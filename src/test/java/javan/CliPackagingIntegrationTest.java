@@ -708,6 +708,35 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
 
 
 
+
+    @Test
+    void nativeBuiltJavanDropsDefinitelyOverwrittenEntryKeys() throws Exception {
+        final Path project = project("selfhost-map-entry-overwritten-key");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Map;
+            public final class Main {
+                static int hashes;
+                static final class Unused { public int hashCode() { System.setProperty("unused", "never"); return 1; } }
+                static final class Key { public int hashCode() { hashes++; return 2; } }
+                public static void main(String[] args) {
+                    Map.Entry<Object, String>[] entries = new Map.Entry[] {
+                        Map.entry(new Unused(), "old"), Map.entry("other", "two")
+                    };
+                    entries[0] = Map.entry(new Key(), "new");
+                    var result = Map.ofEntries(entries);
+                    System.out.println(result.size());
+                    System.out.println(hashes);
+                }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-map-entry-overwritten-key").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("2\n1\n");
+    }
+
     @Test
     void nativeBuiltJavanInfersLocalMapEntryArrayKeys() throws Exception {
         final Path project = project("selfhost-map-entry-local-array");

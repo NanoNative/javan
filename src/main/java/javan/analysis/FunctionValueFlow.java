@@ -15,6 +15,7 @@ import javan.util.Strings2;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -777,7 +778,8 @@ public final class FunctionValueFlow {
                 final boolean platformValue = callbackKind == CallbackKind.COLLECTION_QUERY
                     && (opcode == 1 || instruction.stringValue().isPresent());
                 state.stack().add(new Slot(platformValue ? Fact.platform() : Fact.unsafe(), opcode == 9 || opcode == 10 || opcode == 14
-                    || opcode == 15 || opcode == 20 ? 2 : 1));
+                    || opcode == 15 || opcode == 20 ? 2 : 1,
+                    callbackKind == CallbackKind.COLLECTION_QUERY ? inlineArrayLength(instruction) : -1));
                 return next(index, bytecode);
             }
             if (opcode >= 21 && opcode <= 45) {
@@ -797,14 +799,14 @@ public final class FunctionValueFlow {
             if (opcode >= 79 && opcode <= 86) {
                 if (callbackKind == CallbackKind.COLLECTION_QUERY) state.clearFreshEmptySets();
                 final Slot value = pop(state);
-                pop(state);
+                final Slot arrayIndex = pop(state);
                 final Slot array = pop(state);
                 if (callbackKind == CallbackKind.COLLECTION_QUERY && opcode == 83
                     && (array.fact().kinds() & INLINE_ENTRY_ARRAY) != 0
                     && (value.fact().kinds() & INLINE_ENTRY_ARRAY) == 0) {
                     final Fact key = (value.fact().kinds() & ENTRY_VALUE) != 0
                         && value.fact().elements() != null ? value.fact().elements() : Fact.unsafe();
-                    state.updateInlineEntryArray(array.fact(), key);
+                    state.updateInlineEntryArray(array.fact(), key, arrayIndex.literal());
                 } else if (callbackKind == CallbackKind.COLLECTION_QUERY) {
                     state.clearInlineEntryArrays();
                 }
@@ -1088,11 +1090,14 @@ public final class FunctionValueFlow {
                         addCollectionFact(collectionSiteKey(caller, instruction), trackedArray ? Fact.platform() : Fact.unsafe());
                         if (trackedArray) {
                             Fact key = array.elements();
+                            final Set<Integer> assignedIndices = new HashSet<>();
                             int index = 0;
                             while (key != null) {
-                                addCollectionFact(mapKeySiteKey(caller, instruction, index), key.withElements(null));
+                                if (key.entryIndex() < 0 || assignedIndices.add(Integer.valueOf(key.entryIndex()))) {
+                                    addCollectionFact(mapKeySiteKey(caller, instruction, index), key.withElements(null));
+                                    index++;
+                                }
                                 key = key.elements();
-                                index++;
                             }
                         }
                     } else if (JdkCallSupport.isMapMultiEntryFactory(methodRef)) {
@@ -2192,9 +2197,13 @@ public final class FunctionValueFlow {
     }
 
     // Collection elements are merged facts. For inline entry arrays they form a linked list of key facts.
-    private record Fact(int kinds, List<String> types, boolean unknown, Fact elements) {
+    private record Fact(int kinds, List<String> types, boolean unknown, Fact elements, int entryIndex) {
         private Fact(final int kinds, final List<String> types, final boolean unknown) {
-            this(kinds, types, unknown, null);
+            this(kinds, types, unknown, null, -1);
+        }
+
+        private Fact(final int kinds, final List<String> types, final boolean unknown, final Fact elements) {
+            this(kinds, types, unknown, elements, -1);
         }
 
         private Fact {
@@ -2306,7 +2315,10 @@ public final class FunctionValueFlow {
         }
     }
 
-    private record Slot(Fact fact, int width) {
+    private record Slot(Fact fact, int width, int literal) {
+        private Slot(final Fact fact, final int width) {
+            this(fact, width, -1);
+        }
     }
 
     private enum CallbackKind {
@@ -2379,9 +2391,9 @@ public final class FunctionValueFlow {
             }
         }
 
-        private void updateInlineEntryArray(final Fact array, final Fact key) {
+        private void updateInlineEntryArray(final Fact array, final Fact key, final int entryIndex) {
             final Fact clearedKey = key.withoutFreshEmptySet();
-            final Fact storedKey = new Fact(clearedKey.kinds(), clearedKey.types(), clearedKey.unknown(), array.elements());
+            final Fact storedKey = new Fact(clearedKey.kinds(), clearedKey.types(), clearedKey.unknown(), array.elements(), entryIndex);
             final Fact updated = new Fact(array.kinds(), array.types(), array.unknown(), storedKey);
             for (int index = 0; index < locals.length; index++) {
                 if (locals[index] == array) locals[index] = updated;
@@ -2431,8 +2443,9 @@ public final class FunctionValueFlow {
                     return false;
                 }
                 final Fact merged = current.fact().merge(other.fact());
-                if (merged != current.fact()) {
-                    stack.set(index, new Slot(merged, current.width()));
+                final int literal = current.literal() == other.literal() ? current.literal() : -1;
+                if (merged != current.fact() || literal != current.literal()) {
+                    stack.set(index, new Slot(merged, current.width(), literal));
                     changed = true;
                 }
             }

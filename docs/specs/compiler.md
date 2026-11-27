@@ -156,8 +156,9 @@ the map's runtime lock. Known application key overrides that cannot be compiled 
 `UnsupportedOperationException` when needed. `Map.ofEntries` also infers application key callbacks from
 known `Map.entry` values in a freshly created entry array while that array stays in straight-line
 local variables or on the operand stack. Each entry's key flow is bounded to four exact types. The
-analysis conservatively retains keys assigned before a later overwrite. The array fact is discarded
-when the array escapes, control flow branches or merges, or an unsupported stack operation occurs.
+analysis discards earlier keys when a later assignment has the same proven literal index; unknown
+indices retain all possible keys. The array fact is discarded when the array escapes, control flow
+branches or merges, or an unsupported stack operation occurs.
 Other entry arrays can use callbacks already retained by another proven call.
 Inherited platform key methods, application-defined map
 value equality and custom key queries through map views remain incomplete.
