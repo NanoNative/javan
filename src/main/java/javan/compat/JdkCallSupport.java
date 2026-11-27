@@ -807,6 +807,7 @@ public final class JdkCallSupport {
         runtime("ListIterator.add", "java/util/ListIterator", "add", "(Ljava/lang/Object;)V"),
         runtime("Map.Entry.getKey", "java/util/Map$Entry", "getKey", "()Ljava/lang/Object;"),
         runtime("Map.Entry.getValue", "java/util/Map$Entry", "getValue", "()Ljava/lang/Object;"),
+        runtime("Map.Entry.setValue", "java/util/Map$Entry", "setValue", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("HashMap.<init>", "java/util/HashMap", "<init>", "()V"),
         runtime("HashMap.<init>", "java/util/HashMap", "<init>", "(I)V"),
         runtime("HashMap.<init>", "java/util/HashMap", "<init>", "(IF)V"),
@@ -2360,6 +2361,17 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies value replacement through a map entry.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method replaces an entry value
+     */
+    public static boolean isMapEntrySetValue(final MethodRef methodRef) {
+        return "java/util/Map$Entry".equals(methodRef.owner()) && "setValue".equals(methodRef.name())
+            && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor());
+    }
+
+    /**
      * Identifies supported fixed-arity map factories with at least two entries.
      *
      * @param methodRef referenced JDK method
@@ -2493,6 +2505,9 @@ public final class JdkCallSupport {
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
+        if (isMapEntrySetValue(methodRef)) {
+            return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException", "java/lang/IllegalStateException");
+        }
         if (isAtomicIntegerAdd(methodRef) || isAtomicLongAdd(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }

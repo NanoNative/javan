@@ -3670,6 +3670,47 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapEntrySetValuePublishesTheOldValueDuringCollection() throws Exception {
+        final Path project = project("map-entry-set-value-handoff");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 10000; i++) new StringBuilder().append(i).toString();
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Map<String, String> map = new HashMap<>();
+                    Thread worker = new Thread(new Worker());
+                    worker.start();
+                    int failures = 0;
+                    for (int i = 0; i < 2000; i++) {
+                        map.put("key", new StringBuilder().append("value").append(7).toString());
+                        Map.Entry<String, String> entry = map.entrySet().iterator().next();
+                        String old = entry.setValue("replacement");
+                        if (!"value7".equals(old)) failures++;
+                    }
+                    worker.join();
+                    System.out.println(failures);
+                    System.out.println(map.get("key"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("0\nreplacement\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-entry-set-value-handoff").toString()),
+            Duration.ofSeconds(90), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void concurrentMapValuesIteratorPublishesRemovedValuesDuringCollection() throws Exception {
         final Path project = project("concurrent-map-values-iterator-handoff");
         writeJava(project, "com.acme.Main", """

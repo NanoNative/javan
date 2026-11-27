@@ -1001,6 +1001,13 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksMapEntrySetValueAsUnknownAcrossReceiverTypes() {
+        final MethodRef method = new MethodRef("java/util/Map$Entry", "setValue", "(Ljava/lang/Object;)Ljava/lang/Object;");
+        assertThat(JdkCallSupport.isSupported(method)).isTrue();
+        assertThat(JdkCallableAccounting.status(method)).isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
     void marksHashMapCapacityConstructorAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashMap", "<init>", "(I)V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

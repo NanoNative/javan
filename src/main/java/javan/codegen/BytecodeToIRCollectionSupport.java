@@ -1494,6 +1494,10 @@ final class BytecodeToIRCollectionSupport {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_map_entry_get_value", List.of(receiver));
                 return true;
             }
+            if (JdkCallSupport.isMapEntrySetValue(methodRef)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_map_entry_set_value", List.of(receiver, arguments.getFirst()));
+                return true;
+            }
         }
         throw collectionLoweringRegistryMismatch(classFile, method, methodRef);
     }

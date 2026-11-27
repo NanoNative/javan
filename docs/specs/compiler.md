@@ -107,10 +107,12 @@ retain and safely return a value even when its mapping is removed during garbage
 Application-defined value comparisons are not yet supported and raise `UnsupportedOperationException`
 before bulk operations modify the map. `HashMap` and `LinkedHashMap` provide backed `entrySet()`
 views, including through unmodifiable map wrappers. Reads reflect current mappings. Supported
-removals compare the key and value, and iterator removal uses the returned entry's key. Iteration
-and copying produce detached native entries. `Map.Entry.setValue` and application-defined entry
-comparisons remain unsupported. Concurrent maps, enum maps and immutable factories still return
-detached `entrySet()` snapshots.
+removals compare the key and value, and iterator removal uses the returned entry's key. Entries
+returned by mutable map iterators accept `Map.Entry.setValue`, including null values, and return
+the previous value without invalidating iteration. Structural map changes invalidate replacement
+through earlier entries. Detached entries and entries from unmodifiable maps reject replacement.
+Concurrent maps, enum maps and immutable factories still return detached `entrySet()` snapshots.
+Application-defined entry implementations and comparisons remain unsupported in this view.
 
 Zero-argument `ArrayList` allocation, single-element append and clear coordinate their native
 storage updates with garbage collection. Other list mutation paths still require concurrency

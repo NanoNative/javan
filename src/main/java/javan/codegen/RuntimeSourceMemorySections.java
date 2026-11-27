@@ -312,11 +312,11 @@ final class RuntimeSourceMemorySections {
 
         typedef struct {
             int magic;
-            int reserved0;
-            int reserved1;
-            int reserved2;
+            int map_index;
+            int expected_mod_count;
             void* key;
             void* value;
+            javan_object_map* backing;
         } javan_map_entry_state;
 
         typedef struct {
@@ -2036,6 +2036,7 @@ final class RuntimeSourceMemorySections {
                 if (state->magic != JAVAN_MAP_ENTRY_MAGIC) {
                     javan_panic("invalid map entry metadata");
                 }
+                javan_validate_runtime_managed_reference((void*) state->backing);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_REQUEST_BUILDER) {
                 javan_http_request_builder_value* builder = (javan_http_request_builder_value*) node->value;
                 if (builder->magic != JAVAN_HTTP_REQUEST_BUILDER_MAGIC || builder->uri == NULL || builder->headers == NULL) {
@@ -8473,6 +8474,7 @@ final class RuntimeSourceMemorySections {
                 if (entry->magic == JAVAN_MAP_ENTRY_MAGIC) {
                     javan_gc_mark_value(entry->key);
                     javan_gc_mark_value(entry->value);
+                    javan_gc_mark_value((void*) entry->backing);
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_OPTIONAL) {
                 javan_optional* optional = (javan_optional*) value;
@@ -14483,6 +14485,12 @@ final class RuntimeSourceMemorySections {
                     return;
                 }
                 *result = javan_list_get_unchecked(iterator->list, iterator->index);
+                if ((owner->view_flags & JAVAN_LIST_VIEW_MAP_ENTRIES) != 0 && map->immutable == 0) {
+                    javan_map_entry_state* entry = (javan_map_entry_state*) *result;
+                    entry->backing = map;
+                    entry->map_index = iterator->index;
+                    entry->expected_mod_count = iterator->expected_mod_count;
+                }
                 iterator->reserved = iterator->index;
                 iterator->last_value = javan_map_key_unchecked(map, iterator->index);
                 iterator->index++;
@@ -15409,11 +15417,11 @@ final class RuntimeSourceMemorySections {
             void* entry_value = javan_alloc(sizeof(javan_map_entry_state));
             javan_map_entry_state* entry = (javan_map_entry_state*) entry_value;
             entry->magic = JAVAN_MAP_ENTRY_MAGIC;
-            entry->reserved0 = 0;
-            entry->reserved1 = 0;
-            entry->reserved2 = 0;
+            entry->map_index = -1;
+            entry->expected_mod_count = 0;
             entry->key = key;
             entry->value = value;
+            entry->backing = NULL;
             javan_update_runtime_allocation_kind(entry_value, JAVAN_RUNTIME_KIND_MAP_ENTRY);
             return entry_value;
         }
@@ -16268,6 +16276,28 @@ final class RuntimeSourceMemorySections {
 
         void* javan_map_entry_get_value(void* value) {
             return javan_map_entry_checked(value)->value;
+        }
+
+        void javan_map_entry_set_value_into(void** result, void* value, void* replacement) {
+            javan_runtime_lock_enter();
+            if (value == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+            } else if (!javan_object_builtin_instance_of(value, JAVAN_BUILTIN_INSTANCEOF_MAP_ENTRY)) {
+                javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+            } else {
+                javan_map_entry_state* entry = javan_map_entry_checked(value);
+                javan_object_map* map = entry->backing;
+                if (map == NULL) {
+                    javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                } else if (entry->expected_mod_count != map->mod_count) {
+                    javan_pending_throw("java/lang/IllegalStateException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                } else {
+                    *result = map->values[entry->map_index];
+                    map->values[entry->map_index] = replacement;
+                    entry->value = replacement;
+                }
+            }
+            javan_runtime_lock_leave();
         }
 
         void* javan_map_values(void* value) {

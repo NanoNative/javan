@@ -11,8 +11,8 @@
     "rule": "a broad JDK-compatibility release requires zero unknown leftovers; the first native release is scenario-bounded and requires declared reachable behavior to be supported or rejected"
   },
   "counts": {
-    "rows": 325,
-    "pass": 324,
+    "rows": 326,
+    "pass": 325,
     "scoped": 1,
     "target": 0,
     "rejected": 0
@@ -240,6 +240,7 @@
     {"feature": "map-concrete-key-set", "jdk25": "pass"},
     {"feature": "map-concrete-entry-set", "jdk25": "pass"},
     {"feature": "map-entry-set-backed-view", "jdk25": "pass"},
+    {"feature": "map-iterated-entry-set-value", "jdk25": "pass"},
     {"feature": "map-of-singleton", "jdk25": "pass"},
     {"feature": "map-of-pair", "jdk25": "pass"},
     {"feature": "map-of-triple", "jdk25": "pass"},

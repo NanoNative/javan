@@ -655,6 +655,7 @@ final class RuntimeHeaderFile {
         void* javan_map_entry_set(void* map);
         void* javan_map_entry_get_key(void* value);
         void* javan_map_entry_get_value(void* value);
+        void javan_map_entry_set_value_into(void** result, void* value, void* replacement);
         void* javan_map_values(void* map);
         int javan_object_equals(void* left, void* right);
         int javan_object_virtual_equals(void* left, void* right);

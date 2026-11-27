@@ -550,6 +550,9 @@ public final class BytecodeToIR {
         result.put("javan_iterator_next", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/util/Iterator", "next", "()Ljava/lang/Object;"
         )));
+        result.put("javan_map_entry_set_value", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/util/Map$Entry", "setValue", "(Ljava/lang/Object;)Ljava/lang/Object;"
+        )));
         result.put("javan_list_iterator_remove", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/util/Iterator", "remove", "()V"
         )));

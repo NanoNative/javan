@@ -28,6 +28,7 @@ final class JdkCallableAccounting {
             || JdkCallSupport.isMapCopyConstructor(methodRef)
             || JdkCallSupport.isMapCopyOf(methodRef)
             || JdkCallSupport.isMapSingleEntryFactory(methodRef)
+            || JdkCallSupport.isMapEntrySetValue(methodRef)
             || JdkCallSupport.isSetFactory(methodRef)
             || JdkCallSupport.isSetCopyOf(methodRef)
             || JdkCallSupport.isListCopyOf(methodRef)

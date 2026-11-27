@@ -4217,6 +4217,115 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void iteratedMapEntryReplacesItsMappingAndReturnsTheOldValue() throws Exception {
+        final Path project = project("iterated-map-entry-set-value");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Iterator;
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+
+            public final class Main {
+                public static void main(String[] args) {
+                    Map<String, String> map = new LinkedHashMap<>();
+                    map.put("first", "old");
+                    map.put("second", "keep");
+                    Iterator<Map.Entry<String, String>> iterator = map.entrySet().iterator();
+                    Map.Entry<String, String> entry = iterator.next();
+                    System.out.println(entry.setValue("new"));
+                    System.out.println(entry.getValue());
+                    System.out.println(map.get("first"));
+                    System.out.println(entry.setValue(null));
+                    System.out.println(map.containsKey("first"));
+                    System.out.println(map.get("first"));
+                    System.out.println(iterator.next().getKey());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("old\nnew\nnew\nnew\ntrue\nnull\nsecond\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/iterated-map-entry-set-value").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void unmodifiableMapEntriesRejectReplacingTheirValues() throws Exception {
+        final Path project = project("unmodifiable-map-entry-set-value");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Collections;
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                static void replace(Map.Entry<String, String> entry) {
+                    try { entry.setValue("new"); }
+                    catch (UnsupportedOperationException expected) { System.out.println("immutable"); }
+                }
+                static void replaceNull(Map.Entry<String, String> entry) {
+                    try { entry.setValue("new"); }
+                    catch (NullPointerException expected) { System.out.println("null receiver"); }
+                }
+                public static void main(String[] args) {
+                    Map<String, String> map = new HashMap<>();
+                    map.put("key", "old");
+                    replace(Map.entry("key", "old"));
+                    replace(Map.of("key", "old").entrySet().iterator().next());
+                    replace(Collections.unmodifiableMap(map).entrySet().iterator().next());
+                    replaceNull(null);
+                    System.out.println(map.get("key"));
+                    replace(Collections.unmodifiableSet(map.entrySet()).iterator().next());
+                    System.out.println(map.get("key"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("immutable\nimmutable\nimmutable\nnull receiver\nold\nnew\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/unmodifiable-map-entry-set-value").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void staleMapEntryCannotReplaceAReinsertedMapping() throws Exception {
+        final Path project = project("stale-map-entry-set-value");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                static void replace(Map.Entry<String, String> entry) {
+                    try { entry.setValue("wrong"); }
+                    catch (IllegalStateException expected) { System.out.println("stale"); }
+                }
+                public static void main(String[] args) {
+                    Map<String, String> map = new HashMap<>();
+                    map.put("key", "old");
+                    Map.Entry<String, String> stale = map.entrySet().iterator().next();
+                    map.remove("key");
+                    map.put("key", "reinserted");
+                    replace(stale);
+                    System.out.println(map.get("key"));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/stale-map-entry-set-value").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("stale\nreinserted\n");
+    }
+
+    @Test
     void mapCopyOfBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("map-copy-of");
         writeJava(project, "com.acme.Main", """
