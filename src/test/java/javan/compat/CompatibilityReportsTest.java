@@ -136,6 +136,7 @@ final class CompatibilityReportsTest {
             "| `try-catch` | pass |",
             "| `application-runtime-exception-transport` | pass |",
             "| `try-finally` | scoped |",
+            "| `path-inline-varargs-typed-handler` | pass |",
             "| `boxed-primitive-gc` | pass |",
             "| `enum-basic` | pass |",
             "| `enum-ordinal` | pass |",
@@ -398,6 +399,7 @@ final class CompatibilityReportsTest {
             "\"generatedForJdk\": " + feature,
             "\"feature\": \"try-catch\"",
             "\"feature\": \"try-finally\"",
+            "\"feature\": \"path-inline-varargs-typed-handler\"",
             "\"feature\": \"boxed-primitive-gc\"",
             "\"feature\": \"enum-value-of\"",
             "\"feature\": \"interface-dispatch\"",
@@ -616,10 +618,10 @@ final class CompatibilityReportsTest {
             "A broad JDK-compatibility release must report:",
             "The first native release is scenario-bounded.",
             "not a release-completion percentage.",
-            "| support rows | 326 |",
-            "| pass rows | 325 |",
+            "| support rows | 327 |",
+            "| pass rows | 326 |",
             "| scoped rows | 1 |",
-            "| accounted rows | 325 |",
+            "| accounted rows | 326 |",
             "| unaccounted rows | 1 |"
         );
         assertThat(matrix).contains(

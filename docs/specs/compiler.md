@@ -278,8 +278,9 @@ transports null-array and invalid-range errors within supported handler shapes.
 `Character.offsetByCodePoints(char[], int, int, int, int)` moves within its array slice and
 transports null-array and invalid-range errors within supported handler shapes.
 `Path.of`, `Paths.get`, and `Path.resolve` report supported null inputs and embedded
-U+0000 through typed exceptions. Some inline varargs inside `catch` ranges still fail
-verification and can be moved outside the protected range.
+U+0000 through typed exceptions. `Path.of` and `Paths.get` also support inline varargs of
+string literals and null in supported protected ranges. Computed inline parts remain subject
+to the handler verifier.
 
 Broader exceptions/finally, UTF-16 operations, collections, networking and threading require
 their own public-boundary proofs of supported Java contracts. Unrestricted runtime class

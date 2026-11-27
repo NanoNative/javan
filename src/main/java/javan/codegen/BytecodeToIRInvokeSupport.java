@@ -4971,16 +4971,7 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations
     ) {
-        if ("java/nio/file/Paths".equals(methodRef.owner())
-            && "get".equals(methodRef.name())
-            && "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;".equals(methodRef.descriptor())) {
-            final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-            pushObjectCall(instructions, stack, localDeclarations, "javan_path_of", arguments);
-            return true;
-        }
-        if ("java/nio/file/Path".equals(methodRef.owner())
-            && "of".equals(methodRef.name())
-            && "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;".equals(methodRef.descriptor())) {
+        if (JdkCallSupport.isPathStringFactory(methodRef)) {
             final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
             pushObjectCall(instructions, stack, localDeclarations, "javan_path_of", arguments);
             return true;

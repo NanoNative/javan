@@ -822,7 +822,7 @@ public final class StaticVerifier {
         final int receiverIndex = firstCaptureIndex - 1;
         if (receiverIndex < 0
             || !isImmediateOptionalReceiver(classes, instructions.get(receiverIndex))
-            || hasOptionalSupplierControlFlowEntry(instructions, receiverIndex, terminalIndex)) {
+            || hasControlFlowEntryInExpression(instructions, receiverIndex, terminalIndex)) {
             return false;
         }
         for (int index = firstCaptureIndex; index < dynamicIndex; index++) {
@@ -1106,7 +1106,7 @@ public final class StaticVerifier {
         return false;
     }
 
-    private static boolean hasOptionalSupplierControlFlowEntry(
+    private static boolean hasControlFlowEntryInExpression(
         final List<Instruction> instructions,
         final int startIndex,
         final int terminalIndex
@@ -1893,17 +1893,76 @@ public final class StaticVerifier {
         final CodeException handler
     ) {
         int protectedInstructions = 0;
-        for (final Instruction instruction : code.instructions()) {
+        final List<Instruction> instructions = code.instructions();
+        for (int index = 0; index < instructions.size(); index++) {
+            final Instruction instruction = instructions.get(index);
             if (instruction.offset() < handler.startPc() || instruction.offset() >= handler.endPc()) {
                 continue;
             }
-            protectedInstructions++;
-            if (protectedInstructions > 64
-                || !supportedBoundedProtectedInstruction(classes, method, code, handler, instruction)) {
+            final int end = instruction.opcode() == 189 ? boundedPathVarargsCallIndex(code, handler, index) : index;
+            if (end < index || (end == index
+                && !supportedBoundedProtectedInstruction(classes, method, code, handler, instruction))) {
                 return false;
             }
+            protectedInstructions += end - index + 1;
+            if (protectedInstructions > 64) {
+                return false;
+            }
+            index = end;
         }
         return protectedInstructions > 0;
+    }
+
+    private static int boundedPathVarargsCallIndex(final CodeAttribute code, final CodeException handler, final int allocationIndex) {
+        final List<Instruction> instructions = code.instructions();
+        final Instruction allocation = instructions.get(allocationIndex);
+        if (allocationIndex == 0 || !"java/lang/String".equals(allocation.className().orElse(""))) {
+            return -1;
+        }
+        final Instruction size = instructions.get(allocationIndex - 1);
+        final int length = size.intValue().orElse(-1);
+        if (length < 0 || size.offset() < handler.startPc()
+            || allocationIndex + 1L + 4L * length >= instructions.size()) {
+            return -1;
+        }
+        // Each store writes a String or null to its own index in the fresh array.
+        int cursor = allocationIndex + 1;
+        for (int index = 0; index < length; index++) {
+            if (cursor + 3 >= instructions.size() || instructions.get(cursor).opcode() != 89
+                || instructions.get(cursor + 1).intValue().orElse(-1) != index) {
+                return -1;
+            }
+            final Instruction part = instructions.get(cursor + 2);
+            if (part.opcode() != 1 && part.stringValue().isEmpty()) {
+                return -1;
+            }
+            cursor += 3;
+            final Instruction storeOrNullCast = instructions.get(cursor);
+            if (part.opcode() == 1 && storeOrNullCast.opcode() == 192
+                && "java/lang/String".equals(storeOrNullCast.className().orElse(""))) {
+                cursor++;
+            }
+            if (cursor >= instructions.size() || instructions.get(cursor).opcode() != 83) {
+                return -1;
+            }
+            cursor++;
+        }
+        if (cursor >= instructions.size()) {
+            return -1;
+        }
+        final Instruction call = instructions.get(cursor);
+        final Optional<MethodRef> factory = call.methodRef();
+        if (call.offset() >= handler.endPc() || call.opcode() != 184 || factory.isEmpty()
+            || !JdkCallSupport.isPathStringFactory(factory.orElseThrow())
+            || hasControlFlowEntryInExpression(instructions, allocationIndex, cursor - 1)) {
+            return -1;
+        }
+        for (final CodeException exception : code.exceptionTable()) {
+            if (exception.handlerPc() >= allocation.offset() && exception.handlerPc() < call.offset()) {
+                return -1;
+            }
+        }
+        return cursor;
     }
 
     private static boolean supportedBoundedProtectedInstruction(
@@ -2129,6 +2188,13 @@ public final class StaticVerifier {
             }
             if (instruction.offset() >= handler.endPc()) {
                 continue;
+            }
+            if (instruction.opcode() == 189) {
+                final int factoryIndex = boundedPathVarargsCallIndex(code, handler, instructionIndex);
+                if (factoryIndex >= 0) {
+                    instructionIndex = factoryIndex - 1;
+                    continue;
+                }
             }
             if (instruction.methodRef().isPresent()) {
                 final MethodRef target = instruction.methodRef().orElseThrow();

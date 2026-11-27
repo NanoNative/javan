@@ -11,8 +11,8 @@
     "rule": "a broad JDK-compatibility release requires zero unknown leftovers; the first native release is scenario-bounded and requires declared reachable behavior to be supported or rejected"
   },
   "counts": {
-    "rows": 326,
-    "pass": 325,
+    "rows": 327,
+    "pass": 326,
     "scoped": 1,
     "target": 0,
     "rejected": 0
@@ -36,6 +36,7 @@
     {"feature": "try-catch", "jdk25": "pass"},
     {"feature": "application-runtime-exception-transport", "jdk25": "pass"},
     {"feature": "try-finally", "jdk25": "scoped"},
+    {"feature": "path-inline-varargs-typed-handler", "jdk25": "pass"},
     {"feature": "enum-basic", "jdk25": "pass"},
     {"feature": "enum-ordinal", "jdk25": "pass"},
     {"feature": "enum-values", "jdk25": "pass"},

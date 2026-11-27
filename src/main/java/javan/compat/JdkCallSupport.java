@@ -2372,6 +2372,18 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies the supported string-based path factories.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method builds a path from string parts
+     */
+    public static boolean isPathStringFactory(final MethodRef methodRef) {
+        return ("java/nio/file/Path".equals(methodRef.owner()) && "of".equals(methodRef.name())
+                || "java/nio/file/Paths".equals(methodRef.owner()) && "get".equals(methodRef.name()))
+            && "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;".equals(methodRef.descriptor());
+    }
+
+    /**
      * Identifies supported fixed-arity map factories with at least two entries.
      *
      * @param methodRef referenced JDK method
@@ -2696,9 +2708,7 @@ public final class JdkCallSupport {
             && "(I)Ljava/lang/String;".equals(methodRef.descriptor())) {
             return List.of("java/lang/IllegalArgumentException");
         }
-        if (("java/nio/file/Path".equals(methodRef.owner()) && "of".equals(methodRef.name())
-                || "java/nio/file/Paths".equals(methodRef.owner()) && "get".equals(methodRef.name()))
-            && "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;".equals(methodRef.descriptor())) {
+        if (isPathStringFactory(methodRef)) {
             return List.of("java/nio/file/InvalidPathException", "java/lang/NullPointerException");
         }
         if ("java/nio/file/Path".equals(methodRef.owner()) && "resolve".equals(methodRef.name())) {

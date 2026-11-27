@@ -21980,6 +21980,73 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void inlinePathFactoryVarargsTransportTypedErrors() throws Exception {
+        final Path project = project("path-inline-varargs-typed-errors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.nio.file.InvalidPathException;
+            import java.nio.file.Path;
+            import java.nio.file.Paths;
+
+            public final class Main {
+                static void invalidPath(String path) {
+                    try { Path.of(path, "leaf", "last"); }
+                    catch (InvalidPathException expected) { System.out.println("invalid path"); }
+                    try { Path.of(path); }
+                    catch (InvalidPathException expected) { System.out.println("invalid first part"); }
+                }
+                static void nullPart() {
+                    try { Paths.get("base", "leaf", (String) null); }
+                    catch (NullPointerException expected) { System.out.println("null part"); }
+                }
+                static void validPath() {
+                    try { System.out.println(Paths.get("base", "leaf", "last")); }
+                    catch (InvalidPathException expected) { System.out.println("unexpected error"); }
+                }
+                public static void main(String[] args) {
+                    invalidPath("bad\\0value");
+                    nullPart();
+                    validPath();
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/path-inline-varargs-typed-errors").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void pathFactoryHandlerRejectsAnUnprovenArrayStore() throws Exception {
+        final Path project = project("path-varargs-unproven-store");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.nio.file.Path;
+
+            public final class Main {
+                static void parse(String[] parts, int index) {
+                    try {
+                        parts[index] = "leaf";
+                        Path.of("base", parts);
+                    } catch (NullPointerException expected) {
+                        System.out.println("null part");
+                    }
+                }
+                public static void main(String[] args) {
+                    parse(new String[1], 0);
+                }
+            }
+            """);
+        final CliRun check = run(tempDir, "check", project.toString());
+        assertThat(check.exitCode()).isEqualTo(2);
+        assertThat(check.stderr()).contains("JAVAN014", "parse([Ljava/lang/String;I)V");
+    }
+
+    @Test
     void resolvedPathWithEmbeddedNullDoesNotReachTheFilesystem() throws Exception {
         final Path project = project("path-resolve-null");
         writeJava(project, "com.acme.Main", """
@@ -22047,7 +22114,6 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                     public void run() {
                         Path base = Path.of("safe");
                         String invalid = new String(new char[]{'x', 0, 'y'});
-                        String[] more = new String[0];
                         for (int i = 0; i < 100; i++) {
                             boolean caught = false;
                             try { base.resolve(invalid); }
@@ -22057,7 +22123,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                             }
                             if (!caught) missing.incrementAndGet();
                             caught = false;
-                            try { Path.of(invalid, more); }
+                            try { Path.of(invalid, ""); }
                             catch (InvalidPathException e) {
                                 caught = true;
                                 if (!e.getMessage().equals("Nul character not allowed: x\\0y")) message.incrementAndGet();
