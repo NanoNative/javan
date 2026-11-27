@@ -2286,6 +2286,11 @@ public final class JdkCallSupport {
             return true;
         }
         final String owner = methodRef.owner();
+        if (isCollectionObjectAddition(methodRef)
+            && ("java/util/Collection".equals(owner) || "java/util/Set".equals(owner)
+                || "java/util/HashSet".equals(owner) || "java/util/LinkedHashSet".equals(owner))) {
+            return true;
+        }
         return ("java/util/List".equals(owner) || "java/util/ArrayList".equals(owner)
                 || "java/util/AbstractList".equals(owner))
             && ("indexOf".equals(methodRef.name()) || "lastIndexOf".equals(methodRef.name()))

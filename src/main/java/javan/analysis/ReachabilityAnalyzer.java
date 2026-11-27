@@ -884,6 +884,10 @@ public final class ReachabilityAnalyzer {
             }
             final MethodRef equals = new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z");
             if (provenance.unknown()) {
+                if (instruction.methodRef().isPresent()
+                    && JdkCallSupport.isCollectionObjectAddition(instruction.methodRef().orElseThrow())) {
+                    return List.of();
+                }
                 return virtualTargets(equals);
             }
             final List<EntryPoint> result = new ArrayList<>();

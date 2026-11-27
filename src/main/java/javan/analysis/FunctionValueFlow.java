@@ -32,7 +32,9 @@ public final class FunctionValueFlow {
     private static final int BOUNDED = 16;
     private static final int REMOVAL_REJECTING = 32;
     private static final int ALWAYS_EMPTY = 64;
-    private static final int COLLECTION_MUST_FACTS = REMOVAL_REJECTING | ALWAYS_EMPTY;
+    private static final int LIST_ADDITION_NO_EQUALITY = 128;
+    private static final int FRESH_EMPTY_SET = 256;
+    private static final int COLLECTION_MUST_FACTS = REMOVAL_REJECTING | ALWAYS_EMPTY | LIST_ADDITION_NO_EQUALITY | FRESH_EMPTY_SET;
     private static final Fact NONE_FACT = new Fact(0, List.of(), false);
     private static final Fact MATERIALIZED_FACT = new Fact(MATERIALIZED, List.of(), false);
     private static final Fact UNSAFE_FACT = new Fact(UNSAFE, List.of(), true);
@@ -772,6 +774,7 @@ public final class FunctionValueFlow {
                 return next(index, bytecode);
             }
             if (opcode >= 79 && opcode <= 86) {
+                if (callbackKind == CallbackKind.COLLECTION_QUERY) state.clearFreshEmptySets();
                 pop(state);
                 pop(state);
                 pop(state);
@@ -847,6 +850,7 @@ public final class FunctionValueFlow {
                 return next(index, bytecode);
             }
             if (opcode == 186) {
+                if (callbackKind == CallbackKind.COLLECTION_QUERY) state.clearFreshEmptySets();
                 dynamic(entryPoint, method, instruction, state);
                 return next(index, bytecode);
             }
@@ -856,9 +860,17 @@ public final class FunctionValueFlow {
                     return List.of();
                 }
                 final String className = instruction.className().orElseThrow();
+                final Fact platform;
+                if ("java/util/ArrayList".equals(className)) {
+                    platform = Fact.platform().withListAdditionNoEquality();
+                } else if ("java/util/HashSet".equals(className) || "java/util/LinkedHashSet".equals(className)) {
+                    platform = Fact.platform().withFreshEmptySet();
+                } else {
+                    platform = Fact.platform();
+                }
                 state.stack().add(new Slot(
                     callbackKind == CallbackKind.COLLECTION_QUERY && className.startsWith("java/")
-                        ? Fact.platform()
+                        ? platform
                         : isClosedWorldConcreteCallbackClass(className)
                         ? Fact.concrete(className)
                         : Fact.unsafe(),
@@ -938,6 +950,7 @@ public final class FunctionValueFlow {
                 return;
             }
             if (instruction.opcode() == 179) {
+                if (callbackKind == CallbackKind.COLLECTION_QUERY) state.clearFreshEmptySets();
                 final Slot value = pop(state);
                 addFieldFact(field, value.fact());
                 return;
@@ -947,6 +960,7 @@ public final class FunctionValueFlow {
                 state.stack().add(fieldValue(entryPoint, field, type));
                 return;
             }
+            if (callbackKind == CallbackKind.COLLECTION_QUERY) state.clearFreshEmptySets();
             final Slot value = pop(state);
             pop(state);
             addFieldFact(field, value.fact());
@@ -994,6 +1008,22 @@ public final class FunctionValueFlow {
             final Descriptor descriptor = resolvedDescriptor.orElseThrow();
             final List<Slot> arguments = popArguments(state, descriptor.parameters().size());
             final Slot receiver = instruction.opcode() == 184 ? new Slot(Fact.unsafe(), 1) : pop(state);
+            boolean freshSetEscapes = false;
+            for (final Slot argument : arguments) {
+                freshSetEscapes |= (argument.fact().kinds() & FRESH_EMPTY_SET) != 0;
+            }
+            final boolean emptySetConstructor = instruction.opcode() == 183 && "<init>".equals(methodRef.name())
+                && "()V".equals(methodRef.descriptor()) && ("java/util/HashSet".equals(methodRef.owner())
+                    || "java/util/LinkedHashSet".equals(methodRef.owner()));
+            freshSetEscapes |= (receiver.fact().kinds() & FRESH_EMPTY_SET) != 0 && !emptySetConstructor;
+            if (callbackKind == CallbackKind.COLLECTION_QUERY && freshSetEscapes) {
+                state.clearFreshEmptySets();
+                for (int index = 0; index < arguments.size(); index++) {
+                    final Slot argument = arguments.get(index);
+                    final Fact cleared = argument.fact().withoutFreshEmptySet();
+                    if (cleared != argument.fact()) arguments.set(index, new Slot(cleared, argument.width()));
+                }
+            }
             if (callbackKind != CallbackKind.COLLECTION_QUERY
                 && instruction.opcode() == 185 && directUse(callbackKind).equals(methodRef)) {
                 addCallbackFact(site(caller, instruction), receiver.fact());
@@ -1011,7 +1041,9 @@ public final class FunctionValueFlow {
                         && (receiver.fact().kinds() & REMOVAL_REJECTING) != 0)
                         || (JdkCallSupport.isCollectionFilterAll(methodRef) && (argument.kinds() & ALWAYS_EMPTY) != 0)
                         || ((JdkCallSupport.isCollectionEqualitySearch(methodRef) || JdkCallSupport.isCollectionContainsAll(methodRef))
-                        && (receiver.fact().kinds() & ALWAYS_EMPTY) != 0);
+                        && (receiver.fact().kinds() & ALWAYS_EMPTY) != 0)
+                        || (JdkCallSupport.isCollectionObjectAddition(methodRef)
+                        && (receiver.fact().kinds() & (LIST_ADDITION_NO_EQUALITY | REMOVAL_REJECTING | FRESH_EMPTY_SET)) != 0);
                     addCollectionFact(collectionSiteKey(caller, instruction), noEquality ? Fact.platform() : query);
                 } else {
                     addCallbackFact(site(caller, instruction), arguments.getLast().fact());
@@ -2112,6 +2144,21 @@ public final class FunctionValueFlow {
             return (kinds & ALWAYS_EMPTY) != 0 ? this : new Fact(kinds | ALWAYS_EMPTY, types, unknown, elements);
         }
 
+        private Fact withListAdditionNoEquality() {
+            return (kinds & LIST_ADDITION_NO_EQUALITY) != 0 ? this
+                : new Fact(kinds | LIST_ADDITION_NO_EQUALITY, types, unknown, elements);
+        }
+
+        private Fact withFreshEmptySet() {
+            return (kinds & FRESH_EMPTY_SET) != 0 ? this : new Fact(kinds | FRESH_EMPTY_SET, types, unknown, elements);
+        }
+
+        private Fact withoutFreshEmptySet() {
+            final Fact clearedElements = elements == null ? null : elements.withoutFreshEmptySet();
+            return (kinds & FRESH_EMPTY_SET) == 0 && clearedElements == elements ? this
+                : new Fact(kinds & ~FRESH_EMPTY_SET, types, unknown, clearedElements);
+        }
+
         private Fact merge(final Fact other) {
             if (kinds == 0 && types.isEmpty() && !unknown) {
                 return other;
@@ -2218,6 +2265,17 @@ public final class FunctionValueFlow {
 
         private State copy() {
             return new State(locals, stack, status);
+        }
+
+        private void clearFreshEmptySets() {
+            for (int index = 0; index < locals.length; index++) {
+                locals[index] = locals[index].withoutFreshEmptySet();
+            }
+            for (int index = 0; index < stack.size(); index++) {
+                final Slot slot = stack.get(index);
+                final Fact cleared = slot.fact().withoutFreshEmptySet();
+                if (cleared != slot.fact()) stack.set(index, new Slot(cleared, slot.width()));
+            }
         }
 
         private boolean merge(final State incoming) {

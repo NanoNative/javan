@@ -436,6 +436,30 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanPreservesRecordEqualityInSetOperations() throws Exception {
+        final Path project = project("selfhost-set-record-equality");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashSet;
+            public final class Main {
+                record Key(String name) { }
+                public static void main(String[] args) {
+                    var set = new HashSet<Key>();
+                    set.add(new Key("key"));
+                    System.out.println(set.add(new Key("key")));
+                    System.out.println(set.contains(new Key("key")));
+                }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/selfhost-set-record-equality").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("false\ntrue\n");
+    }
+
+    @Test
     void nativeBuiltJavanRejectsComputedReflectionDeclarations() throws Exception {
         final Path project = project("selfhost-invalid-reflection-declaration");
         writeJava(project, "com.acme.Main", """

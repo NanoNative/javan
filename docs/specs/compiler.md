@@ -129,7 +129,7 @@ clearing and size queries transport a null receiver as `NullPointerException`. S
 also transports a null receiver. Single-element additions and clearing transport
 `UnsupportedOperationException` for supported immutable collections and maps, except the documented
 no-op clear operations on legacy empty factories. Application-defined
-`equals` remains incomplete for searches outside the supported list operations. Search, addition and
+`equals` remains incomplete for searches outside the supported list and single-element set operations. Search, addition and
 clear callables remain unknown in the support ledger while custom collection overrides and set equality
 remain incomplete.
 Other methods remain subject to their supported callable entries.
@@ -185,8 +185,9 @@ elements and creates an immutable ordered snapshot.
 `contains`, `indexOf` and `lastIndexOf` on supported list representations call an application-defined
 query object's `equals`, including inherited implementations. Search values of unknown type
 conservatively retain possible implementations. `List.of` and `List.copyOf` searches reject null
-queries, including through unmodifiable views. Set membership still uses the existing incomplete
-equality semantics.
+queries, including through unmodifiable views. Single-element membership on supported direct set
+representations also calls the query object's application-defined `equals`. Map-backed views,
+set factories and bulk set equality retain their documented narrower behavior.
 Reads using `List.get`, `getFirst` and `getLast` publish returned references safely during concurrent
 garbage collection. Supported `getFirst` and `getLast` calls transport null-receiver and empty-list
 failures within supported handler shapes.
@@ -213,7 +214,8 @@ and `Collections.singleton` sets, including unmodifiable views, call application
 on probe elements. Immutable factory contents retain bounded
 type information; unknown contents conservatively retain possible implementations. Single-element
 `Collections.singleton(...).contains` uses the query's application-defined `equals`, including through
-unmodifiable views. Other set membership keeps its existing incomplete equality semantics.
+unmodifiable views. Direct single-element set membership also uses the query's application-defined
+`equals`; map-backed views and bulk set operations retain narrower equality semantics.
 `removeAll` and `retainAll` on supported collection and set owners handle supported views and
 transport null and immutable-collection failures within supported handlers. For supported list
 receivers, a null element rejected by an immutable probe raises `NullPointerException` after
@@ -226,7 +228,12 @@ empty probe also returns false; a null probe is rejected. Other singleton filter
 probe equality remain incomplete.
 Object removal through supported list, set and `Collection` owners transports null-receiver and
 immutable-collection failures for the currently supported collection representations. Supported
-list receivers call application-defined `equals` on the query. Reentrant mutation of the searched
+list and direct set receivers call application-defined `equals` on the query. Direct mutable set
+addition uses the new element's `equals` to reject duplicates and propagates its exceptions.
+When an addition's application element type cannot be proven and its `equals` implementation
+was not otherwise retained, a comparison fails with `UnsupportedOperationException` instead
+of silently using identity equality.
+Reentrant mutation of the searched
 list from `equals` is not yet fully Java-compatible; a shrink past the match fails without invalid
 native indexing. `Collections.emptyList().remove` and `Collections.emptySet().remove` return false.
 `Collections.singletonList().remove` and `Collections.singleton().remove` return false for a

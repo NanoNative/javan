@@ -13293,7 +13293,12 @@ final class RuntimeSourceMemorySections {
                 return 0;
             }
             if (javan_list_is_set(list) != 0) {
-                return javan_set_add(value, element);
+                if (javan_list_contains_java(value, element) != 0 || javan_pending_has() != 0) {
+                    return 0;
+                }
+                javan_list_append_raw(list, element);
+                list->mod_count++;
+                return 1;
             }
             return javan_arraylist_add_prechecked(list, element);
         }
@@ -13895,14 +13900,6 @@ final class RuntimeSourceMemorySections {
             if (equals == NULL) {
                 return javan_list_contains(value, element);
             }
-            javan_runtime_lock_enter();
-            javan_object_list* list = javan_list_checked(value);
-            int unsupported_set = javan_list_is_set(list) != 0
-                && (javan_list_storage_owner(list)->view_flags & JAVAN_LIST_SINGLETON_COLLECTION) == 0;
-            javan_runtime_lock_leave();
-            if (unsupported_set != 0) {
-                return javan_list_contains(value, element);
-            }
             return javan_list_custom_index_of(value, element, equals, 0) >= 0;
         }
 
@@ -14037,8 +14034,7 @@ final class RuntimeSourceMemorySections {
             javan_collection_equals_resolver_fn resolver = atomic_load_explicit(
                 &javan_collection_equals_resolver, memory_order_acquire
             );
-            javan_collection_equals_fn equals = resolver == NULL || element == NULL
-                || (javan_list_is_set(list) != 0 && singleton == 0) ? NULL : resolver(element);
+            javan_collection_equals_fn equals = resolver == NULL || element == NULL ? NULL : resolver(element);
             if (equals == NULL) {
                 int result = 0;
                 if (singleton != 0) {

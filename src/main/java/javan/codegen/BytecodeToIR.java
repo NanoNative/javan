@@ -54,6 +54,7 @@ import java.util.Set;
  */
 public final class BytecodeToIR {
     static final String COLLECTION_EQUALS_DISPATCH = "javan_dispatch_collection_equals";
+    static final String UNAVAILABLE_COLLECTION_EQUALS = "javan_unavailable_collection_equals";
     static final int TYPE_JAVA_LANG_INTEGER = -1001;
     static final int TYPE_JAVA_LANG_LONG = -1002;
     static final int TYPE_JAVA_LANG_FLOAT = -1003;
@@ -270,16 +271,23 @@ public final class BytecodeToIR {
                 reachable.add(method.display());
             }
             final List<EntryPoint> targets = new ArrayList<>();
+            final List<IrDispatchTarget> unavailable = new ArrayList<>();
+            final boolean setAddition = usesSetEqualityAddition(classes, reachableMethods);
             for (final EntryPoint receiver : virtualTargets(classes, equals, callGraph.instantiatedTypes())) {
                 final Optional<EntryPoint> implementation = lowerableResolvedVirtualTarget(classes, receiver.className(), equals);
                 if (implementation.isPresent() && reachable.contains(implementation.orElseThrow().display())) {
                     targets.add(receiver);
+                } else if (setAddition && implementation.isPresent()) {
+                    unavailable.add(new IrDispatchTarget(receiver.className(), UNAVAILABLE_COLLECTION_EQUALS));
                 }
             }
-            if (!targets.isEmpty()) {
-                dispatches.putIfAbsent(COLLECTION_EQUALS_DISPATCH, BytecodeToIRDynamicSupport.dispatch(
-                    classes, COLLECTION_EQUALS_DISPATCH, MethodDescriptor.parse(equals.descriptor()), targets
-                ));
+            if (!targets.isEmpty() || !unavailable.isEmpty()) {
+                final IrDispatch dispatch = BytecodeToIRDynamicSupport.dispatch(
+                    classes, COLLECTION_EQUALS_DISPATCH, MethodDescriptor.parse(equals.descriptor()), targets);
+                final List<IrDispatchTarget> allTargets = new ArrayList<>(dispatch.targets());
+                allTargets.addAll(unavailable);
+                dispatches.putIfAbsent(COLLECTION_EQUALS_DISPATCH,
+                    new IrDispatch(dispatch.symbol(), dispatch.returnType(), dispatch.parameters(), List.copyOf(allTargets)));
             }
         }
         for (final EntryPoint reachable : reachableMethods) {
@@ -385,6 +393,21 @@ public final class BytecodeToIR {
                         || JdkCallSupport.isCollectionContainsAll(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isCollectionFilterAll(instruction.methodRef().orElseThrow()))) {
                     return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean usesSetEqualityAddition(final Map<String, ClassFile> classes, final List<EntryPoint> reachableMethods) {
+        for (final EntryPoint entry : reachableMethods) {
+            final ClassFile owner = classes.get(entry.className());
+            final Optional<MethodInfo> method = owner == null ? Optional.empty() : owner.method(entry.methodName(), entry.descriptor());
+            if (method.isEmpty() || method.orElseThrow().code().isEmpty()) continue;
+            for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
+                if (instruction.methodRef().isPresent()) {
+                    final MethodRef target = instruction.methodRef().orElseThrow();
+                    if (JdkCallSupport.isCollectionObjectAddition(target) && JdkCallSupport.isCollectionEqualitySearch(target)) return true;
                 }
             }
         }
@@ -519,6 +542,7 @@ public final class BytecodeToIR {
             }
         } while (changed);
         final Map<String, List<String>> result = new LinkedHashMap<>();
+        result.put(UNAVAILABLE_COLLECTION_EQUALS, List.of("java/lang/UnsupportedOperationException"));
         for (final EntryPoint entryPoint : reachableMethods) {
             result.put(symbol(entryPoint), orderedThrowableTypes(typesByMethod.get(entryPoint)));
         }

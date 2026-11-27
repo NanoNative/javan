@@ -2106,6 +2106,20 @@ public final class CCodegen {
         final boolean isStatic
     ) {
         final java.util.Map<String, Integer> typeIds = typeIds(program);
+        boolean unavailableCollectionEquals = false;
+        if (COLLECTION_EQUALS_DISPATCH.equals(dispatch.symbol())) {
+            for (final IrDispatchTarget target : dispatch.targets()) {
+                unavailableCollectionEquals |= BytecodeToIR.UNAVAILABLE_COLLECTION_EQUALS.equals(target.functionSymbol());
+            }
+        }
+        if (unavailableCollectionEquals) {
+            c.append("static int ").append(BytecodeToIR.UNAVAILABLE_COLLECTION_EQUALS)
+                .append("(void* self, void* other) {\n")
+                .append("    (void) self; (void) other;\n")
+                .append("    javan_pending_throw(\"java/lang/UnsupportedOperationException\", ")
+                .append("javan_string_from(\"set element equality is outside the compiled set\"), NULL, NULL, NULL, -1, -1, NULL);\n")
+                .append("    return 0;\n}\n\n");
+        }
         emitDispatchSignature(dispatch, c, isStatic);
         c.append(" {").append(System.lineSeparator());
         c.append("    if (self == 0) {").append(System.lineSeparator());
