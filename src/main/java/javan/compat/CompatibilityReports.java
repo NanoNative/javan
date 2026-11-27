@@ -684,6 +684,7 @@ public final class CompatibilityReports {
             pass("map-of-entries-local-array-static-read"),
             pass("map-of-entries-local-array-length-read"),
             pass("map-of-entries-local-array-discarded-results"),
+            pass("map-of-entries-local-array-unchanged-branches"),
             pass("map-of-entries-proven-index-overwrite"),
             scoped("map-of-entries-custom-key-callbacks"),
             pass("set-copy-of"),

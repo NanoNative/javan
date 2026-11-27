@@ -712,6 +712,39 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
 
 
 
+
+    @Test
+    void nativeBuiltJavanPreservesEntryArrayKeysAcrossBranches() throws Exception {
+        final Path project = project("selfhost-map-entry-array-branch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Map;
+            public final class Main {
+                static int hashes;
+                static final class Key {
+                    final int value; Key(int value) { this.value = value; }
+                    public int hashCode() { hashes++; return value; }
+                    public boolean equals(Object x) { return x instanceof Key key && value == key.value; }
+                }
+                public static void main(String[] args) {
+                    Map.Entry<Key, String>[] entries = new Map.Entry[] {
+                        Map.entry(new Key(1), "one"), Map.entry(new Key(2), "two")
+                    };
+                    if (args.length == 0) System.out.println("empty");
+                    else System.out.println("arguments");
+                    var result = Map.ofEntries(entries);
+                    System.out.println(result.size());
+                    System.out.println(hashes);
+                }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()), Duration.ofSeconds(60));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-map-entry-array-branch").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("empty\n2\n2\n");
+    }
+
     @Test
     void nativeBuiltJavanPreservesEntryArrayKeysAcrossDiscardedResults() throws Exception {
         final Path project = project("selfhost-map-entry-discarded-results");

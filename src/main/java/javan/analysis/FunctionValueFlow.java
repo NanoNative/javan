@@ -764,10 +764,11 @@ public final class FunctionValueFlow {
         ) {
             final int opcode = instruction.opcode();
             // Only track fresh arrays through straight-line locals and operand stacks.
-            // Any escape, control-flow split or opaque stack manipulation loses the fact.
+            // Escapes, opaque operations and divergent array facts lose the proof.
             if (callbackKind == CallbackKind.COLLECTION_QUERY
-                && (opcode >= 90 && opcode <= 95 || opcode >= 153 && opcode <= 177
-                    || opcode >= 179 && opcode <= 181 || opcode == 186 || opcode >= 191 && opcode <= 201)) {
+                && (opcode >= 90 && opcode <= 95 || opcode >= 168 && opcode <= 177
+                    || opcode >= 179 && opcode <= 181 || opcode == 186 || opcode >= 191 && opcode <= 197
+                    || opcode >= 200 && opcode <= 201)) {
                 state.clearInlineEntryArrays();
             }
             if (opcode == 0 || opcode == 132) {
@@ -2376,6 +2377,20 @@ public final class FunctionValueFlow {
             return copy;
         }
 
+        private boolean hasSameInlineEntryArrays(final State other) {
+            for (int index = 0; index < locals.length; index++) {
+                final Fact left = locals[index];
+                final Fact right = other.locals[index];
+                if (((left.kinds() | right.kinds()) & INLINE_ENTRY_ARRAY) != 0 && left != right) return false;
+            }
+            for (int index = 0; index < stack.size(); index++) {
+                final Fact left = stack.get(index).fact();
+                final Fact right = other.stack.get(index).fact();
+                if (((left.kinds() | right.kinds()) & INLINE_ENTRY_ARRAY) != 0 && left != right) return false;
+            }
+            return true;
+        }
+
         private void clearInlineEntryArrays() {
             if (!inlineEntryArrays) return;
             inlineEntryArrays = false;
@@ -2421,13 +2436,14 @@ public final class FunctionValueFlow {
             }
             boolean changed = false;
             State source = incoming;
-            if (inlineEntryArrays || incoming.inlineEntryArrays) {
+            if ((inlineEntryArrays || incoming.inlineEntryArrays) && !hasSameInlineEntryArrays(incoming)) {
                 changed = inlineEntryArrays;
                 clearInlineEntryArrays();
                 source = incoming.copy();
                 source.clearInlineEntryArrays();
             }
             for (int index = 0; index < locals.length; index++) {
+                if ((locals[index].kinds() & INLINE_ENTRY_ARRAY) != 0 && locals[index] == source.locals[index]) continue;
                 final Fact merged = locals[index].merge(source.locals[index]);
                 if (merged != locals[index]) {
                     locals[index] = merged;
@@ -2441,6 +2457,7 @@ public final class FunctionValueFlow {
                     reject();
                     return false;
                 }
+                if ((current.fact().kinds() & INLINE_ENTRY_ARRAY) != 0 && current.fact() == other.fact()) continue;
                 final Fact merged = current.fact().merge(other.fact());
                 final int literal = current.literal() == other.literal() ? current.literal() : -1;
                 if (merged != current.fact() || literal != current.literal()) {
