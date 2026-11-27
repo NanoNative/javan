@@ -407,6 +407,7 @@ public final class ReachabilityAnalyzer {
                         enqueueClassInitializer(classes, instruction, work, workSet, current, callEdges, entryPoints);
                         enqueueClassForNameInitializers(
                             classes,
+                            code.orElseThrow(),
                             instruction,
                             work,
                             workSet,
@@ -2026,6 +2027,7 @@ public final class ReachabilityAnalyzer {
 
     private static void enqueueClassForNameInitializers(
         final Map<String, ClassFile> classes,
+        final CodeAttribute code,
         final Instruction instruction,
         final List<EntryPoint> work,
         final EntryPointMembership workSet,
@@ -2042,6 +2044,31 @@ public final class ReachabilityAnalyzer {
             || !("(Ljava/lang/String;)Ljava/lang/Class;".equals(method.descriptor())
                 || "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;".equals(method.descriptor()))) {
             return;
+        }
+        if ("(Ljava/lang/String;)Ljava/lang/Class;".equals(method.descriptor())
+            && code.exceptionTable().isEmpty()) {
+            final List<Instruction> instructions = code.instructions();
+            Instruction previous = null;
+            Instruction argument = null;
+            boolean straightLine = true;
+            for (final Instruction candidate : instructions) {
+                final int opcode = candidate.opcode();
+                if (opcode >= 153 && opcode <= 171 || opcode >= 198 && opcode <= 201) {
+                    straightLine = false;
+                    break;
+                }
+                if (candidate.offset() == instruction.offset()) {
+                    argument = previous;
+                }
+                previous = candidate;
+            }
+            if (straightLine && argument != null && argument.stringValue().isPresent()) {
+                final String owner = argument.stringValue().orElseThrow().replace('.', '/');
+                if (classes.containsKey(owner)) {
+                    enqueueClassInitializer(classes, owner, work, workSet, current, callEdges, entryPoints);
+                    return;
+                }
+            }
         }
         final List<String> owners = new ArrayList<>(classes.keySet());
         for (int index = 1; index < owners.size(); index++) {

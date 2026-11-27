@@ -16591,6 +16591,73 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void classForNameLiteralKeepsOnlyItsRequiredClassInitializers() throws Exception {
+        final Path project = project("class-for-name-literal-initializers");
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                static { System.out.println("target initialized"); }
+            }
+            """);
+        writeJava(project, "com.acme.Unrelated", """
+            package com.acme;
+            public final class Unrelated {
+                static { System.out.println("unrelated initialized"); }
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    Class.forName("com.acme.Target");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/class-for-name-literal-initializers").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("target initialized\n");
+        assertThat(Files.readString(project.resolve(".javan/reports/call-graph.json")))
+            .contains("com/acme/Target.<clinit>()V")
+            .doesNotContain("com/acme/Unrelated.<clinit>()V");
+    }
+
+    @Test
+    void classForNameKeepsDynamicTargetsWhenControlFlowMerges() throws Exception {
+        final Path project = project("class-for-name-merged-target");
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                static { System.out.println("target initialized"); }
+            }
+            """);
+        writeJava(project, "com.acme.Other", """
+            package com.acme;
+            public final class Other {
+                static { System.out.println("other initialized"); }
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    Class.forName(args.length > 1 ? args[0] : "com.acme.Target");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final String executable = project.resolve(".javan/bin/class-for-name-merged-target").toString();
+        final ProcessResult known = process(project, List.of(executable));
+        assertThat(known.exitCode()).as(known.stderr()).isZero();
+        assertThat(known.stdout()).isEqualTo("target initialized\n");
+        final ProcessResult dynamic = process(project, List.of(executable, "com.acme.Other", "dynamic"));
+        assertThat(dynamic.exitCode()).as(dynamic.stderr()).isZero();
+        assertThat(dynamic.stdout()).isEqualTo("other initialized\n");
+    }
+
+    @Test
     void classForNameFindsClosedWorldClassInitializesOnceAndMatchesJvmFailures() throws Exception {
         final Path project = project("class-for-name");
         writeJava(project, "com.acme.Plugin", """
