@@ -115,6 +115,8 @@ class initialization and wrapped constructor exceptions. A direct class literal 
 straight-line one-argument `Class.forName` literal, including copies through local variables,
 together with inline parameter literals, is retained automatically even with an empty declaration.
 `getConstructor` selects only public constructors, even when non-public constructors are declared.
+Constructor metadata supports `getDeclaringClass`, `getParameterCount`, `getParameterTypes`
+and `getModifiers`. Each `getParameterTypes` call returns a fresh array.
 Local targets across branches or exception handlers remain conservative.
 With a declaration, other dynamic targets require a declared constructor. Without one,
 unresolved constructor lookups retain the parsed world conservatively. Platform constructor

@@ -1015,7 +1015,7 @@ final class RuntimeHeaderFile {
         void* javan_method_get_name(void* value);
         void* javan_method_get_declaring_class(void* value);
         int javan_method_get_parameter_count(void* value);
-        void* javan_method_get_parameter_types(void* value);
+        void javan_method_get_parameter_types(void** result, void* value);
         void* javan_method_get_return_type(void* value);
         int javan_method_get_modifiers(void* value);
         void* javan_method_new(const JavanMethodMetadata* metadata);

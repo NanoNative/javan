@@ -782,6 +782,7 @@ public final class CCodegen {
         if (features.constructorLookup()) {
             result.add("javan_generated_class_get_declared_constructor");
         }
+        result.add("javan_method_get_parameter_types");
         result.add(EXACT_CATCH_NULL_APPLY_SYMBOL);
         if (!program.materializedLambdaTargets().isEmpty()) {
             result.add(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL);

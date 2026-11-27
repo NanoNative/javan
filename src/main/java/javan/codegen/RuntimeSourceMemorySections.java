@@ -5088,21 +5088,22 @@ final class RuntimeSourceMemorySections {
             return javan_method_metadata(value)->parameter_count;
         }
 
-        void* javan_method_get_parameter_types(void* value) {
-            const JavanMethodMetadata* metadata = javan_method_metadata(value);
-            void* result = javan_object_array_new(metadata->parameter_count, "[Ljava.lang.Class;");
-            void* result_root = result;
-            void** roots[] = {(void**) &result_root};
-            javan_root_frame_push(roots, 1);
+        void javan_method_get_parameter_types(void** result, void* value) {
+            void* method_root = value;
+            void** roots[] = {(void**) &method_root, result};
+            javan_root_frame_push(roots, 2);
+            const JavanMethodMetadata* metadata = javan_method_metadata(method_root);
+            javan_runtime_lock_enter();
+            *result = javan_object_array_new(metadata->parameter_count, "[Ljava.lang.Class;");
+            javan_runtime_lock_leave();
             for (int index = 0; index < metadata->parameter_count; index++) {
                 javan_object_array_set(
-                    result_root,
+                    *result,
                     index,
                     javan_runtime_class_from_binary_name(metadata->parameter_names[index])
                 );
             }
             javan_root_frame_pop(roots);
-            return result_root;
         }
 
         void* javan_method_get_return_type(void* value) {

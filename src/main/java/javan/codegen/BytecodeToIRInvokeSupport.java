@@ -4711,7 +4711,8 @@ final class BytecodeToIRInvokeSupport {
                 pendingExceptionHandlerStacks, sourceLines
             );
         }
-        if ("java/lang/reflect/Method".equals(methodRef.owner())) {
+        if ("java/lang/reflect/Method".equals(methodRef.owner())
+            || "java/lang/reflect/Constructor".equals(methodRef.owner())) {
             final String runtimeHelper = methodMetadataRuntimeHelper(methodRef);
             if (runtimeHelper == null) {
                 return false;

@@ -464,6 +464,8 @@ public final class CompatibilityReports {
             pass("interface-polymorphic"),
             pass("closed-world-application-method-invocation"),
             pass("closed-world-declared-constructor-invocation"),
+            pass("closed-world-public-constructor-lookup"),
+            pass("closed-world-constructor-metadata-accessors"),
             pass("closed-world-class-for-name-loader"),
             pass("string-intrinsics"),
             pass("non-ascii-string-semantic-rejection"),

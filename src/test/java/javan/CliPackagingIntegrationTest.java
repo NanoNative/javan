@@ -436,6 +436,30 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanReadsConstructorParameterMetadata() throws Exception {
+        final Path project = project("selfhost-constructor-metadata");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Constructor;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    Constructor<Target> constructor = Target.class.getConstructor(String.class, int.class);
+                    System.out.println(constructor.getDeclaringClass().getName());
+                    System.out.println(constructor.getParameterCount());
+                    System.out.println(constructor.getParameterTypes()[0].getName());
+                    System.out.println(constructor.getModifiers());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", "package com.acme; public final class Target { public Target(String value, int count) { } }");
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-constructor-metadata").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("com.acme.Target\n2\njava.lang.String\n1\n");
+    }
+
+    @Test
     void nativeBuiltJavanSupportsPublicConstructorLookup() throws Exception {
         final Path project = project("selfhost-public-constructor");
         writeJava(project, "com.acme.Main", """
