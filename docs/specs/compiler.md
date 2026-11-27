@@ -71,8 +71,9 @@ Reflection fallback: a project may define one public static method named
 `java.lang.reflect.AnnotatedElement[]` and can be called by JVM and native tests within the
 supported reflection subset. Javan reads its
 bytecode without executing the method or initializing its declaring class. Supported entries
-are non-array class literals from the compiled application or scanned dependencies and
-`getDeclaredMethod` on such classes, with a literal name and literal parameter types:
+are class literals from the compiled application or scanned dependencies, their array class
+literals, primitive array class literals, and `getDeclaredMethod` on non-array classes,
+with a literal name and literal parameter types:
 
 ```java
 public static java.lang.reflect.AnnotatedElement[] javanReflectionTargets()
@@ -83,7 +84,8 @@ public static java.lang.reflect.AnnotatedElement[] javanReflectionTargets()
 }
 ```
 
-The named classes and required hierarchies are retained. Declared method bodies are retained
+The named classes and required hierarchies are retained. An array class literal retains its
+reference component class without initializing it. Declared method bodies are retained
 for the exact parameter list, including all bytecode methods with that name and parameter
 list when return types differ. An empty array is valid. Duplicate declarations, different
 signatures, missing methods and computed or unsupported elements produce `JAVAN096`.

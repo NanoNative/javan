@@ -322,6 +322,34 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanReadsArrayReflectionDeclarations() throws Exception {
+        final Path project = project("selfhost-reflection-arrays");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() {
+                    return new AnnotatedElement[] {Target[].class, int[][].class};
+                }
+                public static void main(String[] args) throws Exception {
+                    System.out.println(Class.forName(args[0]).getName());
+                    System.out.println(((Class<?>) javanReflectionTargets()[1]).getName());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target { static { System.out.println("initialized"); } }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(
+            project.resolve(".javan/bin/selfhost-reflection-arrays").toString(), "[Lcom.acme.Target;"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("[Lcom.acme.Target;\n[[I\n");
+    }
+
+    @Test
     void nativeBuiltJavanRejectsComputedReflectionDeclarations() throws Exception {
         final Path project = project("selfhost-invalid-reflection-declaration");
         writeJava(project, "com.acme.Main", """

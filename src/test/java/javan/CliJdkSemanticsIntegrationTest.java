@@ -17421,6 +17421,73 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void reflectionDeclarationRetainsArrayComponentClassesWithoutInitializingThem() throws Exception {
+        final Path project = project("declared-reflection-arrays");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() {
+                    return new AnnotatedElement[] {Target[].class, int[][].class};
+                }
+                public static void main(String[] args) throws Exception {
+                    final AnnotatedElement[] declared = javanReflectionTargets();
+                    System.out.println(((Class<?>) declared[0]).getName());
+                    System.out.println(((Class<?>) declared[1]).getName());
+                    System.out.println(Class.forName(args[0]).getName());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target { static { System.out.println("initialized"); } }
+            """);
+        writeJava(project, "com.acme.Unrelated", """
+            package com.acme;
+            public final class Unrelated { }
+            """);
+        final Path classes = project.resolve("jvm-classes");
+        Files.createDirectories(classes);
+        final ProcessResult javac = process(project, List.of(CliTestHarness.currentJavacCommand(), "-d", classes.toString(),
+            project.resolve("src/main/java/com/acme/Main.java").toString(),
+            project.resolve("src/main/java/com/acme/Target.java").toString()));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult jvm = process(project, List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(),
+            "com.acme.Main", "[Lcom.acme.Target;"));
+        assertThat(jvm.exitCode()).as(jvm.stderr()).isZero();
+        assertThat(jvm.stdout()).isEqualTo("[Lcom.acme.Target;\n[[I\n[Lcom.acme.Target;\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        assertThat(build.stdout()).doesNotContain("initialized");
+        final String executable = project.resolve(".javan/bin/declared-reflection-arrays").toString();
+        final ProcessResult reference = process(project, List.of(executable, "[Lcom.acme.Target;"));
+        assertThat(reference.exitCode()).as(reference.stderr()).isZero();
+        assertThat(reference.stdout()).isEqualTo("[Lcom.acme.Target;\n[[I\n[Lcom.acme.Target;\n");
+        final ProcessResult primitive = process(project, List.of(executable, "[[I"));
+        assertThat(primitive.exitCode()).as(primitive.stderr()).isZero();
+        assertThat(primitive.stdout()).isEqualTo("[Lcom.acme.Target;\n[[I\n[[I\n");
+        assertThat(generatedProgramSource(project)).doesNotContain("javan_class_com_acme_Unrelated");
+    }
+
+    @Test
+    void reflectionDeclarationRejectsMethodsOnArrayClasses() throws Exception {
+        final Path project = project("declared-array-method");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Main[].class.getDeclaredMethod("clone")};
+                }
+                public static void main(String[] args) { }
+            }
+            """);
+        final CliRun check = run(tempDir, "check", project.toString());
+        assertThat(check.exitCode()).isEqualTo(2);
+        assertThat(check.stderr()).contains("error[JAVAN096]", "Array classes cannot declare method targets");
+    }
+
+    @Test
     void reflectionDeclarationPreservesAbstractMethodDispatch() throws Exception {
         final Path project = project("bounded-abstract-method");
         writeJava(project, "com.acme.Main", """

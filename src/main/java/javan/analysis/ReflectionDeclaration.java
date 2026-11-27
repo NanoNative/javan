@@ -107,13 +107,33 @@ public final class ReflectionDeclaration {
             }
             final Instruction value = instructions.get(cursor + 2);
             if ((value.opcode() != 18 && value.opcode() != 19)
-                || value.className().isEmpty()
-                || !classes.containsKey(value.className().orElseThrow())) {
+                || value.className().isEmpty()) {
                 return invalid(ownerName, "Each target must name a class from the compiled world.");
             }
             final String target = value.className().orElseThrow();
-            targets.add(target);
             cursor += 3;
+            if (target.startsWith("[")) {
+                String component = target;
+                while (component.startsWith("[")) {
+                    component = component.substring(1);
+                }
+                if (instructions.get(cursor).opcode() != 83) {
+                    return invalid(ownerName, "Array classes cannot declare method targets.");
+                }
+                if (component.startsWith("L") && component.endsWith(";")) {
+                    final String componentClass = component.substring(1, component.length() - 1);
+                    if (!classes.containsKey(componentClass)) {
+                        return invalid(ownerName, "Each array component must name a class from the compiled world.");
+                    }
+                    targets.add(componentClass);
+                } else if (component.length() != 1 || "ZBCSIJFD".indexOf(component.charAt(0)) < 0) {
+                    return invalid(ownerName, "Each array component must be a supported class or primitive.");
+                }
+            } else if (classes.containsKey(target)) {
+                targets.add(target);
+            } else {
+                return invalid(ownerName, "Each target must name a class from the compiled world.");
+            }
             if (instructions.get(cursor).opcode() != 83) {
                 if (cursor + 3 >= instructions.size() || instructions.get(cursor).stringValue().isEmpty()
                     || instructions.get(cursor + 1).intValue().isEmpty()
