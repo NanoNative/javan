@@ -119,9 +119,11 @@ public final class ReachabilityAnalyzer {
         boolean serviceRootsResolved = false;
         Map<String, FunctionValueFlow.CollectionQuery> collectionQueries = Map.of();
         final FunctionValueFlow.MethodFlowCache methodFlows = new FunctionValueFlow.MethodFlowCache();
+        final List<EntryPoint> reflectionRoots = ReflectionDeclaration.analyze(classes).methods();
         CallGraph graph;
         while (true) {
             final List<EntryPoint> roots = new ArrayList<>(entries);
+            roots.addAll(reflectionRoots);
             roots.addAll(serviceRoots);
             graph = analyzePass(classes, roots, declaredExternalLeaves, instantiatedTypes, collectionQueries, methodFlows, false);
             if (!serviceProviders.isEmpty()

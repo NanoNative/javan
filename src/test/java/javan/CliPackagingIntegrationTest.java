@@ -300,18 +300,20 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             import java.lang.reflect.AnnotatedElement;
             public final class Main {
                 public static void main(String[] args) { System.out.println("main"); }
-                public static AnnotatedElement[] javanReflectionTargets() {
-                    return new AnnotatedElement[] {Target.class};
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Target.class, Target.class.getDeclaredMethod("run", String.class, int.class)};
                 }
             }
             """);
         writeJava(project, "com.acme.Target", """
             package com.acme;
-            public final class Target { }
+            public final class Target { public static String run(String value, int number) { return value; } }
             """);
         final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         assertThat(generatedProgramSource(project)).contains("javan_class_com_acme_Target");
+        assertThat(Files.readString(project.resolve(".javan/reports/call-graph.json")))
+            .contains("com/acme/Target.run(Ljava/lang/String;I)Ljava/lang/String;");
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/selfhost-reflection-declaration").toString()));
         assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
         assertThat(nativeRun.stdout()).isEqualTo("main\n");

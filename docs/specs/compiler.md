@@ -68,21 +68,26 @@ Closed-world support includes:
 Reflection fallback: a project may define one public static method named
 `javanReflectionTargets` on a public application class. The method returns
 `java.lang.reflect.AnnotatedElement[]` and can be called by JVM tests. Javan reads its
-bytecode without executing the method or initializing its declaring class. The first
-supported shape is a directly returned array of class literals from the compiled application
-or its scanned dependencies:
+bytecode without executing the method or initializing its declaring class. Supported entries
+are class literals from the compiled application or scanned dependencies and
+`getDeclaredMethod` on such classes, with a literal name and literal parameter types:
 
 ```java
-public static java.lang.reflect.AnnotatedElement[] javanReflectionTargets() {
-    return new java.lang.reflect.AnnotatedElement[] { Plugin.class };
+public static java.lang.reflect.AnnotatedElement[] javanReflectionTargets()
+        throws ReflectiveOperationException {
+    return new java.lang.reflect.AnnotatedElement[] {
+        Plugin.class, Plugin.class.getDeclaredMethod("run", String.class)
+    };
 }
 ```
 
-The named classes and required hierarchies are retained. An empty array is valid. Duplicate
-declarations, different signatures and computed or unsupported elements produce `JAVAN096`.
-Member declarations, including `getDeclaredMethod`, are not implemented yet. Unknown dynamic
-`Class.forName` targets remain conservative over the parsed world, even when a declaration
-exists. Automatically proven targets remain available without the declaration.
+The named classes and required hierarchies are retained. Declared method bodies are retained
+for the exact parameter list, including all bytecode methods with that name and parameter
+list when return types differ. An empty array is valid. Duplicate declarations, different
+signatures, missing methods and computed or unsupported elements produce `JAVAN096`.
+Constructor and field declarations are not implemented yet. Unknown dynamic `Class.forName`
+targets remain conservative over the parsed world, even when a declaration exists.
+Automatically proven targets remain available without the declaration.
 
 Direct `new Object()` creates a distinct managed instance with `java.lang.Object` class metadata.
 `Object.equals` dispatches statically reachable application overrides and supports default identity,

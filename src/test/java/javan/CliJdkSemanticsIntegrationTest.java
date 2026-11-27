@@ -16836,6 +16836,111 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void reflectionDeclarationResolvesExactMethodOverloadForRuntimeInput() throws Exception {
+        final Path project = project("declared-reflection-method");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Target.class.getDeclaredMethod("run", String.class, int.class)};
+                }
+                public static void main(String[] args) throws Exception {
+                    final var method = Class.forName(args[0]).getDeclaredMethod("run", String.class, int.class);
+                    System.out.println((String) method.invoke(null, "ok", 7));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                public static String run(String value, int number) { return value + number; }
+                public static String run(String value) { return "wrong"; }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/declared-reflection-method").toString(), "com.acme.Target"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("ok7\n");
+        writeJava(project, "com.acme.VerifyDeclaration", """
+            package com.acme;
+            public final class VerifyDeclaration {
+                public static void main(String[] args) throws Exception {
+                    final var method = (java.lang.reflect.Method) Main.javanReflectionTargets()[0];
+                    System.out.println(method.getParameterCount());
+                    System.out.println(method.getParameterTypes()[1] == int.class);
+                }
+            }
+            """);
+        assertThat(runJvm(project, "com.acme.VerifyDeclaration")).isEqualTo("2\ntrue\n");
+    }
+
+    @Test
+    void reflectionDeclarationRejectsMissingMethodOverload() throws Exception {
+        final Path project = project("declared-reflection-missing-method");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static void main(String[] args) { }
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Main.class.getDeclaredMethod("missing", int.class)};
+                }
+            }
+            """);
+        final CliRun result = run(tempDir, "check", project.toString());
+        assertThat(result.exitCode()).isEqualTo(2);
+        assertThat(result.stderr()).contains("error[JAVAN096]", "missing", "(I)");
+    }
+
+    @Test
+    void reflectionDeclarationRetainsOnlyTheDeclaredMethodOverload() throws Exception {
+        final Path project = project("declared-method-overload");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static void main(String[] args) { }
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {
+                        Target.class.getDeclaredMethod("run", String.class, int.class),
+                        Target.class.getDeclaredMethod("ping"),
+                        Target.class.getDeclaredMethod("take", Payload[][].class)
+                    };
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                static { System.out.println("initialized"); }
+                public static String run(String value, int number) { return value; }
+                public static String run(String value) { return value; }
+                public static void ping() { }
+                public static void take(Payload[][] value) { }
+            }
+            """);
+        writeJava(project, "com.acme.Payload", """
+            package com.acme;
+            public final class Payload { }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        assertThat(build.stdout()).doesNotContain("initialized");
+        assertThat(Files.readString(project.resolve(".javan/reports/call-graph.json")))
+            .contains("com/acme/Target.run(Ljava/lang/String;I)Ljava/lang/String;")
+            .contains("com/acme/Target.ping()V")
+            .contains("com/acme/Target.take([[Lcom/acme/Payload;)V")
+            .doesNotContain("com/acme/Target.run(Ljava/lang/String;)Ljava/lang/String;");
+        assertThat(generatedProgramSource(project)).contains("javan_class_com_acme_Payload");
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/declared-method-overload").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEmpty();
+    }
+
+    @Test
     void classForNameFindsClosedWorldClassInitializesOnceAndMatchesJvmFailures() throws Exception {
         final Path project = project("class-for-name");
         writeJava(project, "com.acme.Plugin", """
