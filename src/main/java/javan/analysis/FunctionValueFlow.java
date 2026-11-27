@@ -34,7 +34,10 @@ public final class FunctionValueFlow {
     private static final int ALWAYS_EMPTY = 64;
     private static final int LIST_ADDITION_NO_EQUALITY = 128;
     private static final int FRESH_EMPTY_SET = 256;
-    private static final int COLLECTION_MUST_FACTS = REMOVAL_REJECTING | ALWAYS_EMPTY | LIST_ADDITION_NO_EQUALITY | FRESH_EMPTY_SET;
+    private static final int ENTRY_VALUE = 512;
+    private static final int INLINE_ENTRY_ARRAY = 1024;
+    private static final int COLLECTION_MUST_FACTS = REMOVAL_REJECTING | ALWAYS_EMPTY | LIST_ADDITION_NO_EQUALITY
+        | FRESH_EMPTY_SET | ENTRY_VALUE | INLINE_ENTRY_ARRAY;
     private static final Fact NONE_FACT = new Fact(0, List.of(), false);
     private static final Fact MATERIALIZED_FACT = new Fact(MATERIALIZED, List.of(), false);
     private static final Fact UNSAFE_FACT = new Fact(UNSAFE, List.of(), true);
@@ -378,6 +381,7 @@ public final class FunctionValueFlow {
                     && (JdkCallSupport.isCollectionEqualitySearch(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isMapKeyOperation(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isMapMultiEntryFactory(instruction.methodRef().orElseThrow())
+                        || JdkCallSupport.isMapEntryArrayFactory(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isCollectionContainsAll(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isCollectionFilterAll(instruction.methodRef().orElseThrow()))) {
                     if (JdkCallSupport.isMapMultiEntryFactory(instruction.methodRef().orElseThrow())) {
@@ -758,6 +762,14 @@ public final class FunctionValueFlow {
             final State state
         ) {
             final int opcode = instruction.opcode();
+            // Only track fresh arrays while they remain on a straight-line operand stack.
+            // Any escape, control-flow split or opaque stack manipulation loses the fact.
+            if (callbackKind == CallbackKind.COLLECTION_QUERY
+                && (opcode >= 54 && opcode <= 78 || opcode >= 87 && opcode <= 88
+                    || opcode >= 90 && opcode <= 95 || opcode >= 153 && opcode <= 181
+                    || opcode == 186 || opcode == 190 || opcode >= 191 && opcode <= 201)) {
+                state.clearInlineEntryArrays();
+            }
             if (opcode == 0 || opcode == 132) {
                 return next(index, bytecode);
             }
@@ -784,9 +796,18 @@ public final class FunctionValueFlow {
             }
             if (opcode >= 79 && opcode <= 86) {
                 if (callbackKind == CallbackKind.COLLECTION_QUERY) state.clearFreshEmptySets();
+                final Slot value = pop(state);
                 pop(state);
-                pop(state);
-                pop(state);
+                final Slot array = pop(state);
+                if (callbackKind == CallbackKind.COLLECTION_QUERY && opcode == 83
+                    && (array.fact().kinds() & INLINE_ENTRY_ARRAY) != 0
+                    && (value.fact().kinds() & INLINE_ENTRY_ARRAY) == 0) {
+                    final Fact key = (value.fact().kinds() & ENTRY_VALUE) != 0
+                        && value.fact().elements() != null ? value.fact().elements() : Fact.unsafe();
+                    state.updateInlineEntryArray(array.fact(), key);
+                } else if (callbackKind == CallbackKind.COLLECTION_QUERY) {
+                    state.clearInlineEntryArrays();
+                }
                 return next(index, bytecode);
             }
             if (opcode >= 87 && opcode <= 95) {
@@ -889,8 +910,13 @@ public final class FunctionValueFlow {
             }
             if (opcode == 188 || opcode == 189) {
                 pop(state);
-                state.stack().add(new Slot(callbackKind == CallbackKind.COLLECTION_QUERY
-                    ? Fact.platform() : Fact.unsafe(), 1));
+                final boolean multiEntryArray = callbackKind == CallbackKind.COLLECTION_QUERY && opcode == 189
+                    && instruction.className().isPresent()
+                    && "java/util/Map$Entry".equals(instruction.className().orElseThrow())
+                    && index > 0 && inlineArrayLength(bytecode.get(index - 1)) > 1;
+                state.stack().add(new Slot(multiEntryArray
+                    ? new Fact(PLATFORM | INLINE_ENTRY_ARRAY, List.of(), false, Fact.platform())
+                    : callbackKind == CallbackKind.COLLECTION_QUERY ? Fact.platform() : Fact.unsafe(), 1));
                 return next(index, bytecode);
             }
             if (opcode == 190) {
@@ -1016,7 +1042,21 @@ public final class FunctionValueFlow {
             }
             final Descriptor descriptor = resolvedDescriptor.orElseThrow();
             final List<Slot> arguments = popArguments(state, descriptor.parameters().size());
-            final Slot receiver = instruction.opcode() == 184 ? new Slot(Fact.unsafe(), 1) : pop(state);
+            Slot receiver = instruction.opcode() == 184 ? new Slot(Fact.unsafe(), 1) : pop(state);
+            if (callbackKind == CallbackKind.COLLECTION_QUERY && !JdkCallSupport.isMapEntryArrayFactory(methodRef)) {
+                boolean arrayEscapes = (receiver.fact().kinds() & INLINE_ENTRY_ARRAY) != 0;
+                for (final Slot argument : arguments) arrayEscapes |= (argument.fact().kinds() & INLINE_ENTRY_ARRAY) != 0;
+                if (arrayEscapes) {
+                    state.clearInlineEntryArrays();
+                    if ((receiver.fact().kinds() & INLINE_ENTRY_ARRAY) != 0) receiver = new Slot(Fact.platform(), receiver.width());
+                    for (int index = 0; index < arguments.size(); index++) {
+                        final Slot argument = arguments.get(index);
+                        if ((argument.fact().kinds() & INLINE_ENTRY_ARRAY) != 0) {
+                            arguments.set(index, new Slot(Fact.platform(), argument.width()));
+                        }
+                    }
+                }
+            }
             boolean freshSetEscapes = false;
             for (final Slot argument : arguments) {
                 freshSetEscapes |= (argument.fact().kinds() & FRESH_EMPTY_SET) != 0;
@@ -1041,7 +1081,12 @@ public final class FunctionValueFlow {
             }
             if (isIndirectUse(callbackKind, methodRef) && !arguments.isEmpty()) {
                 if (callbackKind == CallbackKind.COLLECTION_QUERY) {
-                    if (JdkCallSupport.isMapMultiEntryFactory(methodRef)) {
+                    if (JdkCallSupport.isMapEntryArrayFactory(methodRef)) {
+                        final Fact array = arguments.getFirst().fact();
+                        addCollectionFact(collectionSiteKey(caller, instruction),
+                            (array.kinds() & INLINE_ENTRY_ARRAY) != 0 && array.elements() != null
+                                ? array.elements() : Fact.unsafe());
+                    } else if (JdkCallSupport.isMapMultiEntryFactory(methodRef)) {
                         for (int key = 0; key < arguments.size() / 2; key++) {
                             addCollectionFact(mapFixedSiteKey(caller, instruction, key), arguments.get(key * 2).fact());
                         }
@@ -1064,6 +1109,12 @@ public final class FunctionValueFlow {
                 } else {
                     addCallbackFact(site(caller, instruction), arguments.getLast().fact());
                 }
+            }
+            if (callbackKind == CallbackKind.COLLECTION_QUERY && instruction.opcode() == 184
+                && JdkCallSupport.isMapSingleEntryFactory(methodRef) && "entry".equals(methodRef.name())) {
+                pushReturn(state, descriptor.result(), new Fact(PLATFORM | ENTRY_VALUE, List.of(), false,
+                    arguments.getFirst().fact().withElements(null)));
+                return;
             }
             if (callbackKind == CallbackKind.COLLECTION_QUERY && instruction.opcode() == 184) {
                 final String owner = methodRef.owner();
@@ -1849,6 +1900,16 @@ public final class FunctionValueFlow {
         return result;
     }
 
+    private static int inlineArrayLength(final Instruction instruction) {
+        final int opcode = instruction.opcode();
+        if (opcode >= 3 && opcode <= 8) return opcode - 3;
+        if (opcode == 16 && instruction.operands().length > 0) return instruction.operands()[0];
+        if (opcode == 17 && instruction.operands().length > 1) {
+            return (short) (((instruction.operands()[0] & 255) << 8) | (instruction.operands()[1] & 255));
+        }
+        return instruction.intValue().orElse(Integer.valueOf(-1)).intValue();
+    }
+
     private static int conversionWidth(final int opcode) {
         return switch (opcode) {
             case 133, 135, 140, 141 -> 2;
@@ -1885,7 +1946,7 @@ public final class FunctionValueFlow {
     ) {
         return callbackKind == CallbackKind.COLLECTION_QUERY ? (JdkCallSupport.isCollectionEqualitySearch(methodRef)
             || JdkCallSupport.isMapKeyOperation(methodRef)
-            || JdkCallSupport.isMapMultiEntryFactory(methodRef)
+            || JdkCallSupport.isMapMultiEntryFactory(methodRef) || JdkCallSupport.isMapEntryArrayFactory(methodRef)
             || JdkCallSupport.isCollectionContainsAll(methodRef) || JdkCallSupport.isCollectionFilterAll(methodRef))
             : directUse(callbackKind).equals(methodRef) || isIndirectUse(callbackKind, methodRef);
     }
@@ -1909,7 +1970,7 @@ public final class FunctionValueFlow {
         if (callbackKind == CallbackKind.COLLECTION_QUERY) {
             return JdkCallSupport.isCollectionEqualitySearch(methodRef) || JdkCallSupport.isCollectionContainsAll(methodRef)
                 || JdkCallSupport.isCollectionFilterAll(methodRef) || JdkCallSupport.isMapKeyOperation(methodRef)
-                || JdkCallSupport.isMapMultiEntryFactory(methodRef);
+                || JdkCallSupport.isMapMultiEntryFactory(methodRef) || JdkCallSupport.isMapEntryArrayFactory(methodRef);
         }
         return callbackKind == CallbackKind.FUNCTION
             ? isIndirectFunctionUse(methodRef)
@@ -2288,6 +2349,23 @@ public final class FunctionValueFlow {
 
         private State copy() {
             return new State(locals, stack, status);
+        }
+
+        private void clearInlineEntryArrays() {
+            for (int index = 0; index < stack.size(); index++) {
+                final Slot slot = stack.get(index);
+                if ((slot.fact().kinds() & INLINE_ENTRY_ARRAY) != 0) {
+                    stack.set(index, new Slot(Fact.platform(), slot.width()));
+                }
+            }
+        }
+
+        private void updateInlineEntryArray(final Fact array, final Fact key) {
+            final Fact updated = new Fact(array.kinds(), array.types(), array.unknown(), array.elements().merge(key));
+            for (int index = 0; index < stack.size(); index++) {
+                final Slot slot = stack.get(index);
+                if (slot.fact() == array) stack.set(index, new Slot(updated, slot.width()));
+            }
         }
 
         private void clearFreshEmptySets() {

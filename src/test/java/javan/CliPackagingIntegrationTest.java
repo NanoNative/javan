@@ -705,6 +705,34 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         assertThat(result.stdout()).isEqualTo("one\ntwo\n");
     }
 
+
+    @Test
+    void nativeBuiltJavanInfersInlineMapOfEntriesKeys() throws Exception {
+        final Path project = project("selfhost-map-ofentries-inline-keys");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Map;
+            public final class Main {
+                static int calls;
+                static final class Key {
+                    final int value; Key(int value) { this.value = value; }
+                    public int hashCode() { calls++; return value; }
+                    public boolean equals(Object other) { return other instanceof Key key && value == key.value; }
+                }
+                public static void main(String[] args) {
+                    var map = Map.ofEntries(Map.entry(new Key(1), "one"), Map.entry(new Key(2), "two"));
+                    System.out.println(map.size());
+                    System.out.println(calls);
+                }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-map-ofentries-inline-keys").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("2\n2\n");
+    }
+
     @Test
     void nativeBuiltJavanUsesKnownCustomKeysInMapOfEntries() throws Exception {
         final Path project = project("selfhost-map-ofentries-custom-keys");

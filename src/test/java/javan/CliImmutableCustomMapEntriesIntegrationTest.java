@@ -183,4 +183,70 @@ final class CliImmutableCustomMapEntriesIntegrationTest extends CliIntegrationSu
         assertThat(result.exitCode()).as(result.stderr()).isZero();
         assertThat(result.stdout()).isEqualTo(expected).isEqualTo("1\n");
     }
+    @Test
+    void mapOfEntriesInfersOnlyKeysUsedInInlineEntries() throws Exception {
+        final Path project = project("map-ofentries-inline-key-flow");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Map;
+            public final class Main {
+                static int calls;
+                static final class First {
+                    public int hashCode() { calls++; return 1; }
+                    public boolean equals(Object other) { return other instanceof First; }
+                }
+                static final class Second {
+                    public int hashCode() { calls++; return 2; }
+                    public boolean equals(Object other) { return other instanceof Second; }
+                }
+                static final class Unused {
+                    public int hashCode() { System.setProperty("unused", "never"); return 3; }
+                }
+                public static void main(String[] args) {
+                    var unrelated = Map.entry(new Unused(), "unused");
+                    var map = Map.ofEntries(Map.entry(new First(), "one"), Map.entry(new Second(), "two"));
+                    System.out.println(map.size());
+                    System.out.println(calls);
+                    System.out.println(unrelated.getValue());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-ofentries-inline-key-flow").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("2\n2\nunused\n");
+    }
+
+    @Test
+    void inlineMapOfEntriesPropagatesKeyCallbackFailuresAndDuplicates() throws Exception {
+        final Path project = project("map-ofentries-inline-key-failures");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Map;
+            public final class Main {
+                static boolean fail;
+                static final class Key {
+                    public int hashCode() { if (fail) throw new IllegalStateException("hash"); return 1; }
+                    public boolean equals(Object other) { return other instanceof Key; }
+                }
+                static void build() { Map.ofEntries(Map.entry(new Key(), "one"), Map.entry(new Key(), "two")); }
+                public static void main(String[] args) {
+                    try { build(); }
+                    catch (IllegalArgumentException expected) { System.out.println("duplicate"); }
+                    fail = true;
+                    try { build(); }
+                    catch (IllegalStateException expected) { System.out.println(expected.getMessage()); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-ofentries-inline-key-failures").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("duplicate\nhash\n");
+    }
+
 }

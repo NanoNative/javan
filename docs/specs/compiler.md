@@ -153,8 +153,12 @@ Ordinary maps reject structural changes observed during an equality callback wit
 `ConcurrentModificationException`; concurrent maps retry the lookup. Canonical generated record
 key methods containing only primitives and Strings are proven side-effect-free and execute under
 the map's runtime lock. Known application key overrides that cannot be compiled fail with
-`UnsupportedOperationException` when needed. `Map.ofEntries` can use application key callbacks already
-retained by another proven call, but does not yet infer them from the entry array itself. Inherited platform key methods, application-defined map
+`UnsupportedOperationException` when needed. `Map.ofEntries` also infers application key callbacks from
+known `Map.entry` values in a freshly created entry array while that array stays on a straight-line
+operand stack. This inference is bounded to four exact key types and is discarded when the array escapes,
+control flow branches or an unsupported stack operation occurs. Other entry arrays can use callbacks
+already retained by another proven call.
+Inherited platform key methods, application-defined map
 value equality and custom key queries through map views remain incomplete.
 `ConcurrentHashMap` rejects null keys for `get`, `getOrDefault`, `containsKey`, `put`, `putIfAbsent`,
 `remove` and `replace`, and null values for `containsValue`, `put`, `putIfAbsent` and `replace`,
