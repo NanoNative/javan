@@ -17642,6 +17642,42 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void constructorLookupFollowsLiteralClassForNameWithoutDeclaration() throws Exception {
+        final Path project = project("constructor-literal-class-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[0]; }
+                public static void main(String[] args) throws Exception {
+                    Object instance = Class.forName("com.acme.Target").getDeclaredConstructor(String.class).newInstance("known");
+                    System.out.println(((Target) instance).message());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                private final String value;
+                public Target(String value) { this.value = value; }
+                public Target(int unused) { throw new IllegalStateException("unused overload"); }
+                public String message() { return value; }
+            }
+            """);
+        writeJava(project, "com.acme.Unrelated", """
+            package com.acme;
+            public final class Unrelated { public Unrelated() { System.out.println("unused type"); } }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/constructor-literal-class-name").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("known\n");
+        assertThat(generatedProgramSource(project)).doesNotContain("unused overload", "unused type");
+    }
+
+    @Test
     void dynamicConstructorLookupWithoutDeclarationRemainsConservative() throws Exception {
         final Path project = project("dynamic-reflection-constructor");
         writeJava(project, "com.acme.Main", """

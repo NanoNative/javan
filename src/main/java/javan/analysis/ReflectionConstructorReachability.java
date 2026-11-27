@@ -6,13 +6,11 @@ import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
-/** Proves constructor targets for direct class and parameter literals. */
+/** Proves constructor targets for direct class or class-name and parameter literals. */
 public final class ReflectionConstructorReachability {
     private ReflectionConstructorReachability() { }
 
@@ -22,8 +20,8 @@ public final class ReflectionConstructorReachability {
      * @param targets exact constructor identities
      * @param complete whether every reachable lookup has this proven shape
      */
-    public record Result(Set<EntryPoint> targets, boolean complete) {
-        public Result { targets = Set.copyOf(targets); }
+    public record Result(List<EntryPoint> targets, boolean complete) {
+        public Result { targets = List.copyOf(targets); }
     }
 
     /**
@@ -34,7 +32,7 @@ public final class ReflectionConstructorReachability {
      * @return exact targets and whether the analysis covers all lookup sites
      */
     public static Result analyze(final Map<String, ClassFile> classes, final List<EntryPoint> reachable) {
-        final Set<EntryPoint> result = new HashSet<>();
+        final List<EntryPoint> result = new ArrayList<>();
         int lookups = 0;
         int proven = 0;
         for (final EntryPoint entry : reachable) {
@@ -70,8 +68,16 @@ public final class ReflectionConstructorReachability {
                 }
                 if (!ordered) continue;
                 final Instruction receiver = code.get(cursor - 2);
-                if ((receiver.opcode() != 18 && receiver.opcode() != 19) || receiver.className().isEmpty()) continue;
-                final String target = receiver.className().orElseThrow();
+                final Optional<String> targetName;
+                if (receiver.opcode() == 18 || receiver.opcode() == 19) {
+                    targetName = receiver.className();
+                } else if (receiver.opcode() == 184) {
+                    targetName = ReachabilityAnalyzer.literalClassForNameTarget(method.orElseThrow().code().orElseThrow(), receiver);
+                } else {
+                    targetName = Optional.empty();
+                }
+                if (targetName.isEmpty()) continue;
+                final String target = targetName.orElseThrow();
                 final ClassFile targetClass = classes.get(target);
                 if (targetClass == null) continue;
                 proven++;
@@ -79,7 +85,8 @@ public final class ReflectionConstructorReachability {
                 for (int parameter = reversed.size() - 1; parameter >= 0; parameter--) descriptor.append(reversed.get(parameter));
                 descriptor.append(")V");
                 if (targetClass.method("<init>", descriptor.toString()).isPresent()) {
-                    result.add(new EntryPoint(target, "<init>", descriptor.toString()));
+                    final EntryPoint candidate = new EntryPoint(target, "<init>", descriptor.toString());
+                    if (!result.contains(candidate)) result.add(candidate);
                 }
             }
         }

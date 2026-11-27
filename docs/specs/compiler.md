@@ -111,8 +111,9 @@ available without the declaration.
 
 Within the compiled application and dependencies, `getDeclaredConstructor` and
 `Constructor.newInstance` support exact overload lookup, argument conversion, access checks,
-class initialization and wrapped constructor exceptions. A direct class literal and inline
-literal parameter array at the lookup are retained automatically even with an empty declaration.
+class initialization and wrapped constructor exceptions. A direct class literal or a
+straight-line one-argument `Class.forName` literal, together with inline parameter literals,
+is retained automatically even with an empty declaration.
 With a declaration, other dynamic targets require a declared constructor. Without one,
 unresolved constructor lookups retain the parsed world conservatively. Platform constructor
 lookup fails explicitly with `UnsupportedOperationException` until implemented. Other

@@ -407,6 +407,35 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanFollowsLiteralClassNameToConstructor() throws Exception {
+        final Path project = project("selfhost-literal-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[0]; }
+                public static void main(String[] args) throws Exception {
+                    Object instance = Class.forName("com.acme.Target").getDeclaredConstructor().newInstance();
+                    System.out.println(((Target) instance).message());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                public Target() { }
+                public String message() { return "known"; }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/selfhost-literal-constructor").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("known\n");
+    }
+
+    @Test
     void nativeBuiltJavanRejectsComputedReflectionDeclarations() throws Exception {
         final Path project = project("selfhost-invalid-reflection-declaration");
         writeJava(project, "com.acme.Main", """
