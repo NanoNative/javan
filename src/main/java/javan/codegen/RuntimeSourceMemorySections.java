@@ -5071,7 +5071,8 @@ final class RuntimeSourceMemorySections {
         }
 
         void* javan_method_get_name(void* value) {
-            return javan_string_from(javan_method_metadata(value)->name);
+            const JavanMethodMetadata* metadata = javan_method_metadata(value);
+            return javan_string_from(strcmp(metadata->name, "<init>") == 0 ? metadata->declaring_name : metadata->name);
         }
 
         void* javan_method_get_declaring_class(void* value) {

@@ -472,6 +472,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             public final class Main {
                 public static void main(String[] args) throws Exception {
                     Constructor<Target> constructor = Target.class.getConstructor(String.class, int.class);
+                    System.out.println(constructor.getName());
                     System.out.println(constructor.getDeclaringClass().getName());
                     System.out.println(constructor.getParameterCount());
                     System.out.println(constructor.getParameterTypes()[0].getName());
@@ -484,7 +485,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-constructor-metadata").toString()));
         assertThat(result.exitCode()).as(result.stderr()).isZero();
-        assertThat(result.stdout()).isEqualTo("com.acme.Target\n2\njava.lang.String\n1\n");
+        assertThat(result.stdout()).isEqualTo("com.acme.Target\ncom.acme.Target\n2\njava.lang.String\n1\n");
     }
 
     @Test

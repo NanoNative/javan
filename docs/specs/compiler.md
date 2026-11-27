@@ -115,7 +115,7 @@ class initialization and wrapped constructor exceptions. A direct class literal 
 straight-line one-argument `Class.forName` literal, including copies through local variables,
 together with inline parameter literals, is retained automatically even with an empty declaration.
 `getConstructor` selects only public constructors, even when non-public constructors are declared.
-Constructor metadata supports `getDeclaringClass`, `getParameterCount`, `getParameterTypes`
+Constructor metadata supports `getName`, `getDeclaringClass`, `getParameterCount`, `getParameterTypes`
 and `getModifiers`. Each `getParameterTypes` call returns a fresh array.
 Constructor `canAccess`, `setAccessible`, `trySetAccessible` and `isAccessible` use the same
 closed-world access checks as invocation, including rejection of non-null `canAccess` targets.

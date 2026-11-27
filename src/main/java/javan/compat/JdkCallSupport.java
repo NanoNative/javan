@@ -184,6 +184,7 @@ public final class JdkCallSupport {
             "([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;"),
         runtime("Constructor.newInstance", "java/lang/reflect/Constructor", "newInstance",
             "([Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("Constructor.getName", "java/lang/reflect/Constructor", "getName", "()Ljava/lang/String;"),
         runtime("Constructor.getDeclaringClass", "java/lang/reflect/Constructor", "getDeclaringClass", "()Ljava/lang/Class;"),
         runtime("Constructor.getParameterCount", "java/lang/reflect/Constructor", "getParameterCount", "()I"),
         runtime("Constructor.getParameterTypes", "java/lang/reflect/Constructor", "getParameterTypes", "()[Ljava/lang/Class;"),
@@ -3032,7 +3033,7 @@ public final class JdkCallSupport {
         if (!method && !constructor) {
             return false;
         }
-        return method && "getName".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())
+        return "getName".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())
             || "getDeclaringClass".equals(methodRef.name()) && "()Ljava/lang/Class;".equals(methodRef.descriptor())
             || "getParameterCount".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())
             || "getParameterTypes".equals(methodRef.name())
