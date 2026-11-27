@@ -16621,6 +16621,9 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertThat(Files.readString(project.resolve(".javan/reports/call-graph.json")))
             .contains("com/acme/Target.<clinit>()V")
             .doesNotContain("com/acme/Unrelated.<clinit>()V");
+        assertThat(Files.readString(project.resolve(".javan/generated/main.c")))
+            .contains("javan_class_com_acme_Target")
+            .doesNotContain("javan_class_com_acme_Unrelated");
     }
 
     @Test
@@ -16655,6 +16658,36 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult dynamic = process(project, List.of(executable, "com.acme.Other", "dynamic"));
         assertThat(dynamic.exitCode()).as(dynamic.stderr()).isZero();
         assertThat(dynamic.stdout()).isEqualTo("other initialized\n");
+    }
+
+    @Test
+    void classForNameLiteralRetainsMethodMetadataForTheTarget() throws Exception {
+        final Path project = project("class-for-name-literal-method");
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                public void run() { }
+            }
+            """);
+        writeJava(project, "com.acme.Unrelated", """
+            package com.acme;
+            public final class Unrelated { }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    System.out.println(Class.forName("com.acme.Target").getDeclaredMethod("run").getName());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/class-for-name-literal-method").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("run\n");
+        assertThat(generatedProgramSource(project)).doesNotContain("javan_class_com_acme_Unrelated");
     }
 
     @Test

@@ -389,6 +389,9 @@ final class BytecodeToIRTest {
             List.of(),
             List.of()
         );
+        final ClassFile unrelated = classFile(
+            "com/acme/Unrelated", "java/lang/Object", 0, List.of(), List.of(), List.of()
+        );
         final EntryPoint entryPoint = new EntryPoint(mainClass.name(), main.name(), main.descriptor());
         final CallGraph graph = new CallGraph(
             entryPoint,
@@ -400,13 +403,31 @@ final class BytecodeToIRTest {
         );
 
         final IrProgram program = new BytecodeToIR().lower(
-            Map.of(mainClass.name(), mainClass, unused.name(), unused),
+            Map.of(mainClass.name(), mainClass, unused.name(), unused, unrelated.name(), unrelated),
             graph,
             SourceLineIndex.empty()
         );
 
         assertThat(program.classes()).extracting(IrClass::jvmName)
             .containsExactly("com/acme/Main", "com/acme/Unused");
+    }
+
+    @Test
+    void dynamicClassForNameRetainsAllClosedWorldMetadata() {
+        final MethodInfo main = method(
+            0x0008, "main", "(Ljava/lang/String;)V", 1, 1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;")),
+            plain(4, 87, "pop"), plain(5, 177, "return")
+        );
+        final ClassFile mainClass = classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(main));
+        final ClassFile other = classFile("com/acme/Other", "java/lang/Object", 0, List.of(), List.of(), List.of());
+        final EntryPoint entryPoint = new EntryPoint(mainClass.name(), main.name(), main.descriptor());
+        final CallGraph graph = new CallGraph(entryPoint, List.of(entryPoint), List.of(), List.of(),
+            FunctionValueFlow.Result.unavailable(), new InstantiatedTypeAnalysis.Result(List.of(), true));
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(mainClass.name(), mainClass, other.name(), other), graph, SourceLineIndex.empty());
+        assertThat(program.classes()).extracting(IrClass::jvmName).containsExactly("com/acme/Main", "com/acme/Other");
     }
 
     @Test

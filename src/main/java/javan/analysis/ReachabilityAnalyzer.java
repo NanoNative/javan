@@ -2025,6 +2025,37 @@ public final class ReachabilityAnalyzer {
         }
     }
 
+    /**
+     * Finds a literal one-argument class lookup in straight-line bytecode.
+     *
+     * @param code the enclosing method
+     * @param instruction the lookup instruction
+     * @return the JVM class name when the argument is proven, otherwise empty
+     */
+    public static Optional<String> literalClassForNameTarget(final CodeAttribute code, final Instruction instruction) {
+        if (instruction.methodRef().isEmpty() || !code.exceptionTable().isEmpty()) {
+            return Optional.empty();
+        }
+        final MethodRef method = instruction.methodRef().orElseThrow();
+        if (!"java/lang/Class".equals(method.owner()) || !"forName".equals(method.name())
+            || !"(Ljava/lang/String;)Ljava/lang/Class;".equals(method.descriptor())) {
+            return Optional.empty();
+        }
+        Instruction previous = null;
+        Instruction argument = null;
+        for (final Instruction candidate : code.instructions()) {
+            final int opcode = candidate.opcode();
+            if (opcode >= 153 && opcode <= 171 || opcode == 196 || opcode >= 198 && opcode <= 201) {
+                return Optional.empty();
+            }
+            if (candidate.offset() == instruction.offset()) {
+                argument = previous;
+            }
+            previous = candidate;
+        }
+        return argument == null ? Optional.empty() : argument.stringValue().map(value -> value.replace('.', '/'));
+    }
+
     private static void enqueueClassForNameInitializers(
         final Map<String, ClassFile> classes,
         final CodeAttribute code,
@@ -2045,30 +2076,10 @@ public final class ReachabilityAnalyzer {
                 || "(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;".equals(method.descriptor()))) {
             return;
         }
-        if ("(Ljava/lang/String;)Ljava/lang/Class;".equals(method.descriptor())
-            && code.exceptionTable().isEmpty()) {
-            final List<Instruction> instructions = code.instructions();
-            Instruction previous = null;
-            Instruction argument = null;
-            boolean straightLine = true;
-            for (final Instruction candidate : instructions) {
-                final int opcode = candidate.opcode();
-                if (opcode >= 153 && opcode <= 171 || opcode >= 198 && opcode <= 201) {
-                    straightLine = false;
-                    break;
-                }
-                if (candidate.offset() == instruction.offset()) {
-                    argument = previous;
-                }
-                previous = candidate;
-            }
-            if (straightLine && argument != null && argument.stringValue().isPresent()) {
-                final String owner = argument.stringValue().orElseThrow().replace('.', '/');
-                if (classes.containsKey(owner)) {
-                    enqueueClassInitializer(classes, owner, work, workSet, current, callEdges, entryPoints);
-                    return;
-                }
-            }
+        final Optional<String> target = literalClassForNameTarget(code, instruction);
+        if (target.isPresent() && classes.containsKey(target.orElseThrow())) {
+            enqueueClassInitializer(classes, target.orElseThrow(), work, workSet, current, callEdges, entryPoints);
+            return;
         }
         final List<String> owners = new ArrayList<>(classes.keySet());
         for (int index = 1; index < owners.size(); index++) {

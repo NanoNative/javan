@@ -4,6 +4,7 @@ import javan.analysis.CallGraph;
 import javan.analysis.ClassInitializationGraph;
 import javan.analysis.EntryPoint;
 import javan.analysis.GeneratedObjectCloneSupport;
+import javan.analysis.ReachabilityAnalyzer;
 import javan.classfile.ClassFile;
 import javan.classfile.ClassFileScanner;
 import javan.classfile.CodeAttribute;
@@ -500,7 +501,11 @@ final class BytecodeToIRMetadataSupport {
                 if (instruction.methodRef().isPresent()) {
                     final MethodRef reference = instruction.methodRef().orElseThrow();
                     if (isClassForName(reference)) {
-                        return lowerClasses(classes);
+                        final Optional<String> target = ReachabilityAnalyzer.literalClassForNameTarget(code, instruction);
+                        if (target.isEmpty() || !classes.containsKey(target.orElseThrow())) {
+                            return lowerClasses(classes);
+                        }
+                        addClass(classes, retained, target.orElseThrow());
                     }
                     addClass(classes, retained, reference.owner());
                 }
