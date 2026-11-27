@@ -699,6 +699,33 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBoundsClassNamesWithoutDeclaration() throws Exception {
+        final Path project = project("selfhost-implicit-class-bounds");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println(Known.class.getName());
+                    final String name = args[0];
+                    try { System.out.println(Class.forName(name).getName()); }
+                    catch (ClassNotFoundException missing) { System.out.println("missing"); }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Known", "package com.acme; public final class Known { }");
+        writeJava(project, "com.acme.Unrelated", "package com.acme; public final class Unrelated { }");
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final String executable = project.resolve(".javan/bin/selfhost-implicit-class-bounds").toString();
+        final ProcessResult known = process(project, List.of(executable, "com.acme.Known"));
+        assertThat(known.exitCode()).as(known.stderr()).isZero();
+        assertThat(known.stdout()).isEqualTo("com.acme.Known\ncom.acme.Known\n");
+        final ProcessResult missing = process(project, List.of(executable, "com.acme.Unrelated"));
+        assertThat(missing.exitCode()).as(missing.stderr()).isZero();
+        assertThat(missing.stdout()).isEqualTo("com.acme.Known\nmissing\n");
+    }
+
+    @Test
     void nativeBuiltJavanFollowsAliasedClassNames() throws Exception {
         final Path project = project("selfhost-aliased-class-name");
         writeJava(project, "com.acme.Main", """

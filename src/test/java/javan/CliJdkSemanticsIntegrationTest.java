@@ -16042,7 +16042,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void classForNameWithSystemLoaderRestrictsRuntimeNamesToCompiledClasses() throws Exception {
+    void classForNameWithSystemLoaderRestrictsRuntimeNamesToKnownClasses() throws Exception {
         final Path project = project("class-for-name-runtime-loader-name");
         writeJava(project, "com.acme.Target", """
             package com.acme;
@@ -16051,6 +16051,9 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         writeJava(project, "com.acme.Main", """
             package com.acme;
             public final class Main {
+                public static java.lang.reflect.AnnotatedElement[] javanReflectionTargets() {
+                    return new java.lang.reflect.AnnotatedElement[] { Target.class };
+                }
                 public static void main(final String[] args) {
                     final String name = args[0];
                     final ClassLoader loader = ClassLoader.getSystemClassLoader();
@@ -16629,7 +16632,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void classForNameKeepsDynamicTargetsWhenControlFlowMerges() throws Exception {
+    void classForNameKeepsDeclaredDynamicTargetsWhenControlFlowMerges() throws Exception {
         final Path project = project("class-for-name-merged-target");
         writeJava(project, "com.acme.Target", """
             package com.acme;
@@ -16646,6 +16649,9 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         writeJava(project, "com.acme.Main", """
             package com.acme;
             public final class Main {
+                public static java.lang.reflect.AnnotatedElement[] javanReflectionTargets() {
+                    return new java.lang.reflect.AnnotatedElement[] { Other.class };
+                }
                 public static void main(String[] args) throws Exception {
                     Class.forName(args.length > 1 ? args[0] : "com.acme.Target");
                 }

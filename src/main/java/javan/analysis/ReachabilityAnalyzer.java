@@ -169,12 +169,12 @@ public final class ReachabilityAnalyzer {
                 constructorsChanged = true;
             }
             if (constructorsChanged) continue;
-            if (declaration.present()) {
+            if (declaration.present() || usesClassForName(classes, graph.reachableMethods())) {
                 final ClassInitializationGraph.Result initialization =
                     ClassInitializationGraph.analyze(classes, graph.reachableMethods());
                 final boolean classesChanged = reflectionClasses.addAll(
                     ClassMetadataReachability.collect(classes, graph, initialization, declaration));
-                final boolean namesChanged = reflectionMethodNames.addAll(
+                final boolean namesChanged = declaration.present() && reflectionMethodNames.addAll(
                     ReflectionMethodReachability.literalNames(classes, graph.reachableMethods()));
                 if (classesChanged || namesChanged) {
                     continue;
@@ -215,6 +215,19 @@ public final class ReachabilityAnalyzer {
             }
             collectionQueries = Map.copyOf(next);
         }
+    }
+
+    private static boolean usesClassForName(final Map<String, ClassFile> classes, final List<EntryPoint> reachable) {
+        for (final EntryPoint entry : reachable) {
+            final ClassFile owner = classes.get(entry.className());
+            final Optional<MethodInfo> method = owner == null ? Optional.empty() : owner.method(entry.methodName(), entry.descriptor());
+            if (method.isEmpty() || method.orElseThrow().code().isEmpty()) continue;
+            for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
+                if (instruction.methodRef().isPresent()
+                    && ClassMetadataReachability.isClassForName(instruction.methodRef().orElseThrow())) return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -456,7 +469,6 @@ public final class ReachabilityAnalyzer {
                             classes,
                             code.orElseThrow(),
                             instruction,
-                            declaration.present(),
                             reflectionClasses,
                             work,
                             workSet,
@@ -2171,7 +2183,6 @@ public final class ReachabilityAnalyzer {
         final Map<String, ClassFile> classes,
         final CodeAttribute code,
         final Instruction instruction,
-        final boolean boundedReflection,
         final Set<String> reflectionClasses,
         final List<EntryPoint> work,
         final EntryPointMembership workSet,
@@ -2191,7 +2202,7 @@ public final class ReachabilityAnalyzer {
             enqueueClassInitializer(classes, target.orElseThrow(), work, workSet, current, callEdges, entryPoints);
             return;
         }
-        final List<String> owners = new ArrayList<>(boundedReflection ? reflectionClasses : classes.keySet());
+        final List<String> owners = new ArrayList<>(reflectionClasses);
         for (int index = 1; index < owners.size(); index++) {
             final String owner = owners.get(index);
             int insertion = index;

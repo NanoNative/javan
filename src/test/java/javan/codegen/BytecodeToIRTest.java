@@ -420,7 +420,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void dynamicClassForNameRetainsAllClosedWorldMetadata() {
+    void dynamicClassForNameOmitsUnreferencedClassMetadata() {
         final MethodInfo main = method(
             0x0008, "main", "(Ljava/lang/String;)V", 1, 1,
             plain(0, 42, "aload_0"),
@@ -434,7 +434,7 @@ final class BytecodeToIRTest {
             FunctionValueFlow.Result.unavailable(), new InstantiatedTypeAnalysis.Result(List.of(), true));
         final IrProgram program = new BytecodeToIR().lower(
             Map.of(mainClass.name(), mainClass, other.name(), other), graph, SourceLineIndex.empty());
-        assertThat(program.classes()).extracting(IrClass::jvmName).containsExactly("com/acme/Main", "com/acme/Other");
+        assertThat(program.classes()).extracting(IrClass::jvmName).containsExactly("com/acme/Main");
     }
 
     @Test

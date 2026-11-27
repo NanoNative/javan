@@ -68,8 +68,6 @@ public final class ClassMetadataReachability {
                         final Optional<String> target = ReachabilityAnalyzer.literalClassForNameTarget(code, instruction);
                         if (target.isPresent() && classes.containsKey(target.orElseThrow())) {
                             addClass(classes, retained, target.orElseThrow());
-                        } else if (!declaration.present()) {
-                            return Set.copyOf(classes.keySet());
                         } else if ("(Ljava/lang/String;)Ljava/lang/Class;".equals(reference.descriptor())) {
                             for (final String literal : ReflectionStringFlow.literals(method.orElseThrow(), index - 1)) {
                                 addClass(classes, retained, literal.replace('.', '/'));

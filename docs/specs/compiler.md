@@ -92,13 +92,12 @@ for the exact parameter list, including all bytecode methods with that name and 
 list when return types differ. Constructors retain their exact parameter list. An empty array
 is valid. Duplicate declarations, different signatures, missing members and computed or
 unsupported elements produce `JAVAN096`.
-Field declarations are not implemented yet. Unknown dynamic `Class.forName`
-targets remain conservative over the parsed world when no declaration exists. With a
-declaration, dynamic names resolve against the declared classes, classes retained by reachable
+Field declarations are not implemented yet. Dynamic `Class.forName` names resolve against
+the declared classes, classes retained by reachable
 code and their required hierarchies, and class-name literals traced to the lookup directly or
 through local assignments and control flow in the same method. The three-argument overload
-currently traces simple loader and initialization-flag expressions. Names that cannot be
-proven, including names received from external input, require an explicit declaration.
+currently traces simple loader and initialization-flag expressions. External names that do
+not resolve to an already retained class require an explicit declaration.
 Supported platform classes remain available. Other application names produce
 `ClassNotFoundException`. For application methods, metadata and invocation retain declared
 identities and literal arguments traced through local assignments and control flow to reachable
@@ -108,6 +107,10 @@ yet be proven require an explicit declaration. Other dynamic application method 
 `NoSuchMethodException`.
 Supported platform method metadata remains available. Automatically proven targets remain
 available without the declaration.
+
+This class-name bound applies without a declaration as well. Unresolved reflective method or
+constructor invocation can still conservatively retain additional application code when no
+declaration exists, which can also make more classes available to `Class.forName`.
 
 Within the compiled application and dependencies, `getDeclaredConstructor`, `getConstructor` and
 `Constructor.newInstance` support exact overload lookup, argument conversion, access checks,
