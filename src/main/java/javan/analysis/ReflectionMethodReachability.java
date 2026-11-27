@@ -73,7 +73,7 @@ public final class ReflectionMethodReachability {
                     cursor -= 2;
                 }
                 if (cursor >= 0) {
-                    names.addAll(ReflectionStringFlow.literals(method.orElseThrow(), cursor));
+                    names.addAll(ReflectionLiteralFlow.literals(method.orElseThrow(), cursor));
                 }
             }
         }

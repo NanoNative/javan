@@ -69,7 +69,7 @@ public final class ClassMetadataReachability {
                         if (target.isPresent() && classes.containsKey(target.orElseThrow())) {
                             addClass(classes, retained, target.orElseThrow());
                         } else if ("(Ljava/lang/String;)Ljava/lang/Class;".equals(reference.descriptor())) {
-                            for (final String literal : ReflectionStringFlow.literals(method.orElseThrow(), index - 1)) {
+                            for (final String literal : ReflectionLiteralFlow.literals(method.orElseThrow(), index - 1)) {
                                 addClass(classes, retained, literal.replace('.', '/'));
                             }
                         } else if (index >= 3) {
@@ -86,7 +86,7 @@ public final class ClassMetadataReachability {
                             final boolean directFlag = initialize.intValue().isPresent() || flagOpcode == 21
                                 || flagOpcode >= 26 && flagOpcode <= 29;
                             if (directLoader && directFlag) {
-                                for (final String literal : ReflectionStringFlow.literals(method.orElseThrow(), index - 3)) {
+                                for (final String literal : ReflectionLiteralFlow.literals(method.orElseThrow(), index - 3)) {
                                     addClass(classes, retained, literal.replace('.', '/'));
                                 }
                             }

@@ -9,15 +9,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/** Finds literal string values that can reach a local bytecode expression. */
-public final class ReflectionStringFlow {
+/** Finds literal strings and classes that can reach a local bytecode expression. */
+public final class ReflectionLiteralFlow {
     private record Search(int index, int local, boolean stackValue) {
     }
 
     private record Predecessor(int index, boolean exceptional) {
     }
 
-    private ReflectionStringFlow() {
+    private ReflectionLiteralFlow() {
     }
 
     /**
@@ -29,6 +29,21 @@ public final class ReflectionStringFlow {
      * @return literal values found at that use
      */
     public static Set<String> literals(final MethodInfo method, final int sourceIndex) {
+        return literals(method, sourceIndex, false);
+    }
+
+    /**
+     * Finds class literals and one-argument Class.forName literals reaching an expression.
+     *
+     * @param method enclosing method with decoded code
+     * @param sourceIndex index of the instruction producing the class argument
+     * @return discovered JVM class names
+     */
+    public static Set<String> classNames(final MethodInfo method, final int sourceIndex) {
+        return literals(method, sourceIndex, true);
+    }
+
+    private static Set<String> literals(final MethodInfo method, final int sourceIndex, final boolean classes) {
         if (method.code().isEmpty()) {
             return Set.of();
         }
@@ -37,8 +52,9 @@ public final class ReflectionStringFlow {
             return Set.of();
         }
         final Instruction source = instructions.get(sourceIndex);
-        if (source.stringValue().isPresent()) {
-            return Set.of(source.stringValue().orElseThrow());
+        final Set<String> direct = literal(method, instructions, sourceIndex, classes);
+        if (!direct.isEmpty()) {
+            return direct;
         }
         final int initialLocal = referenceLoad(source);
         if (initialLocal < 0) {
@@ -92,8 +108,9 @@ public final class ReflectionStringFlow {
                     if (predecessor.exceptional()) {
                         continue;
                     }
-                    if (instruction.stringValue().isPresent()) {
-                        values.add(instruction.stringValue().orElseThrow());
+                    final Set<String> literal = literal(method, instructions, index, classes);
+                    if (!literal.isEmpty()) {
+                        values.addAll(literal);
                     } else if (opcode == 0 || opcode == 167 || opcode == 192 || opcode == 200) {
                         work.add(new Search(index, -1, true));
                     } else {
@@ -124,6 +141,28 @@ public final class ReflectionStringFlow {
             }
         }
         return Set.copyOf(values);
+    }
+
+    private static Set<String> literal(final MethodInfo method, final List<Instruction> instructions,
+                                       final int index, final boolean classes) {
+        final Instruction instruction = instructions.get(index);
+        if (!classes) {
+            if (instruction.stringValue().isPresent()) return Set.of(instruction.stringValue().orElseThrow());
+            return Set.of();
+        }
+        if ((instruction.opcode() == 18 || instruction.opcode() == 19) && instruction.className().isPresent()) {
+            return Set.of(instruction.className().orElseThrow());
+        }
+        if (instruction.opcode() == 184 && instruction.methodRef().isPresent()) {
+            final var target = instruction.methodRef().orElseThrow();
+            if ("java/lang/Class".equals(target.owner()) && "forName".equals(target.name())
+                && "(Ljava/lang/String;)Ljava/lang/Class;".equals(target.descriptor())) {
+                final Set<String> names = new HashSet<>();
+                for (final String name : literals(method, index - 1)) names.add(name.replace('.', '/'));
+                return Set.copyOf(names);
+            }
+        }
+        return Set.of();
     }
 
     private static int referenceLoad(final Instruction instruction) {

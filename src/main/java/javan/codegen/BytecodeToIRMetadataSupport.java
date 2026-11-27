@@ -446,20 +446,18 @@ final class BytecodeToIRMetadataSupport {
         final Set<String> classpathClasses = classes.keySet();
         final ReflectionDeclaration.Result declaration = ReflectionDeclaration.analyze(classes);
         final Set<String> literalNames = ReflectionMethodReachability.literalNames(classes, reachableMethods);
-        final ReflectionConstructorReachability.Result constructorAnalysis =
-            ReflectionConstructorReachability.analyze(classes, reachableMethods);
-        final List<EntryPoint> literalConstructors = constructorAnalysis.targets();
+        final List<EntryPoint> literalConstructors = ReflectionConstructorReachability.analyze(classes, reachableMethods);
         final List<IrReflectedClass> result = new ArrayList<>();
         for (final IrClass retained : retainedClasses) {
             final ClassFile classFile = classes.get(retained.jvmName());
             if (classFile != null) {
-                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection, declaration, literalNames, literalConstructors, constructorAnalysis.complete()));
+                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection, declaration, literalNames, literalConstructors));
             }
         }
         for (final String jvmName : reflection.externalClassNames()) {
             final ClassFile classFile = externalClasses.get(jvmName);
             if (classFile != null) {
-                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection, declaration, literalNames, literalConstructors, constructorAnalysis.complete()));
+                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection, declaration, literalNames, literalConstructors));
             }
         }
         if (reflection.publicMethodLookup()) {
@@ -483,15 +481,14 @@ final class BytecodeToIRMetadataSupport {
         final ReflectionClasses reflection,
         final ReflectionDeclaration.Result declaration,
         final Set<String> literalNames,
-        final List<EntryPoint> literalConstructors,
-        final boolean preciseConstructors
+        final List<EntryPoint> literalConstructors
     ) {
         final List<IrMethodMetadata> constructors = new ArrayList<>();
         if (reflection.declaredConstructorLookup() && classpathClasses.contains(classFile.name())) {
             for (final MethodInfo method : classFile.methods()) {
-                if (!"<init>".equals(method.name()) || (declaration.present() || preciseConstructors)
-                    && !declaration.methods().contains(new EntryPoint(classFile.name(), method.name(), method.descriptor()))
-                    && !literalConstructors.contains(new EntryPoint(classFile.name(), method.name(), method.descriptor()))) {
+                if (!"<init>".equals(method.name())
+                    || (!declaration.methods().contains(new EntryPoint(classFile.name(), method.name(), method.descriptor()))
+                        && !literalConstructors.contains(new EntryPoint(classFile.name(), method.name(), method.descriptor())))) {
                     continue;
                 }
                 constructors.add(new IrMethodMetadata(classFile.name(), classFile.nestHost(), method.name(),

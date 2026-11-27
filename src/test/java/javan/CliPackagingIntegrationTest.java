@@ -544,6 +544,33 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanFollowsBranchedConstructorClasses() throws Exception {
+        final Path project = project("selfhost-branched-constructors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    Class<?> type = args.length == 0 ? First.class : Second.class;
+                    Object value = type.getDeclaredConstructor().newInstance();
+                    System.out.println(value.getClass().getName());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.First", "package com.acme; public final class First { public First() { } }");
+        writeJava(project, "com.acme.Second", "package com.acme; public final class Second { public Second() { } }");
+        writeJava(project, "com.acme.Unrelated", "package com.acme; public final class Unrelated { public Unrelated() { System.setProperty(\"unused\", \"never\"); } }");
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final String executable = project.resolve(".javan/bin/selfhost-branched-constructors").toString();
+        final ProcessResult first = process(project, List.of(executable));
+        final ProcessResult second = process(project, List.of(executable, "second"));
+        assertThat(first.exitCode()).as(first.stderr()).isZero();
+        assertThat(first.stdout()).isEqualTo("com.acme.First\n");
+        assertThat(second.exitCode()).as(second.stderr()).isZero();
+        assertThat(second.stdout()).isEqualTo("com.acme.Second\n");
+    }
+
+    @Test
     void nativeBuiltJavanFollowsLocalClassNameToConstructor() throws Exception {
         final Path project = project("selfhost-local-constructor");
         writeJava(project, "com.acme.Main", """

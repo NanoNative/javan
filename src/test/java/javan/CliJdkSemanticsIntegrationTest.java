@@ -17684,11 +17684,14 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void dynamicConstructorLookupWithoutDeclarationRemainsConservative() throws Exception {
+    void dynamicConstructorLookupUsesDeclaredTargets() throws Exception {
         final Path project = project("dynamic-reflection-constructor");
         writeJava(project, "com.acme.Main", """
             package com.acme;
             public final class Main {
+                public static java.lang.reflect.AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new java.lang.reflect.AnnotatedElement[] {Other.class.getDeclaredConstructor()};
+                }
                 public static void main(String[] args) throws Exception {
                     Target.class.getDeclaredConstructor().newInstance();
                     System.out.println(Class.forName(args[0]).getDeclaredConstructor().newInstance().getClass().getName());

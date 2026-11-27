@@ -108,15 +108,14 @@ yet be proven require an explicit declaration. Other dynamic application method 
 Supported platform method metadata remains available. Automatically proven targets remain
 available without the declaration.
 
-These class-name and method-name bounds apply without a declaration as well. Unresolved
-reflective constructor invocation can still conservatively retain additional application code
-when no declaration exists, which can also make more classes available to `Class.forName`.
+These class-name and method-name bounds apply without a declaration as well.
 
 Within the compiled application and dependencies, `getDeclaredConstructor`, `getConstructor` and
 `Constructor.newInstance` support exact overload lookup, argument conversion, access checks,
-class initialization and wrapped constructor exceptions. A direct class literal or a
-straight-line one-argument `Class.forName` literal, including copies through local variables,
-together with inline parameter literals, is retained automatically even with an empty declaration.
+class initialization and wrapped constructor exceptions. Class literals and one-argument
+`Class.forName` string literals traced through local variables and control flow in the same method,
+together with inline parameter literals, retain the matching constructors automatically even
+with an empty declaration.
 `getConstructor` selects only public constructors, even when non-public constructors are declared.
 Constructor metadata supports `getName`, `getDeclaringClass`, `getParameterCount`, `getParameterTypes`
 and `getModifiers`. Each `getParameterTypes` call returns a fresh array.
@@ -124,9 +123,8 @@ Constructor `canAccess`, `setAccessible`, `trySetAccessible` and `isAccessible` 
 closed-world access checks as invocation, including rejection of non-null `canAccess` targets.
 The shared `Executable` and `Member` metadata accessors work for compiled Method and Constructor
 objects. Field reflection remains outside this subset.
-Local targets across branches or exception handlers remain conservative.
-With a declaration, other dynamic targets require a declared constructor. Without one,
-unresolved constructor lookups retain the parsed world conservatively. Platform constructor
+Other dynamic targets require a declared constructor, including when no declaration exists.
+Platform constructor
 lookup fails explicitly with `UnsupportedOperationException` until implemented. Other
 constructor reflection APIs are not implied by this subset.
 
