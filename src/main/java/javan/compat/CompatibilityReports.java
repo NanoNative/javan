@@ -681,6 +681,7 @@ public final class CompatibilityReports {
             pass("map-of-entries-inline-typed-handler"),
             pass("map-of-entries-inline-distinct-key-types"),
             pass("map-of-entries-local-array-key-flow"),
+            pass("map-of-entries-local-array-static-read"),
             pass("map-of-entries-proven-index-overwrite"),
             scoped("map-of-entries-custom-key-callbacks"),
             pass("set-copy-of"),

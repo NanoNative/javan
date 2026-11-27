@@ -314,6 +314,7 @@ final class CompatibilityReportsTest {
             "| `map-of-entries-inline-typed-handler` | pass |",
             "| `map-of-entries-inline-distinct-key-types` | pass |",
             "| `map-of-entries-local-array-key-flow` | pass |",
+            "| `map-of-entries-local-array-static-read` | pass |",
             "| `map-of-entries-proven-index-overwrite` | pass |",
             "| `map-of-entries-custom-key-callbacks` | scoped |",
             "| `set-copy-of` | pass |",
@@ -527,6 +528,7 @@ final class CompatibilityReportsTest {
             "\"feature\": \"map-of-entries-inline-typed-handler\"",
             "\"feature\": \"map-of-entries-inline-distinct-key-types\"",
             "\"feature\": \"map-of-entries-local-array-key-flow\"",
+            "\"feature\": \"map-of-entries-local-array-static-read\"",
             "\"feature\": \"map-of-entries-proven-index-overwrite\"",
             "\"feature\": \"set-copy-of\"",
             "\"feature\": \"set-of-empty\"",
@@ -638,10 +640,10 @@ final class CompatibilityReportsTest {
             "A broad JDK-compatibility release must report:",
             "The first native release is scenario-bounded.",
             "not a release-completion percentage.",
-            "| support rows | 340 |",
-            "| pass rows | 338 |",
+            "| support rows | 341 |",
+            "| pass rows | 339 |",
             "| scoped rows | 2 |",
-            "| accounted rows | 338 |",
+            "| accounted rows | 339 |",
             "| unaccounted rows | 2 |"
         );
         assertThat(matrix).contains(

@@ -767,8 +767,8 @@ public final class FunctionValueFlow {
             // Any escape, control-flow split or opaque stack manipulation loses the fact.
             if (callbackKind == CallbackKind.COLLECTION_QUERY
                 && (opcode >= 87 && opcode <= 88
-                    || opcode >= 90 && opcode <= 95 || opcode >= 153 && opcode <= 181
-                    || opcode == 186 || opcode == 190 || opcode >= 191 && opcode <= 201)) {
+                    || opcode >= 90 && opcode <= 95 || opcode >= 153 && opcode <= 177
+                    || opcode >= 179 && opcode <= 181 || opcode == 186 || opcode == 190 || opcode >= 191 && opcode <= 201)) {
                 state.clearInlineEntryArrays();
             }
             if (opcode == 0 || opcode == 132) {
