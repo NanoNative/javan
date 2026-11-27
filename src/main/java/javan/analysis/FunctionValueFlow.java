@@ -387,7 +387,7 @@ public final class FunctionValueFlow {
                     if (JdkCallSupport.isMapMultiEntryFactory(instruction.methodRef().orElseThrow())) {
                         final int count = JdkCallSupport.mapFixedEntryCount(instruction.methodRef().orElseThrow());
                         for (int key = 0; key < count; key++) {
-                            result.putIfAbsent(mapFixedSiteKey(entry, instruction, key), CollectionQuery.unavailable());
+                            result.putIfAbsent(mapKeySiteKey(entry, instruction, key), CollectionQuery.unavailable());
                         }
                     } else {
                         result.putIfAbsent(collectionSiteKey(entry, instruction), CollectionQuery.unavailable());
@@ -915,7 +915,7 @@ public final class FunctionValueFlow {
                     && "java/util/Map$Entry".equals(instruction.className().orElseThrow())
                     && index > 0 && inlineArrayLength(bytecode.get(index - 1)) > 1;
                 state.stack().add(new Slot(multiEntryArray
-                    ? new Fact(PLATFORM | INLINE_ENTRY_ARRAY, List.of(), false, Fact.platform())
+                    ? new Fact(PLATFORM | INLINE_ENTRY_ARRAY, List.of(), false, null)
                     : callbackKind == CallbackKind.COLLECTION_QUERY ? Fact.platform() : Fact.unsafe(), 1));
                 return next(index, bytecode);
             }
@@ -1083,12 +1083,20 @@ public final class FunctionValueFlow {
                 if (callbackKind == CallbackKind.COLLECTION_QUERY) {
                     if (JdkCallSupport.isMapEntryArrayFactory(methodRef)) {
                         final Fact array = arguments.getFirst().fact();
-                        addCollectionFact(collectionSiteKey(caller, instruction),
-                            (array.kinds() & INLINE_ENTRY_ARRAY) != 0 && array.elements() != null
-                                ? array.elements() : Fact.unsafe());
+                        final boolean trackedArray = (array.kinds() & INLINE_ENTRY_ARRAY) != 0;
+                        addCollectionFact(collectionSiteKey(caller, instruction), trackedArray ? Fact.platform() : Fact.unsafe());
+                        if (trackedArray) {
+                            Fact key = array.elements();
+                            int index = 0;
+                            while (key != null) {
+                                addCollectionFact(mapKeySiteKey(caller, instruction, index), key.withElements(null));
+                                key = key.elements();
+                                index++;
+                            }
+                        }
                     } else if (JdkCallSupport.isMapMultiEntryFactory(methodRef)) {
                         for (int key = 0; key < arguments.size() / 2; key++) {
-                            addCollectionFact(mapFixedSiteKey(caller, instruction, key), arguments.get(key * 2).fact());
+                            addCollectionFact(mapKeySiteKey(caller, instruction, key), arguments.get(key * 2).fact());
                         }
                     } else {
                         final Fact argument = JdkCallSupport.isMapKeyOperation(methodRef)
@@ -2011,7 +2019,7 @@ public final class FunctionValueFlow {
         return entryPoint.display() + "#" + instruction.offset();
     }
 
-    static String mapFixedSiteKey(final EntryPoint entryPoint, final Instruction instruction, final int key) {
+    static String mapKeySiteKey(final EntryPoint entryPoint, final Instruction instruction, final int key) {
         return collectionSiteKey(entryPoint, instruction) + ":" + key;
     }
 
@@ -2182,7 +2190,7 @@ public final class FunctionValueFlow {
         }
     }
 
-    // Null elements mean unknown contents; element facts do not retain nested collection contents.
+    // Collection elements are merged facts. For inline entry arrays they form a linked list of key facts.
     private record Fact(int kinds, List<String> types, boolean unknown, Fact elements) {
         private Fact(final int kinds, final List<String> types, final boolean unknown) {
             this(kinds, types, unknown, null);
@@ -2238,6 +2246,8 @@ public final class FunctionValueFlow {
         }
 
         private Fact withoutFreshEmptySet() {
+            // Inline-array keys are cleared as they are recorded, so avoid revisiting the list.
+            if ((kinds & INLINE_ENTRY_ARRAY) != 0) return this;
             final Fact clearedElements = elements == null ? null : elements.withoutFreshEmptySet();
             return (kinds & FRESH_EMPTY_SET) == 0 && clearedElements == elements ? this
                 : new Fact(kinds & ~FRESH_EMPTY_SET, types, unknown, clearedElements);
@@ -2361,7 +2371,9 @@ public final class FunctionValueFlow {
         }
 
         private void updateInlineEntryArray(final Fact array, final Fact key) {
-            final Fact updated = new Fact(array.kinds(), array.types(), array.unknown(), array.elements().merge(key));
+            final Fact clearedKey = key.withoutFreshEmptySet();
+            final Fact storedKey = new Fact(clearedKey.kinds(), clearedKey.types(), clearedKey.unknown(), array.elements());
+            final Fact updated = new Fact(array.kinds(), array.types(), array.unknown(), storedKey);
             for (int index = 0; index < stack.size(); index++) {
                 final Slot slot = stack.get(index);
                 if (slot.fact() == array) stack.set(index, new Slot(updated, slot.width()));

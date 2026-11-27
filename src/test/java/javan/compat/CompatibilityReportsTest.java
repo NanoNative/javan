@@ -312,6 +312,7 @@ final class CompatibilityReportsTest {
             "| `map-copyof-custom-key-callbacks` | pass |",
             "| `map-of-entries` | pass |",
             "| `map-of-entries-inline-typed-handler` | pass |",
+            "| `map-of-entries-inline-distinct-key-types` | pass |",
             "| `map-of-entries-custom-key-callbacks` | scoped |",
             "| `set-copy-of` | pass |",
             "| `set-of-empty` | pass |",
@@ -522,6 +523,7 @@ final class CompatibilityReportsTest {
             "\"feature\": \"map-copyof-custom-key-callbacks\"",
             "\"feature\": \"map-of-entries-custom-key-callbacks\"",
             "\"feature\": \"map-of-entries-inline-typed-handler\"",
+            "\"feature\": \"map-of-entries-inline-distinct-key-types\"",
             "\"feature\": \"set-copy-of\"",
             "\"feature\": \"set-of-empty\"",
             "\"feature\": \"set-of-singleton\"",
@@ -632,10 +634,10 @@ final class CompatibilityReportsTest {
             "A broad JDK-compatibility release must report:",
             "The first native release is scenario-bounded.",
             "not a release-completion percentage.",
-            "| support rows | 337 |",
-            "| pass rows | 335 |",
+            "| support rows | 338 |",
+            "| pass rows | 336 |",
             "| scoped rows | 2 |",
-            "| accounted rows | 335 |",
+            "| accounted rows | 336 |",
             "| unaccounted rows | 2 |"
         );
         assertThat(matrix).contains(

@@ -155,8 +155,8 @@ key methods containing only primitives and Strings are proven side-effect-free a
 the map's runtime lock. Known application key overrides that cannot be compiled fail with
 `UnsupportedOperationException` when needed. `Map.ofEntries` also infers application key callbacks from
 known `Map.entry` values in a freshly created entry array while that array stays on a straight-line
-operand stack. This inference is bounded to four exact key types and is discarded when the array escapes,
-control flow branches or an unsupported stack operation occurs. Other entry arrays can use callbacks
+operand stack. Each entry's key flow is bounded to four exact types. The array fact is discarded when
+the array escapes, control flow branches or an unsupported stack operation occurs. Other entry arrays can use callbacks
 already retained by another proven call.
 Inherited platform key methods, application-defined map
 value equality and custom key queries through map views remain incomplete.

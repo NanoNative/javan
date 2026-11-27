@@ -706,6 +706,35 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
 
+
+    @Test
+    void nativeBuiltJavanInfersFiveInlineMapEntryKeyTypes() throws Exception {
+        final Path project = project("selfhost-map-entry-five-key-types");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Map;
+            public final class Main {
+                static int hashes;
+                static final class A { public int hashCode() { hashes++; return 1; } }
+                static final class B { public int hashCode() { hashes++; return 2; } }
+                static final class C { public int hashCode() { hashes++; return 3; } }
+                static final class D { public int hashCode() { hashes++; return 4; } }
+                static final class E { public int hashCode() { hashes++; return 5; } }
+                public static void main(String[] args) {
+                    var result = Map.ofEntries(Map.entry(new A(), "a"), Map.entry(new B(), "b"),
+                        Map.entry(new C(), "c"), Map.entry(new D(), "d"), Map.entry(new E(), "e"));
+                    System.out.println(result.size());
+                    System.out.println(hashes);
+                }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-map-entry-five-key-types").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("5\n5\n");
+    }
+
     @Test
     void nativeBuiltJavanInfersInlineMapOfEntriesKeys() throws Exception {
         final Path project = project("selfhost-map-ofentries-inline-keys");

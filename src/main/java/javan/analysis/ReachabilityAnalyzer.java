@@ -877,6 +877,15 @@ public final class ReachabilityAnalyzer {
             return resolved;
         }
 
+        private boolean hasKnownCollectionSite(final String site) {
+            final FunctionValueFlow.CollectionQuery query = collectionQueries.get(site);
+            return query != null && !query.unknown();
+        }
+
+        private boolean hasCollectionSite(final String site) {
+            return collectionQueries.containsKey(site);
+        }
+
         private List<EntryPoint> collectionTargets(final EntryPoint current, final Instruction instruction) {
             return collectionTargets(current, instruction, new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z"));
         }
@@ -1491,9 +1500,21 @@ public final class ReachabilityAnalyzer {
             final MethodRef hash = new MethodRef("java/lang/Object", "hashCode", "()I");
             if (JdkCallSupport.isMapMultiEntryFactory(target)) {
                 for (int key = 0; key < JdkCallSupport.mapFixedEntryCount(target); key++) {
-                    final String site = FunctionValueFlow.mapFixedSiteKey(current, instruction, key);
+                    final String site = FunctionValueFlow.mapKeySiteKey(current, instruction, key);
                     customEquals.addAll(dispatchTargets.collectionTargets(instruction, equality, site));
                     customHash.addAll(dispatchTargets.collectionTargets(instruction, hash, site));
+                }
+            } else if (JdkCallSupport.isMapEntryArrayFactory(target)) {
+                final String arraySite = FunctionValueFlow.collectionSiteKey(current, instruction);
+                if (dispatchTargets.hasKnownCollectionSite(arraySite)) {
+                    int key = 0;
+                    String site = FunctionValueFlow.mapKeySiteKey(current, instruction, key);
+                    while (dispatchTargets.hasCollectionSite(site)) {
+                        customEquals.addAll(dispatchTargets.collectionTargets(instruction, equality, site));
+                        customHash.addAll(dispatchTargets.collectionTargets(instruction, hash, site));
+                        key++;
+                        site = FunctionValueFlow.mapKeySiteKey(current, instruction, key);
+                    }
                 }
             } else {
                 customEquals.addAll(dispatchTargets.collectionTargets(current, instruction, equality));
