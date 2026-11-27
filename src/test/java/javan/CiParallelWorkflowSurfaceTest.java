@@ -133,7 +133,7 @@ final class CiParallelWorkflowSurfaceTest {
             .doesNotContain("package_timeout_minutes:");
         assertThat(common)
             .contains("bootstrap_generation:")
-            .contains("bootstrap_generation: ${{ inputs.bootstrap_generation }}")
+            .contains("bootstrap_generation: ${{ fromJSON(format('{0}', inputs.bootstrap_generation)) }}")
             .contains("timeout_minutes: ${{ inputs.bootstrap_generation == 3 && 90 || 60 }}")
             .doesNotContain("package_timeout_minutes:")
             .contains("package_scope: ${{ inputs.prepare_publication && matrix.enabled && 'full' || 'bootstrap' }}")
@@ -175,6 +175,8 @@ final class CiParallelWorkflowSurfaceTest {
                 .contains("package_scope: ${{ needs.build-info.outputs.package_scope }}")
                 .contains("sanitizer_scope: ${{ needs.build-info.outputs.package_sanitizer_scope }}");
         }
+        final String numericGeneration = "bootstrap_generation: ${{ fromJSON(format('{0}', inputs.bootstrap_generation)) }}";
+        assertThat(common.split(Pattern.quote(numericGeneration), -1)).hasSize(4);
     }
 
     @Test
