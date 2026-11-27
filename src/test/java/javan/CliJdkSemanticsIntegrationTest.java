@@ -14712,6 +14712,42 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void collectionToArraySurvivesConcurrentCollection() throws Exception {
+        final Path project = project("collection-to-array-concurrent-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            public final class Main {
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 2000; i++) new StringBuilder().append(i).toString();
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Collection<String> values = List.of("always");
+                    Thread worker = new Thread(new Worker());
+                    worker.start();
+                    int failures = 0;
+                    for (int i = 0; i < 2000; i++) {
+                        Object[] array = values.toArray();
+                        if (array.length != 1 || !"always".equals(array[0])) failures++;
+                    }
+                    worker.join();
+                    System.out.println(failures);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("0\n");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/collection-to-array-concurrent-gc").toString()),
+            Duration.ofSeconds(90), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
     void mapKeySetBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("map-key-set");
         writeJava(project, "com.acme.Main", """

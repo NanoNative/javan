@@ -2542,6 +2542,55 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void staticLibraryCollectionToArraySurvivesConcurrentCollection() throws Exception {
+        final Path project = project("library-array-handoff");
+        writeJava(project, "com.acme.Arrays", """
+            package com.acme;
+            import java.util.*;
+            public final class Arrays {
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 500; i++) new StringBuilder().append(i).toString();
+                    }
+                }
+                public static int check() throws InterruptedException {
+                    Collection<String> values = List.of("always");
+                    Thread worker = new Thread(new Worker());
+                    worker.start();
+                    int failures = 0;
+                    for (int i = 0; i < 500; i++) {
+                        Object[] array = values.toArray();
+                        if (array.length != 1 || !"always".equals(array[0])) failures++;
+                    }
+                    worker.join();
+                    return failures;
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString(), "--kind", "staticlib", "--export", "com.acme.Arrays.check");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path caller = writeC(project, "call_array.c", """
+            #include ".javan/dist/bindings/c/library-array-handoff.h"
+            int main(void) {
+                for (int i = 0; i < 5; i++) {
+                    int value = -1;
+                    JavanResult result = javan_try_com_acme_Arrays_check_void(&value);
+                    if (!result.ok || value != 0) return 1;
+                    javan_result_free(&result);
+                }
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-array");
+        final ProcessResult compile = process(project, List.of("cc", caller.toString(),
+            project.resolve(".javan/dist/liblibrary-array-handoff.a").toString(), "-o", binary.toString()));
+        assertThat(compile.exitCode()).as(compile.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(binary.toString()), Duration.ofSeconds(90),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+    }
+
+    @Test
     void staticLibraryNestedReferenceSelectionTransportsFailures() throws Exception {
         final Path project = project("library-nested-reference-selection");
         writeJava(project, "com.acme.Text", """

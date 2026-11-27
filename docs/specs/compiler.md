@@ -121,6 +121,8 @@ equality semantics.
 Reads using `List.get`, `getFirst` and `getLast` publish returned references safely during concurrent
 garbage collection. Supported `getFirst` and `getLast` calls transport null-receiver and empty-list
 failures within supported handler shapes.
+Supported `Collection.toArray()` results are also published safely during concurrent garbage
+collection.
 Supported indexed `get` calls transport null-receiver and invalid-index failures within supported
 handler shapes.
 Supported indexed `set` calls also transport immutable-list failures and preserve the replaced value

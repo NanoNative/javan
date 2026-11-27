@@ -3810,6 +3810,7 @@ public final class CCodegen {
                     "javan_hashset_new_with_expected_elements",
                     "javan_linkedhashset_new_with_expected_elements",
                     "javan_list_copy_of",
+                    "javan_list_to_array",
                     "javan_list_of",
                     "javan_collections_empty_list",
                     "javan_list_of_java",
