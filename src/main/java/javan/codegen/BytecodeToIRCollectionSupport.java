@@ -1300,13 +1300,13 @@ final class BytecodeToIRCollectionSupport {
         if (isJdkMapOwner(methodRef.owner())) {
             if ("get(Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
                 pushObjectCall(instructions, stack, localDeclarations,
-                    JdkCallSupport.isMapObjectGetOrPut(methodRef) ? "javan_map_get_java" : "javan_map_get",
+                    JdkCallSupport.isMapObjectGetOrPut(methodRef) ? "javan_map_get_java_into" : "javan_map_get",
                     List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("getOrDefault(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
                 pushObjectCall(instructions, stack, localDeclarations,
-                    JdkCallSupport.isMapMembershipOrDefaultQuery(methodRef) ? "javan_map_get_or_default_java" : "javan_map_get_or_default",
+                    JdkCallSupport.isMapMembershipOrDefaultQuery(methodRef) ? "javan_map_get_or_default_java_into" : "javan_map_get_or_default",
                     List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
@@ -1314,19 +1314,19 @@ final class BytecodeToIRCollectionSupport {
                 || ("java/util/EnumMap".equals(methodRef.owner())
                 && "put(Ljava/lang/Enum;Ljava/lang/Object;)Ljava/lang/Object;".equals(signature))) {
                 pushObjectCall(instructions, stack, localDeclarations,
-                    JdkCallSupport.isMapObjectGetOrPut(methodRef) ? "javan_map_put_java" : "javan_map_put",
+                    JdkCallSupport.isMapObjectGetOrPut(methodRef) ? "javan_map_put_java_into" : "javan_map_put",
                     List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
             if ("putIfAbsent(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
                 pushObjectCall(instructions, stack, localDeclarations,
-                    JdkCallSupport.isMapPutIfAbsent(methodRef) ? "javan_map_put_if_absent_java" : "javan_map_put_if_absent",
+                    JdkCallSupport.isMapPutIfAbsent(methodRef) ? "javan_map_put_if_absent_java_into" : "javan_map_put_if_absent",
                     List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
             if ("replace(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
                 pushObjectCall(instructions, stack, localDeclarations,
-                    JdkCallSupport.isMapReplace(methodRef) ? "javan_map_replace_java" : "javan_map_replace",
+                    JdkCallSupport.isMapReplace(methodRef) ? "javan_map_replace_java_into" : "javan_map_replace",
                     List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
@@ -1442,7 +1442,7 @@ final class BytecodeToIRCollectionSupport {
             }
             if ("remove(Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
                 pushObjectCall(instructions, stack, localDeclarations,
-                    JdkCallSupport.isMapRemove(methodRef) ? "javan_map_remove_java" : "javan_map_remove",
+                    JdkCallSupport.isMapRemove(methodRef) ? "javan_map_remove_java_into" : "javan_map_remove",
                     List.of(receiver, arguments.getFirst()));
                 return true;
             }

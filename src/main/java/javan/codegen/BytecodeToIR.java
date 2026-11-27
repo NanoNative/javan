@@ -56,6 +56,10 @@ import java.util.Set;
 public final class BytecodeToIR {
     static final String COLLECTION_EQUALS_DISPATCH = "javan_dispatch_collection_equals";
     static final String UNAVAILABLE_COLLECTION_EQUALS = "javan_unavailable_collection_equals";
+    static final String UNAVAILABLE_MAP_EQUALS = "javan_unavailable_map_equals";
+    static final String UNAVAILABLE_MAP_HASH = "javan_unavailable_map_hash";
+    static final String MAP_CUSTOM_EQUALS_DISPATCH = "javan_dispatch_map_custom_equals";
+    static final String MAP_CUSTOM_HASH_DISPATCH = "javan_dispatch_map_custom_hash";
     static final String MAP_RECORD_EQUALS_DISPATCH = "javan_dispatch_map_record_equals";
     static final String MAP_RECORD_HASH_DISPATCH = "javan_dispatch_map_record_hash";
     static final int TYPE_JAVA_LANG_INTEGER = -1001;
@@ -308,6 +312,59 @@ public final class BytecodeToIR {
                     hashTargets.add(hash);
                 }
             }
+            final Set<String> safeOwners = new LinkedHashSet<>();
+            for (final EntryPoint target : equalsTargets) safeOwners.add(target.className());
+            final MethodRef customEquals = new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z");
+            final MethodRef customHash = new MethodRef("java/lang/Object", "hashCode", "()I");
+            final List<EntryPoint> customEqualsTargets = new ArrayList<>();
+            final List<EntryPoint> customHashTargets = new ArrayList<>();
+            final List<IrDispatchTarget> unavailableEquals = new ArrayList<>();
+            final List<IrDispatchTarget> unavailableHash = new ArrayList<>();
+            for (final EntryPoint receiver : virtualTargets(classes, customEquals, callGraph.instantiatedTypes())) {
+                if (safeOwners.contains(receiver.className())) continue;
+                final Optional<EntryPoint> implementation = lowerableResolvedVirtualTarget(classes, receiver.className(), customEquals);
+                if (implementation.isPresent() && reachable.contains(implementation.orElseThrow().display())) {
+                    customEqualsTargets.add(receiver);
+                } else if (implementation.isPresent()) {
+                    unavailableEquals.add(new IrDispatchTarget(receiver.className(), UNAVAILABLE_MAP_EQUALS));
+                }
+            }
+            for (final EntryPoint receiver : virtualTargets(classes, customHash, callGraph.instantiatedTypes())) {
+                if (safeOwners.contains(receiver.className())) continue;
+                final Optional<EntryPoint> implementation = lowerableResolvedVirtualTarget(classes, receiver.className(), customHash);
+                if (implementation.isPresent() && reachable.contains(implementation.orElseThrow().display())) {
+                    customHashTargets.add(receiver);
+                } else if (implementation.isPresent()) {
+                    unavailableHash.add(new IrDispatchTarget(receiver.className(), UNAVAILABLE_MAP_HASH));
+                }
+            }
+            for (final ClassFile candidate : dispatchCandidates(classes, callGraph.instantiatedTypes())) {
+                if (candidate.isInterface() || safeOwners.contains(candidate.name())) continue;
+                if (resolvedVirtualTarget(classes, candidate.name(), customEquals).isPresent()
+                    && lowerableResolvedVirtualTarget(classes, candidate.name(), customEquals).isEmpty()) {
+                    unavailableEquals.add(new IrDispatchTarget(candidate.name(), UNAVAILABLE_MAP_EQUALS));
+                }
+                if (resolvedVirtualTarget(classes, candidate.name(), customHash).isPresent()
+                    && lowerableResolvedVirtualTarget(classes, candidate.name(), customHash).isEmpty()) {
+                    unavailableHash.add(new IrDispatchTarget(candidate.name(), UNAVAILABLE_MAP_HASH));
+                }
+            }
+            if (!customEqualsTargets.isEmpty() || !unavailableEquals.isEmpty()) {
+                final IrDispatch dispatch = BytecodeToIRDynamicSupport.dispatch(
+                    classes, MAP_CUSTOM_EQUALS_DISPATCH, MethodDescriptor.parse(customEquals.descriptor()), customEqualsTargets);
+                final List<IrDispatchTarget> targets = new ArrayList<>(dispatch.targets());
+                targets.addAll(unavailableEquals);
+                dispatches.putIfAbsent(MAP_CUSTOM_EQUALS_DISPATCH,
+                    new IrDispatch(dispatch.symbol(), dispatch.returnType(), dispatch.parameters(), List.copyOf(targets)));
+            }
+            if (!customHashTargets.isEmpty() || !unavailableHash.isEmpty()) {
+                final IrDispatch dispatch = BytecodeToIRDynamicSupport.dispatch(
+                    classes, MAP_CUSTOM_HASH_DISPATCH, MethodDescriptor.parse(customHash.descriptor()), customHashTargets);
+                final List<IrDispatchTarget> targets = new ArrayList<>(dispatch.targets());
+                targets.addAll(unavailableHash);
+                dispatches.putIfAbsent(MAP_CUSTOM_HASH_DISPATCH,
+                    new IrDispatch(dispatch.symbol(), dispatch.returnType(), dispatch.parameters(), List.copyOf(targets)));
+            }
             if (!equalsTargets.isEmpty()) {
                 dispatches.putIfAbsent(MAP_RECORD_EQUALS_DISPATCH, BytecodeToIRDynamicSupport.dispatch(
                     classes, MAP_RECORD_EQUALS_DISPATCH, MethodDescriptor.parse("(Ljava/lang/Object;)Z"), equalsTargets));
@@ -445,7 +502,11 @@ public final class BytecodeToIR {
             final Optional<MethodInfo> method = owner == null ? Optional.empty() : owner.method(entry.methodName(), entry.descriptor());
             if (method.isEmpty() || method.orElseThrow().code().isEmpty()) continue;
             for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
-                if (instruction.methodRef().isPresent() && JdkCallSupport.isMapKeyOperation(instruction.methodRef().orElseThrow())) return true;
+                if (instruction.methodRef().isPresent()) {
+                    final MethodRef target = instruction.methodRef().orElseThrow();
+                    if (JdkCallSupport.isMapKeyOperation(target) || JdkCallSupport.isMapMultiEntryFactory(target)
+                        || JdkCallSupport.isMapEntryArrayFactory(target) || JdkCallSupport.isMapCopyOf(target)) return true;
+                }
             }
         }
         return false;
@@ -549,8 +610,13 @@ public final class BytecodeToIR {
                             && "()Ljava/lang/String;".equals(callee.descriptor());
                         final boolean collectionEquality = (JdkCallSupport.isCollectionEqualitySearch(calledMethod)
                             || JdkCallSupport.isCollectionContainsAll(calledMethod)
-                            || JdkCallSupport.isCollectionFilterAll(calledMethod)) && "equals".equals(callee.methodName())
-                            && "(Ljava/lang/Object;)Z".equals(callee.descriptor());
+                            || JdkCallSupport.isCollectionFilterAll(calledMethod)
+                            || JdkCallSupport.isMapKeyOperation(calledMethod) || JdkCallSupport.isMapPutAll(calledMethod))
+                            && "equals".equals(callee.methodName())
+                            && "(Ljava/lang/Object;)Z".equals(callee.descriptor())
+                            || (JdkCallSupport.isMapKeyOperation(calledMethod) || JdkCallSupport.isMapPutAll(calledMethod))
+                            && "hashCode".equals(callee.methodName())
+                            && "()I".equals(callee.descriptor());
                         if (!directCall && !charSequenceConversion && !collectionEquality) {
                             continue;
                         }
@@ -580,6 +646,8 @@ public final class BytecodeToIR {
         } while (changed);
         final Map<String, List<String>> result = new LinkedHashMap<>();
         result.put(UNAVAILABLE_COLLECTION_EQUALS, List.of("java/lang/UnsupportedOperationException"));
+        result.put(UNAVAILABLE_MAP_EQUALS, List.of("java/lang/UnsupportedOperationException"));
+        result.put(UNAVAILABLE_MAP_HASH, List.of("java/lang/UnsupportedOperationException"));
         for (final EntryPoint entryPoint : reachableMethods) {
             result.put(symbol(entryPoint), orderedThrowableTypes(typesByMethod.get(entryPoint)));
         }
@@ -1608,6 +1676,11 @@ public final class BytecodeToIR {
                 || JdkCallSupport.isListEndpointRemove(reference)
                 || JdkCallSupport.isListEndpointAdd(reference)) {
                 possibleTypes.addAll(JdkCallSupport.transportedPlatformThrowableTypes(reference));
+            }
+            if (JdkCallSupport.isMapKeyOperation(reference) || JdkCallSupport.isMapPutAll(reference)) {
+                possibleTypes.add("java/util/ConcurrentModificationException");
+                addTransportedThrowableTypes(MAP_CUSTOM_EQUALS_DISPATCH, dispatches, transportedThrowableTypes, possibleTypes);
+                addTransportedThrowableTypes(MAP_CUSTOM_HASH_DISPATCH, dispatches, transportedThrowableTypes, possibleTypes);
             }
             if (JdkCallSupport.isCollectionEqualitySearch(reference) || JdkCallSupport.isCollectionContainsAll(reference)
                 || JdkCallSupport.isCollectionFilterAll(reference)) {

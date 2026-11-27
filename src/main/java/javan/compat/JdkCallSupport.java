@@ -2595,10 +2595,17 @@ public final class JdkCallSupport {
         if (isListEndpoint(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/util/NoSuchElementException");
         }
-        if (isMapMultiEntryFactory(methodRef) || isMapEntryArrayFactory(methodRef) || isSetFactory(methodRef)) {
+        if (isMapMultiEntryFactory(methodRef) || isMapEntryArrayFactory(methodRef)) {
+            return List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException",
+                "java/lang/UnsupportedOperationException");
+        }
+        if (isSetFactory(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException");
         }
-        if (isMapCopyConstructor(methodRef) || isMapCopyOf(methodRef) || isMapSingleEntryFactory(methodRef)
+        if (isMapCopyOf(methodRef)) {
+            return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
+        }
+        if (isMapCopyConstructor(methodRef) || isMapSingleEntryFactory(methodRef)
             || isSetCopyOf(methodRef) || isListCopyOf(methodRef) || isListFactory(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
@@ -2620,8 +2627,10 @@ public final class JdkCallSupport {
         if (isCollectionContains(methodRef) || isCollectionContainsAll(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
         }
-        if (isCollectionObjectSearch(methodRef) || isCollectionSizeQuery(methodRef) || isMapObjectGetOrPut(methodRef)
-            || isMapMembershipOrDefaultQuery(methodRef)) {
+        if (isMapObjectGetOrPut(methodRef) || isMapMembershipOrDefaultQuery(methodRef)) {
+            return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
+        }
+        if (isCollectionObjectSearch(methodRef) || isCollectionSizeQuery(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
         if ("java/lang/Object".equals(methodRef.owner()) && "equals".equals(methodRef.name())

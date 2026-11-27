@@ -541,6 +541,8 @@ public final class CompatibilityReports {
             pass("deduplication-plan"),
             pass("hashmap-realloc-gc"),
             pass("hashmap-primitive-string-record-keys"),
+            pass("hashmap-direct-application-key-callbacks"),
+            pass("concurrent-hashmap-direct-application-key-callbacks"),
             pass("collections-empty-set"),
             pass("collections-unmodifiable-collection"),
             pass("collections-unmodifiable-set"),

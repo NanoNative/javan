@@ -24016,7 +24016,7 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashmap_new", List.of())),
             IrInstruction.assignObject("object1", IrExpression.objectCall(
-                "javan_map_put_java",
+                "javan_map_put_java_into",
                 List.of(
                     IrExpression.objectLocal("object0"),
                     IrExpression.stringLiteral("k"),
@@ -24024,7 +24024,7 @@ final class BytecodeToIRTest {
                 )
             )),
             IrInstruction.assignObject("object2", IrExpression.objectCall(
-                "javan_map_get_java",
+                "javan_map_get_java_into",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.stringLiteral("k"))
             )),
             IrInstruction.returnObject(IrExpression.objectLocal("object2"))
@@ -24815,7 +24815,7 @@ final class BytecodeToIRTest {
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject("object0", IrExpression.objectCall(
-                "javan_map_remove_java",
+                "javan_map_remove_java_into",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
             )),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
@@ -24839,7 +24839,7 @@ final class BytecodeToIRTest {
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject("object0", IrExpression.objectCall(
-                "javan_map_remove_java",
+                "javan_map_remove_java_into",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
             )),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
@@ -27199,7 +27199,7 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsSubsequence(
             IrInstruction.assignObject(
                 "object0",
-                IrExpression.objectCall("javan_map_get_java", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+                IrExpression.objectCall("javan_map_get_java_into", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
             ),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
@@ -27225,7 +27225,7 @@ final class BytecodeToIRTest {
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.objectCall(
-                    "javan_map_put_java",
+                    "javan_map_put_java_into",
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
                 )
             ),
@@ -27253,7 +27253,7 @@ final class BytecodeToIRTest {
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.objectCall(
-                    "javan_map_put_if_absent_java",
+                    "javan_map_put_if_absent_java_into",
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
                 )
             ),
@@ -27281,7 +27281,7 @@ final class BytecodeToIRTest {
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.objectCall(
-                    "javan_map_replace_java",
+                    "javan_map_replace_java_into",
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
                 )
             ),
@@ -27309,7 +27309,7 @@ final class BytecodeToIRTest {
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.objectCall(
-                    "javan_map_replace_java",
+                    "javan_map_replace_java_into",
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
                 )
             ),
@@ -27405,7 +27405,7 @@ final class BytecodeToIRTest {
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.objectCall(
-                    "javan_map_put_if_absent_java",
+                    "javan_map_put_if_absent_java_into",
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
                 )
             ),
@@ -27469,7 +27469,7 @@ final class BytecodeToIRTest {
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.objectCall(
-                    "javan_map_get_or_default_java",
+                    "javan_map_get_or_default_java_into",
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
                 )
             ),

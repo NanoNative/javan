@@ -3585,6 +3585,15 @@ public final class StaticVerifier {
         if (!visiting.add(target)) {
             return Set.of();
         }
+        if (JdkCallSupport.isMapKeyOperation(target) || JdkCallSupport.isMapPutAll(target)) {
+            final Set<String> result = new HashSet<>(escapingPlatformExceptionTypes(classes,
+                new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z"), visiting));
+            result.addAll(escapingPlatformExceptionTypes(classes,
+                new MethodRef("java/lang/Object", "hashCode", "()I"), visiting));
+            result.add("java/util/ConcurrentModificationException");
+            visiting.remove(target);
+            return result;
+        }
         if (JdkCallSupport.isCollectionEqualitySearch(target) || JdkCallSupport.isCollectionContainsAll(target)
             || JdkCallSupport.isCollectionFilterAll(target)) {
             final Set<String> result = escapingPlatformExceptionTypes(classes,
@@ -3592,8 +3601,9 @@ public final class StaticVerifier {
             visiting.remove(target);
             return result;
         }
-        if (("java/lang/Object".equals(target.owner()) && "equals".equals(target.name())
-                && "(Ljava/lang/Object;)Z".equals(target.descriptor()))
+        if (("java/lang/Object".equals(target.owner()) && ("equals".equals(target.name())
+                && "(Ljava/lang/Object;)Z".equals(target.descriptor())
+                || "hashCode".equals(target.name()) && "()I".equals(target.descriptor())))
             || ("java/util/random/RandomGenerator".equals(target.owner())
             && (("nextLong".equals(target.name()) && "()J".equals(target.descriptor()))
                 || ("nextBytes".equals(target.name()) && "([B)V".equals(target.descriptor()))

@@ -597,6 +597,33 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanUsesApplicationMapKeyCallbacks() throws Exception {
+        final Path project = project("selfhost-custom-map-keys");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            public final class Main {
+                static final class Key {
+                    final int number; Key(int number) { this.number = number; }
+                    public int hashCode() { return number; }
+                    public boolean equals(Object other) { return other instanceof Key key && number == key.number; }
+                }
+                public static void main(String[] args) {
+                    var map = new HashMap<Key, String>(); map.put(new Key(7), "found");
+                    System.out.println(map.get(new Key(7)));
+                    System.out.println(map.remove(new Key(7)));
+                    System.out.println(map.size());
+                }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-custom-map-keys").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("found\nfound\n0\n");
+    }
+
+    @Test
     void nativeBuiltJavanPreservesRecordEqualityInMapOperations() throws Exception {
         final Path project = project("selfhost-map-record-equality");
         writeJava(project, "com.acme.Main", """

@@ -783,6 +783,12 @@ public final class CCodegen {
             result.add("javan_generated_class_get_declared_constructor");
         }
         result.add("javan_method_get_parameter_types");
+        result.add("javan_map_get_or_default_java_into");
+        result.add("javan_map_put_if_absent_java_into");
+        result.add("javan_map_replace_java_into");
+        result.add("javan_map_get_java_into");
+        result.add("javan_map_put_java_into");
+        result.add("javan_map_remove_java_into");
         result.add(EXACT_CATCH_NULL_APPLY_SYMBOL);
         if (!program.materializedLambdaTargets().isEmpty()) {
             result.add(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL);
@@ -2123,14 +2129,35 @@ public final class CCodegen {
                 .append("javan_string_from(\"set element equality is outside the compiled set\"), NULL, NULL, NULL, -1, -1, NULL);\n")
                 .append("    return 0;\n}\n\n");
         }
+        final boolean customMapHash = BytecodeToIR.MAP_CUSTOM_HASH_DISPATCH.equals(dispatch.symbol());
+        final boolean customMapEquals = BytecodeToIR.MAP_CUSTOM_EQUALS_DISPATCH.equals(dispatch.symbol());
+        if (customMapHash || customMapEquals) {
+            final String unavailable = customMapHash ? BytecodeToIR.UNAVAILABLE_MAP_HASH : BytecodeToIR.UNAVAILABLE_MAP_EQUALS;
+            for (final IrDispatchTarget target : dispatch.targets()) {
+                if (unavailable.equals(target.functionSymbol())) {
+                    c.append("static int ").append(unavailable)
+                        .append(customMapHash ? "(void* self) {\n" : "(void* self, void* other) {\n")
+                        .append(customMapHash ? "    (void) self;\n" : "    (void) self; (void) other;\n")
+                        .append("    javan_pending_throw(\"java/lang/UnsupportedOperationException\", ")
+                        .append("javan_string_from(\"map key method is outside the compiled set\"), NULL, NULL, NULL, -1, -1, NULL);\n")
+                        .append("    return 0;\n}\n\n");
+                    break;
+                }
+            }
+        }
         emitDispatchSignature(dispatch, c, isStatic);
         c.append(" {").append(System.lineSeparator());
         c.append("    if (self == 0) {").append(System.lineSeparator());
         c.append("        javan_panic(\"null dispatch\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
         if (BytecodeToIR.MAP_RECORD_EQUALS_DISPATCH.equals(dispatch.symbol())
-            || BytecodeToIR.MAP_RECORD_HASH_DISPATCH.equals(dispatch.symbol())) {
-            final boolean hash = BytecodeToIR.MAP_RECORD_HASH_DISPATCH.equals(dispatch.symbol());
+            || BytecodeToIR.MAP_RECORD_HASH_DISPATCH.equals(dispatch.symbol())
+            || BytecodeToIR.MAP_CUSTOM_EQUALS_DISPATCH.equals(dispatch.symbol())
+            || BytecodeToIR.MAP_CUSTOM_HASH_DISPATCH.equals(dispatch.symbol())) {
+            final boolean custom = BytecodeToIR.MAP_CUSTOM_EQUALS_DISPATCH.equals(dispatch.symbol())
+                || BytecodeToIR.MAP_CUSTOM_HASH_DISPATCH.equals(dispatch.symbol());
+            final boolean hash = BytecodeToIR.MAP_RECORD_HASH_DISPATCH.equals(dispatch.symbol())
+                || BytecodeToIR.MAP_CUSTOM_HASH_DISPATCH.equals(dispatch.symbol());
             c.append("    switch (javan_object_registered_type_id(self)) {\n");
             for (final IrDispatchTarget target : dispatch.targets()) {
                 c.append("        case ").append(typeIds.get(target.owner()).intValue())
@@ -2138,8 +2165,9 @@ public final class CCodegen {
                     .append("(").append(dispatchArguments(dispatch)).append(");\n");
             }
             c.append("        default: return 0;\n    }\n}\n\n");
-            c.append(hash ? "static int (*javan_select_map_record_hash(void* self))(void*) {\n"
-                : "static int (*javan_select_map_record_equals(void* self))(void*, void*) {\n")
+            c.append("static int (*javan_select_map_")
+                .append(custom ? "custom_" : "record_")
+                .append(hash ? "hash(void* self))(void*) {\n" : "equals(void* self))(void*, void*) {\n")
                 .append("    switch (javan_object_registered_type_id(self)) {\n");
             for (final IrDispatchTarget target : dispatch.targets()) {
                 c.append("        case ").append(typeIds.get(target.owner()).intValue())
@@ -2749,6 +2777,14 @@ public final class CCodegen {
         if (hasDispatch(program, COLLECTION_EQUALS_DISPATCH)) {
             c.append("    javan_register_collection_equals_resolver(")
                 .append("javan_select_collection_equals").append(");").append(System.lineSeparator());
+        }
+        if (hasDispatch(program, BytecodeToIR.MAP_CUSTOM_EQUALS_DISPATCH)
+            || hasDispatch(program, BytecodeToIR.MAP_CUSTOM_HASH_DISPATCH)) {
+            c.append("    javan_register_map_custom_resolvers(")
+                .append(hasDispatch(program, BytecodeToIR.MAP_CUSTOM_EQUALS_DISPATCH) ? "javan_select_map_custom_equals" : "0")
+                .append(", ")
+                .append(hasDispatch(program, BytecodeToIR.MAP_CUSTOM_HASH_DISPATCH) ? "javan_select_map_custom_hash" : "0")
+                .append(");\n");
         }
         if (hasDispatch(program, BytecodeToIR.MAP_RECORD_EQUALS_DISPATCH)
             && hasDispatch(program, BytecodeToIR.MAP_RECORD_HASH_DISPATCH)) {
@@ -4058,17 +4094,11 @@ public final class CCodegen {
                     "javan_map_copy_of",
                     "javan_map_unmodifiable",
                     "javan_map_get",
-                    "javan_map_get_java",
                     "javan_map_get_or_default",
-                    "javan_map_get_or_default_java",
                     "javan_map_put",
-                    "javan_map_put_java",
                     "javan_map_put_if_absent",
-                    "javan_map_put_if_absent_java",
                     "javan_map_replace",
-                    "javan_map_replace_java",
                     "javan_map_remove",
-                    "javan_map_remove_java",
                     "javan_map_key_set",
                     "javan_map_entry_set",
                     "javan_map_values",

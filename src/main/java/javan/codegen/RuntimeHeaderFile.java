@@ -542,6 +542,8 @@ final class RuntimeHeaderFile {
         int javan_list_contains(void* list, void* value);
         int javan_list_contains_java(void* list, void* value);
         void javan_register_collection_equals_resolver(int (*(*resolver)(void*))(void*, void*));
+        void javan_register_map_custom_resolvers(int (*(*equals_resolver)(void*))(void*, void*),
+            int (*(*hash_resolver)(void*))(void*));
         void javan_register_map_record_resolvers(int (*(*equals_resolver)(void*))(void*, void*),
             int (*(*hash_resolver)(void*))(void*));
         int javan_list_index_of(void* list, void* value);
@@ -616,21 +618,21 @@ final class RuntimeHeaderFile {
         void javan_map_put_all_java(void* map, void* source);
         void* javan_map_unmodifiable(void* map);
         void* javan_map_get(void* map, void* key);
-        void* javan_map_get_java(void* map, void* key);
+        void javan_map_get_java_into(void** result, void* map, void* key);
         void* javan_map_get_or_default(void* map, void* key, void* fallback);
-        void* javan_map_get_or_default_java(void* map, void* key, void* fallback);
+        void javan_map_get_or_default_java_into(void** result, void* map, void* key, void* fallback);
         void* javan_map_put(void* map, void* key, void* value);
-        void* javan_map_put_java(void* map, void* key, void* value);
+        void javan_map_put_java_into(void** result, void* map, void* key, void* value);
         void* javan_map_put_if_absent(void* map, void* key, void* value);
-        void* javan_map_put_if_absent_java(void* map, void* key, void* value);
+        void javan_map_put_if_absent_java_into(void** result, void* map, void* key, void* value);
         void* javan_map_replace(void* map, void* key, void* value);
-        void* javan_map_replace_java(void* map, void* key, void* value);
+        void javan_map_replace_java_into(void** result, void* map, void* key, void* value);
         int javan_map_replace_entry(void* map, void* key, void* expected_value, void* new_value);
         int javan_map_replace_entry_java(void* map, void* key, void* expected_value, void* new_value);
         void javan_map_clear_java(void* map);
         void javan_map_clear(void* map);
         void* javan_map_remove(void* map, void* key);
-        void* javan_map_remove_java(void* map, void* key);
+        void javan_map_remove_java_into(void** result, void* map, void* key);
         int javan_map_remove_entry(void* map, void* key, void* expected_value);
         int javan_map_remove_entry_java(void* map, void* key, void* expected_value);
         int javan_map_contains_key(void* map, void* key);

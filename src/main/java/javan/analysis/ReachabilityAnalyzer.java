@@ -877,18 +877,22 @@ public final class ReachabilityAnalyzer {
         }
 
         private List<EntryPoint> collectionTargets(final EntryPoint current, final Instruction instruction) {
+            return collectionTargets(current, instruction, new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z"));
+        }
+
+        private List<EntryPoint> collectionTargets(final EntryPoint current, final Instruction instruction, final MethodRef member) {
             final FunctionValueFlow.CollectionQuery provenance = collectionQueries.get(
                 FunctionValueFlow.collectionSiteKey(current, instruction));
             if (provenance == null) {
                 return List.of();
             }
-            final MethodRef equals = new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z");
             if (provenance.unknown()) {
                 if (instruction.methodRef().isPresent()
-                    && JdkCallSupport.isCollectionObjectAddition(instruction.methodRef().orElseThrow())) {
+                    && (JdkCallSupport.isCollectionObjectAddition(instruction.methodRef().orElseThrow())
+                        || JdkCallSupport.isMapKeyOperation(instruction.methodRef().orElseThrow()))) {
                     return List.of();
                 }
-                return virtualTargets(equals);
+                return virtualTargets(member);
             }
             final List<EntryPoint> result = new ArrayList<>();
             final EntryPointMembership seen = new EntryPointMembership();
@@ -906,7 +910,7 @@ public final class ReachabilityAnalyzer {
                 candidates.addAll(provenance.types());
             }
             for (final String type : candidates) {
-                final Optional<EntryPoint> target = lowerableResolvedVirtualTarget(classes, type, equals, entryPoints);
+                final Optional<EntryPoint> target = lowerableResolvedVirtualTarget(classes, type, member, entryPoints);
                 if (target.isPresent()) {
                     final EntryPoint entry = target.orElseThrow();
                     if (seen.add(entry)) {
@@ -1474,6 +1478,13 @@ public final class ReachabilityAnalyzer {
             addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
         }
         if (JdkCallSupport.isMapKeyOperation(target)) {
+            final List<EntryPoint> customEquals = dispatchTargets.collectionTargets(current, instruction);
+            final List<EntryPoint> customHash = dispatchTargets.collectionTargets(current, instruction,
+                new MethodRef("java/lang/Object", "hashCode", "()I"));
+            enqueueAll(work, workSet, customEquals);
+            enqueueAll(work, workSet, customHash);
+            addEdges(callEdges, current, customEquals, CallEdge.Kind.CALL);
+            addEdges(callEdges, current, customHash, CallEdge.Kind.CALL);
             final List<EntryPoint> recordMethods = new ArrayList<>();
             for (final EntryPoint equality : dispatchTargets.collectionTargets(current, instruction)) {
                 final ClassFile owner = classes.get(equality.className());

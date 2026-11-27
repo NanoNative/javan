@@ -11,8 +11,8 @@
     "rule": "a broad JDK-compatibility release requires zero unknown leftovers; the first native release is scenario-bounded and requires declared reachable behavior to be supported or rejected"
   },
   "counts": {
-    "rows": 331,
-    "pass": 330,
+    "rows": 333,
+    "pass": 332,
     "scoped": 1,
     "target": 0,
     "rejected": 0
@@ -124,6 +124,8 @@
     {"feature": "deduplication-plan", "jdk25": "pass"},
     {"feature": "hashmap-realloc-gc", "jdk25": "pass"},
     {"feature": "hashmap-primitive-string-record-keys", "jdk25": "pass"},
+    {"feature": "hashmap-direct-application-key-callbacks", "jdk25": "pass"},
+    {"feature": "concurrent-hashmap-direct-application-key-callbacks", "jdk25": "pass"},
     {"feature": "collections-empty-set", "jdk25": "pass"},
     {"feature": "collections-unmodifiable-collection", "jdk25": "pass"},
     {"feature": "collections-unmodifiable-set", "jdk25": "pass"},
