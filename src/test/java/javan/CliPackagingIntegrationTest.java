@@ -371,6 +371,42 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBoundsDynamicReflectionMethods() throws Exception {
+        final Path project = project("selfhost-bounded-reflection-method");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Target.class.getDeclaredMethod("run", String.class)};
+                }
+                public static void main(String[] args) throws Exception {
+                    final var method = Class.forName(args[0]).getDeclaredMethod(args[1], String.class);
+                    System.out.println((String) method.invoke(null, "ok"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                public static String run(String value) { return value; }
+                public static String hidden(String value) { return value; }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final String executable = project.resolve(".javan/bin/selfhost-bounded-reflection-method").toString();
+        final ProcessResult known = process(project, List.of(executable, "com.acme.Target", "run"));
+        assertThat(known.exitCode()).as(known.stderr()).isZero();
+        assertThat(known.stdout()).isEqualTo("ok\n");
+        final ProcessResult missing = process(project, List.of(executable, "com.acme.Target", "hidden"));
+        assertThat(missing.exitCode()).isNotZero();
+        assertThat(missing.stderr()).contains("NoSuchMethodException");
+        assertThat(Files.readString(project.resolve(".javan/reports/call-graph.json")))
+            .doesNotContain("com/acme/Target.hidden(Ljava/lang/String;)Ljava/lang/String;");
+    }
+
+    @Test
     void nativeBuiltJavanTracksInheritedInterfaceArguments() throws Exception {
         final Path project = tempDir.resolve("selfhost-inherited-interface-query");
         final Path classes = project.resolve("classes");

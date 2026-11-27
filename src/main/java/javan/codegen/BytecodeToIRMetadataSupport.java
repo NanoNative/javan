@@ -6,6 +6,7 @@ import javan.analysis.ClassMetadataReachability;
 import javan.analysis.EntryPoint;
 import javan.analysis.GeneratedObjectCloneSupport;
 import javan.analysis.ReflectionDeclaration;
+import javan.analysis.ReflectionMethodReachability;
 import javan.classfile.ClassFile;
 import javan.classfile.ClassFileScanner;
 import javan.classfile.FieldInfo;
@@ -429,7 +430,8 @@ final class BytecodeToIRMetadataSupport {
         final Map<String, ClassFile> classes,
         final List<IrClass> retainedClasses,
         final ReflectionClasses reflection,
-        final Map<String, ClassFile> externalClasses
+        final Map<String, ClassFile> externalClasses,
+        final List<EntryPoint> reachableMethods
     ) {
         if (!reflection.declaredMethodLookup() && !reflection.publicMethodLookup()) {
             return List.of();
@@ -437,17 +439,20 @@ final class BytecodeToIRMetadataSupport {
         final Map<String, ClassFile> allClasses = new LinkedHashMap<>(externalClasses);
         allClasses.putAll(classes);
         final Set<String> classpathClasses = classes.keySet();
+        final ReflectionDeclaration.Result declaration = ReflectionDeclaration.analyze(classes);
+        final Set<String> literalNames = declaration.present()
+            ? ReflectionMethodReachability.literalNames(classes, reachableMethods) : Set.of();
         final List<IrReflectedClass> result = new ArrayList<>();
         for (final IrClass retained : retainedClasses) {
             final ClassFile classFile = classes.get(retained.jvmName());
             if (classFile != null) {
-                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection));
+                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection, declaration, literalNames));
             }
         }
         for (final String jvmName : reflection.externalClassNames()) {
             final ClassFile classFile = externalClasses.get(jvmName);
             if (classFile != null) {
-                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection));
+                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection, declaration, literalNames));
             }
         }
         if (reflection.publicMethodLookup()) {
@@ -468,15 +473,45 @@ final class BytecodeToIRMetadataSupport {
         final ClassFile classFile,
         final Map<String, ClassFile> classes,
         final Set<String> classpathClasses,
-        final ReflectionClasses reflection
+        final ReflectionClasses reflection,
+        final ReflectionDeclaration.Result declaration,
+        final Set<String> literalNames
     ) {
         return new IrReflectedClass(
             classFile.name(),
             reflection.declaredMethodLookup()
-                ? declaredMethods(classFile, classes, classpathClasses)
+                ? selectedMethods(declaredMethods(classFile, classes, classpathClasses), classes, classpathClasses, declaration, literalNames)
                 : List.of(),
-            reflection.publicMethodLookup() ? publicMethods(classFile, classes, classpathClasses) : List.of()
+            reflection.publicMethodLookup()
+                ? selectedMethods(publicMethods(classFile, classes, classpathClasses), classes, classpathClasses, declaration, literalNames)
+                : List.of()
         );
+    }
+
+    private static List<IrMethodMetadata> selectedMethods(
+        final List<IrMethodMetadata> methods,
+        final Map<String, ClassFile> classes,
+        final Set<String> classpathClasses,
+        final ReflectionDeclaration.Result declaration,
+        final Set<String> literalNames
+    ) {
+        if (!declaration.present()) {
+            return methods;
+        }
+        final List<IrMethodMetadata> selected = new ArrayList<>();
+        for (final IrMethodMetadata method : methods) {
+            final StringBuilder descriptor = new StringBuilder("(");
+            for (final String parameter : method.parameterDescriptors()) {
+                descriptor.append(parameter);
+            }
+            descriptor.append(')').append(method.returnDescriptor());
+            if (!classpathClasses.contains(method.declaringJvmName())
+                || ReflectionMethodReachability.includes(
+                    classes, declaration, literalNames, method.declaringJvmName(), method.name(), descriptor.toString())) {
+                selected.add(method);
+            }
+        }
+        return List.copyOf(selected);
     }
 
     record ReflectionClasses(

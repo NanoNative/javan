@@ -26,7 +26,7 @@ public final class ReflectionDeclaration {
      *
      * @param present whether a valid declaration exists, including an empty declaration
      * @param classes declared classes and required parameter classes
-     * @param methods declared method bodies
+     * @param methods declared method identities, including abstract methods
      * @param diagnostics deterministic validation errors
      */
     public record Result(boolean present, List<String> classes, List<EntryPoint> methods, List<Diagnostic> diagnostics) {
@@ -164,9 +164,7 @@ public final class ReflectionDeclaration {
                 for (final MethodInfo method : classes.get(target).methods()) {
                     if (name.equals(method.name()) && method.descriptor().startsWith(descriptor.toString())) {
                         found = true;
-                        if (method.code().isPresent()) {
-                            methods.add(new EntryPoint(target, method.name(), method.descriptor()));
-                        }
+                        methods.add(new EntryPoint(target, method.name(), method.descriptor()));
                     }
                 }
                 if (!found) {

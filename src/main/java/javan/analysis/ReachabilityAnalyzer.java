@@ -120,15 +120,21 @@ public final class ReachabilityAnalyzer {
         Map<String, FunctionValueFlow.CollectionQuery> collectionQueries = Map.of();
         final FunctionValueFlow.MethodFlowCache methodFlows = new FunctionValueFlow.MethodFlowCache();
         final ReflectionDeclaration.Result declaration = ReflectionDeclaration.analyze(classes);
-        final List<EntryPoint> reflectionRoots = declaration.methods();
+        final List<EntryPoint> reflectionRoots = new ArrayList<>();
+        for (final EntryPoint entry : declaration.methods()) {
+            if (classes.get(entry.className()).method(entry.methodName(), entry.descriptor()).orElseThrow().code().isPresent()) {
+                reflectionRoots.add(entry);
+            }
+        }
         final Set<String> reflectionClasses = new HashSet<>(declaration.classes());
+        final Set<String> reflectionMethodNames = new HashSet<>();
         CallGraph graph;
         while (true) {
             final List<EntryPoint> roots = new ArrayList<>(entries);
             roots.addAll(reflectionRoots);
             roots.addAll(serviceRoots);
             graph = analyzePass(classes, roots, declaredExternalLeaves, instantiatedTypes, collectionQueries,
-                methodFlows, declaration.present(), reflectionClasses, false);
+                methodFlows, declaration, reflectionClasses, reflectionMethodNames, false);
             if (!serviceProviders.isEmpty()
                 && !serviceRootsResolved
                 && usesServiceLoader(classes, graph.reachableMethods())) {
@@ -146,7 +152,11 @@ public final class ReachabilityAnalyzer {
             if (declaration.present()) {
                 final ClassInitializationGraph.Result initialization =
                     ClassInitializationGraph.analyze(classes, graph.reachableMethods());
-                if (reflectionClasses.addAll(ClassMetadataReachability.collect(classes, graph, initialization, declaration))) {
+                final boolean classesChanged = reflectionClasses.addAll(
+                    ClassMetadataReachability.collect(classes, graph, initialization, declaration));
+                final boolean namesChanged = reflectionMethodNames.addAll(
+                    ReflectionMethodReachability.literalNames(classes, graph.reachableMethods()));
+                if (classesChanged || namesChanged) {
                     continue;
                 }
             }
@@ -181,7 +191,7 @@ public final class ReachabilityAnalyzer {
             }
             if (!queriesChanged) {
                 return analyzePass(classes, roots, declaredExternalLeaves, instantiatedTypes, collectionQueries,
-                    methodFlows, declaration.present(), reflectionClasses, true);
+                    methodFlows, declaration, reflectionClasses, reflectionMethodNames, true);
             }
             collectionQueries = Map.copyOf(next);
         }
@@ -346,8 +356,9 @@ public final class ReachabilityAnalyzer {
         final InstantiatedTypeAnalysis.Result instantiatedTypes,
         final Map<String, FunctionValueFlow.CollectionQuery> collectionQueries,
         final FunctionValueFlow.MethodFlowCache methodFlows,
-        final boolean boundedReflection,
+        final ReflectionDeclaration.Result declaration,
         final Set<String> reflectionClasses,
+        final Set<String> reflectionMethodNames,
         final boolean complete
     ) {
         final MethodRefFactsCache methodRefFacts = new MethodRefFactsCache(classes);
@@ -424,7 +435,7 @@ public final class ReachabilityAnalyzer {
                             classes,
                             code.orElseThrow(),
                             instruction,
-                            boundedReflection,
+                            declaration.present(),
                             reflectionClasses,
                             work,
                             workSet,
@@ -446,6 +457,9 @@ public final class ReachabilityAnalyzer {
                         enqueueReflectiveInvocationTargets(
                             classes,
                             instruction,
+                            declaration,
+                            reflectionClasses,
+                            reflectionMethodNames,
                             work,
                             workSet,
                             current,
@@ -499,6 +513,9 @@ public final class ReachabilityAnalyzer {
     private static void enqueueReflectiveInvocationTargets(
         final Map<String, ClassFile> classes,
         final Instruction instruction,
+        final ReflectionDeclaration.Result declaration,
+        final Set<String> reflectionClasses,
+        final Set<String> reflectionMethodNames,
         final List<EntryPoint> work,
         final EntryPointMembership workSet,
         final EntryPoint current,
@@ -519,10 +536,17 @@ public final class ReachabilityAnalyzer {
         }
         final List<EntryPoint> targets = new ArrayList<>();
         for (final ClassFile classFile : classes.values()) {
+            if (declaration.present() && !reflectionClasses.contains(classFile.name())) {
+                continue;
+            }
             for (final MethodInfo method : classFile.methods()) {
                 if (method.code().isEmpty()
                     || "<init>".equals(method.name())
                     || "<clinit>".equals(method.name())) {
+                    continue;
+                }
+                if (!ReflectionMethodReachability.includes(
+                    classes, declaration, reflectionMethodNames, classFile.name(), method.name(), method.descriptor())) {
                     continue;
                 }
                 targets.add(entryPoints.entry(classFile.name(), method.name(), method.descriptor()));
@@ -3146,7 +3170,15 @@ public final class ReachabilityAnalyzer {
         return current.equals(expectedSuper);
     }
 
-    private static boolean isAssignableTo(final Map<String, ClassFile> classes, final String candidate, final String expected) {
+    /**
+     * Checks the parsed class and interface hierarchy for assignability.
+     *
+     * @param classes scanned classes
+     * @param candidate candidate JVM type name
+     * @param expected expected JVM type name
+     * @return whether the candidate inherits or implements the expected type
+     */
+    public static boolean isAssignableTo(final Map<String, ClassFile> classes, final String candidate, final String expected) {
         String current = candidate;
         final List<String> visitedClasses = new ArrayList<>();
         while (current != null && !current.isEmpty()) {

@@ -306,7 +306,7 @@ public final class BytecodeToIR {
         );
         final List<IrReflectedClass> reflectedClasses =
             BytecodeToIRMetadataSupport.reflectedClasses(
-                classes, loweredClasses, reflection, externalReflectionClasses
+                classes, loweredClasses, reflection, externalReflectionClasses, reachableMethods
             );
         if (usesMethodInvocation(classes, reachableMethods)) {
             addReflectiveInvocationDispatches(classes, reflectedClasses, callGraph.instantiatedTypes(), dispatches);

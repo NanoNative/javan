@@ -68,7 +68,8 @@ Closed-world support includes:
 
 Reflection fallback: a project may define one public static method named
 `javanReflectionTargets` on a public application class. The method returns
-`java.lang.reflect.AnnotatedElement[]` and can be called by JVM tests. Javan reads its
+`java.lang.reflect.AnnotatedElement[]` and can be called by JVM and native tests within the
+supported reflection subset. Javan reads its
 bytecode without executing the method or initializing its declaring class. Supported entries
 are class literals from the compiled application or scanned dependencies and
 `getDeclaredMethod` on such classes, with a literal name and literal parameter types:
@@ -91,7 +92,13 @@ targets remain conservative over the parsed world when no declaration exists. Wi
 declaration, dynamic names resolve against the declared classes, classes retained by reachable
 code and their required hierarchies, and compiled classes named by string literals in reachable
 code. Supported platform classes remain available. Other application names produce
-`ClassNotFoundException`. Automatically proven targets remain available without the declaration.
+`ClassNotFoundException`. For application methods, metadata and invocation retain declared
+identities and literal arguments directly supplied to reachable `getDeclaredMethod` or
+`getMethod` calls. Literal-name matches conservatively retain all overloads; the normal
+parameter check still selects the requested overload. Names that cannot yet be proven require
+an explicit declaration. Other dynamic application method names produce `NoSuchMethodException`.
+Supported platform method metadata remains available. Automatically proven targets remain
+available without the declaration.
 
 Direct `new Object()` creates a distinct managed instance with `java.lang.Object` class metadata.
 `Object.equals` dispatches statically reachable application overrides and supports default identity,

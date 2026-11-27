@@ -17021,6 +17021,302 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void reflectionDeclarationBoundsDynamicMethodInvocationToDeclaredOverloads() throws Exception {
+        final Path project = project("bounded-reflection-method");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Target.class.getDeclaredMethod("run", String.class)};
+                }
+                public static void main(String[] args) throws Exception {
+                    javanReflectionTargets();
+                    if (args.length == 0) System.out.println("hidden");
+                    final var method = Class.forName(args[0]).getDeclaredMethod(args[1], String.class);
+                    System.out.println((String) method.invoke(null, "ok"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                public static String run(String value) { return value; }
+                public static String run(int value) { return "wrong"; }
+                public static String hidden(String value) { return "wrong"; }
+            }
+            """);
+        writeJava(project, "com.acme.Unrelated", """
+            package com.acme;
+            public final class Unrelated { public static String unused(String value) { return value; } }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/bounded-reflection-method").toString(), "com.acme.Target", "run"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("ok\n");
+        final ProcessResult missing = process(project,
+            List.of(project.resolve(".javan/bin/bounded-reflection-method").toString(), "com.acme.Target", "hidden"));
+        assertThat(missing.exitCode()).isNotZero();
+        assertThat(missing.stderr()).contains("NoSuchMethodException");
+        assertThat(Files.readString(project.resolve(".javan/reports/call-graph.json")))
+            .contains("com/acme/Target.run(Ljava/lang/String;)Ljava/lang/String;")
+            .doesNotContain("com/acme/Target.run(I)Ljava/lang/String;")
+            .doesNotContain("com/acme/Target.hidden(Ljava/lang/String;)Ljava/lang/String;")
+            .doesNotContain("com/acme/Unrelated.unused(Ljava/lang/String;)Ljava/lang/String;");
+        assertThat(generatedProgramSource(project)).doesNotContain("javan_class_com_acme_Unrelated");
+    }
+
+    @Test
+    void reflectionDeclarationPreservesAutomaticallyNamedMethods() throws Exception {
+        final Path project = project("bounded-literal-method");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[0]; }
+                public static void main(String[] args) throws Exception {
+                    final var method = Target.class.getDeclaredMethod("run", String.class);
+                    System.out.println((String) method.invoke(null, "ok"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target { public static String run(String value) { return value; } }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/bounded-literal-method").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("ok\n");
+    }
+
+    @Test
+    void reflectionDeclarationRecognizesLiteralLookupInsideCatchRange() throws Exception {
+        final Path project = project("bounded-literal-method-catch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[0]; }
+                public static void main(String[] args) {
+                    final Class<?>[] parameters = null;
+                    try { Target.class.getDeclaredMethod("run", parameters); }
+                    catch (NoSuchMethodException missing) { System.out.println("missing"); return; }
+                    System.out.println("found");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target { public void run() { } }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/bounded-literal-method-catch").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("found\n");
+    }
+
+    @Test
+    void reflectionDeclarationCanBeCalledByNativeTests() throws Exception {
+        final Path project = project("native-reflection-declaration-call");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            import java.lang.reflect.Method;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Target.class, Target.class.getDeclaredMethod("run")};
+                }
+                public static void main(String[] args) throws Exception {
+                    final AnnotatedElement[] declared = javanReflectionTargets();
+                    System.out.println(declared.length);
+                    System.out.println(declared[0] == Target.class);
+                    System.out.println(((Method) declared[1]).getName());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target { public void run() { } }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/native-reflection-declaration-call").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("2\ntrue\nrun\n");
+    }
+
+    @Test
+    void reflectionDeclarationPreservesAbstractMethodDispatch() throws Exception {
+        final Path project = project("bounded-abstract-method");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Base.class.getDeclaredMethod("run", String.class)};
+                }
+                public static void main(String[] args) throws Exception {
+                    final var method = Class.forName(args[0]).getDeclaredMethod(args[1], String.class);
+                    System.out.println((String) method.invoke(new Impl(), "ok"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Base", """
+            package com.acme;
+            public abstract class Base { public abstract String run(String value); }
+            """);
+        writeJava(project, "com.acme.Impl", """
+            package com.acme;
+            public final class Impl extends Base {
+                public String run(String value) { return value; }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/bounded-abstract-method").toString(), "com.acme.Base", "run"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("ok\n");
+    }
+
+    @Test
+    void reflectionDeclarationPreservesPublicLookupOfOverrides() throws Exception {
+        final Path project = project("bounded-public-override");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Base.class.getDeclaredMethod("run", String.class)};
+                }
+                public static void main(String[] args) throws Exception {
+                    final var method = Class.forName(args[0]).getMethod(args[1], String.class);
+                    System.out.println((String) method.invoke(new Impl(), "ok"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Base", """
+            package com.acme;
+            public abstract class Base { public abstract String run(String value); }
+            """);
+        writeJava(project, "com.acme.Impl", """
+            package com.acme;
+            public final class Impl extends Base { public String run(String value) { return value; } }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/bounded-public-override").toString(), "com.acme.Impl", "run"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("ok\n");
+    }
+
+    @Test
+    void reflectionDeclarationPreservesInterfaceMethodDispatch() throws Exception {
+        final Path project = project("bounded-interface-method");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Service.class.getDeclaredMethod("run", String.class)};
+                }
+                public static void main(String[] args) throws Exception {
+                    final var method = Class.forName(args[0]).getDeclaredMethod(args[1], String.class);
+                    System.out.println((String) method.invoke(new Impl(), "ok"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Service", """
+            package com.acme;
+            public interface Service { String run(String value); }
+            """);
+        writeJava(project, "com.acme.Impl", """
+            package com.acme;
+            public final class Impl implements Service { public String run(String value) { return value; } }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/bounded-interface-method").toString(), "com.acme.Service", "run"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("ok\n");
+    }
+
+    @Test
+    void reflectionDeclarationDoesNotExposeUnrelatedPrivateSubclassMethods() throws Exception {
+        final Path project = project("bounded-private-method");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Base.class.getDeclaredMethod("run")};
+                }
+                public static void main(String[] args) throws Exception {
+                    final Class<?> type = Class.forName(args[0]);
+                    final String name = args[1];
+                    System.out.println(Child.class.getName());
+                    System.out.println(type.getDeclaredMethod(name).getName());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Base", """
+            package com.acme;
+            public class Base { private void run() { } }
+            """);
+        writeJava(project, "com.acme.Child", """
+            package com.acme;
+            public final class Child extends Base { private void run() { } }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/bounded-private-method").toString(), "com.acme.Child", "run"));
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.stdout()).isEqualTo("com.acme.Child\n");
+        assertThat(result.stderr()).contains("NoSuchMethodException");
+    }
+
+    @Test
+    void reflectionDeclarationPreservesPackagePrivateOverridesInTheSamePackage() throws Exception {
+        final Path project = project("bounded-package-method");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Base.class.getDeclaredMethod("run", String.class)};
+                }
+                public static void main(String[] args) throws Exception {
+                    final var method = Class.forName(args[0]).getDeclaredMethod(args[1], String.class);
+                    System.out.println((String) method.invoke(new Impl(), "ok"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Base", """
+            package com.acme;
+            public class Base { String run(String value) { return "base"; } }
+            """);
+        writeJava(project, "com.acme.Impl", """
+            package com.acme;
+            public final class Impl extends Base { @Override String run(String value) { return value; } }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/bounded-package-method").toString(), "com.acme.Base", "run"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("ok\n");
+    }
+
+    @Test
     void reflectionDeclarationRejectsMissingMethodOverload() throws Exception {
         final Path project = project("declared-reflection-missing-method");
         writeJava(project, "com.acme.Main", """
