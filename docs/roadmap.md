@@ -11,6 +11,11 @@ Linux ARM64 and macOS ARM64, with Java support expanded through complete, tested
 behavior slices. macOS x64 and Windows package support remain outside that release scope.
 [REL-001](specs/release.md#requirements-and-acceptance) owns this boundary.
 
+The longer-term compatibility goal is full Java 25 coverage. Begin with the closed-world
+native architecture and extend supported reflection automatically for classes included in
+the build. Runtime-provided names may resolve included classes; definitions obtained only
+after the build require a separate execution-model decision.
+
 Normal Java source and build outputs remain the input. The compiler selects supported
 behavior automatically, explains unsupported reachable behavior early, and preserves
 Java runtime semantics. C remains the production backend.
