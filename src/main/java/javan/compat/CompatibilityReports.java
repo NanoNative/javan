@@ -463,6 +463,7 @@ public final class CompatibilityReports {
             pass("polymorphic-virtual"),
             pass("interface-polymorphic"),
             pass("closed-world-application-method-invocation"),
+            pass("closed-world-declared-constructor-invocation"),
             pass("closed-world-class-for-name-loader"),
             pass("string-intrinsics"),
             pass("non-ascii-string-semantic-rejection"),

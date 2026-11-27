@@ -26,7 +26,7 @@ public final class ReflectionDeclaration {
      *
      * @param present whether a valid declaration exists, including an empty declaration
      * @param classes declared classes and required parameter classes
-     * @param methods declared method identities, including abstract methods
+     * @param methods declared method and constructor identities, including abstract methods
      * @param diagnostics deterministic validation errors
      */
     public record Result(boolean present, List<String> classes, List<EntryPoint> methods, List<Diagnostic> diagnostics) {
@@ -142,15 +142,15 @@ public final class ReflectionDeclaration {
                 return invalid(ownerName, "Each target must name a class from the compiled world.");
             }
             if (instructions.get(cursor).opcode() != 83) {
-                if (cursor + 3 >= instructions.size() || instructions.get(cursor).stringValue().isEmpty()
-                    || instructions.get(cursor + 1).intValue().isEmpty()
-                    || instructions.get(cursor + 2).opcode() != 189
-                    || !instructions.get(cursor + 2).className().orElse("").equals("java/lang/Class")) {
-                    return invalid(ownerName, "Use getDeclaredMethod with a literal name and parameter class literals.");
+                final boolean constructor = instructions.get(cursor).stringValue().isEmpty();
+                final String name = constructor ? "<init>" : instructions.get(cursor++).stringValue().orElseThrow();
+                if (cursor + 2 >= instructions.size() || instructions.get(cursor).intValue().isEmpty()
+                    || instructions.get(cursor + 1).opcode() != 189
+                    || !instructions.get(cursor + 1).className().orElse("").equals("java/lang/Class")) {
+                    return invalid(ownerName, "Use getDeclaredMethod or getDeclaredConstructor with literal parameters.");
                 }
-                final String name = instructions.get(cursor).stringValue().orElseThrow();
-                final int parameters = instructions.get(cursor + 1).intValue().orElseThrow();
-                cursor += 3;
+                final int parameters = instructions.get(cursor).intValue().orElseThrow();
+                cursor += 2;
                 if (parameters < 0 || instructions.size() - cursor < 4L * parameters + 2) {
                     return invalid(ownerName, "Use a literal parameter class array for " + name + ".");
                 }
@@ -183,9 +183,10 @@ public final class ReflectionDeclaration {
                 final Instruction lookup = instructions.get(cursor++);
                 final MethodRef reference = lookup.methodRef().orElse(null);
                 if (lookup.opcode() != 182 || reference == null || !"java/lang/Class".equals(reference.owner())
-                    || !"getDeclaredMethod".equals(reference.name())
-                    || !"(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;".equals(reference.descriptor())) {
-                    return invalid(ownerName, "Use getDeclaredMethod with literal parameters for " + name + ".");
+                    || !(constructor ? "getDeclaredConstructor" : "getDeclaredMethod").equals(reference.name())
+                    || !(constructor ? "([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;"
+                        : "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;").equals(reference.descriptor())) {
+                    return invalid(ownerName, "Use getDeclaredMethod or getDeclaredConstructor with literal parameters for " + name + ".");
                 }
                 boolean found = false;
                 for (final MethodInfo method : classes.get(target).methods()) {
@@ -195,7 +196,7 @@ public final class ReflectionDeclaration {
                     }
                 }
                 if (!found) {
-                    return invalid(ownerName, "No declared method " + target + "." + name + descriptor + " exists.");
+                    return invalid(ownerName, "No declared member " + target + "." + name + descriptor + " exists.");
                 }
             }
             if (cursor >= instructions.size() || instructions.get(cursor++).opcode() != 83) {
@@ -208,7 +209,7 @@ public final class ReflectionDeclaration {
         return new Result(true, targets, methods, List.of());
     }
 
-    private static Optional<String> classLiteralDescriptor(final Instruction instruction) {
+    static Optional<String> classLiteralDescriptor(final Instruction instruction) {
         if ((instruction.opcode() == 18 || instruction.opcode() == 19) && instruction.className().isPresent()) {
             final String name = instruction.className().orElseThrow();
             return Optional.of(name.startsWith("[") ? name : "L" + name + ";");
@@ -235,7 +236,7 @@ public final class ReflectionDeclaration {
     private static Result invalid(final String owner, final String reason) {
         return new Result(false, List.of(), List.of(), List.of(Diagnostic.error(
             "JAVAN096", "invalid reflection declaration", owner, METHOD, METHOD, reason,
-            "Return an array of compiled class literals and getDeclaredMethod calls with literal parameters."
+            "Return compiled class literals or getDeclaredMethod/getDeclaredConstructor calls with literal parameters."
         )));
     }
 }

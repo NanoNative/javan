@@ -72,14 +72,16 @@ Reflection fallback: a project may define one public static method named
 supported reflection subset. Javan reads its
 bytecode without executing the method or initializing its declaring class. Supported entries
 are class literals from the compiled application or scanned dependencies, their array class
-literals, primitive and void class literals, primitive array class literals, and
-`getDeclaredMethod` on non-array classes, with a literal name and literal parameter types:
+literals, primitive and void class literals, primitive array class literals,
+`getDeclaredMethod` on non-array classes with a literal name and literal parameter types,
+and `getDeclaredConstructor` on compiled classes with literal parameter types:
 
 ```java
 public static java.lang.reflect.AnnotatedElement[] javanReflectionTargets()
         throws ReflectiveOperationException {
     return new java.lang.reflect.AnnotatedElement[] {
-        Plugin.class, Plugin.class.getDeclaredMethod("run", String.class)
+        Plugin.class, Plugin.class.getDeclaredMethod("run", String.class),
+        Plugin.class.getDeclaredConstructor()
     };
 }
 ```
@@ -87,9 +89,10 @@ public static java.lang.reflect.AnnotatedElement[] javanReflectionTargets()
 The named classes and required hierarchies are retained. An array class literal retains its
 reference component class without initializing it. Declared method bodies are retained
 for the exact parameter list, including all bytecode methods with that name and parameter
-list when return types differ. An empty array is valid. Duplicate declarations, different
-signatures, missing methods and computed or unsupported elements produce `JAVAN096`.
-Constructor and field declarations are not implemented yet. Unknown dynamic `Class.forName`
+list when return types differ. Constructors retain their exact parameter list. An empty array
+is valid. Duplicate declarations, different signatures, missing members and computed or
+unsupported elements produce `JAVAN096`.
+Field declarations are not implemented yet. Unknown dynamic `Class.forName`
 targets remain conservative over the parsed world when no declaration exists. With a
 declaration, dynamic names resolve against the declared classes, classes retained by reachable
 code and their required hierarchies, and class-name literals traced to the lookup directly or
@@ -105,6 +108,15 @@ yet be proven require an explicit declaration. Other dynamic application method 
 `NoSuchMethodException`.
 Supported platform method metadata remains available. Automatically proven targets remain
 available without the declaration.
+
+Within the compiled application and dependencies, `getDeclaredConstructor` and
+`Constructor.newInstance` support exact overload lookup, argument conversion, access checks,
+class initialization and wrapped constructor exceptions. A direct class literal and inline
+literal parameter array at the lookup are retained automatically even with an empty declaration.
+With a declaration, other dynamic targets require a declared constructor. Without one,
+unresolved constructor lookups retain the parsed world conservatively. Platform constructor
+lookup fails explicitly with `UnsupportedOperationException` until implemented. Other
+constructor reflection APIs are not implied by this subset.
 
 Direct `new Object()` creates a distinct managed instance with `java.lang.Object` class metadata.
 `Object.equals` dispatches statically reachable application overrides and supports default identity,

@@ -572,6 +572,18 @@ public final class BytecodeToIR {
             ))
         );
         result.put(
+            "javan_generated_constructor_invoke",
+            JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+                "java/lang/reflect/Constructor", "newInstance", "([Ljava/lang/Object;)Ljava/lang/Object;"
+            ))
+        );
+        result.put(
+            "javan_generated_class_get_declared_constructor",
+            JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+                "java/lang/Class", "getDeclaredConstructor", "([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;"
+            ))
+        );
+        result.put(
             "javan_optional_or_else_throw",
             JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
                 "java/util/Optional",

@@ -178,6 +178,10 @@ public final class JdkCallSupport {
             "getMethod",
             "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;"
         ),
+        runtime("Class.getDeclaredConstructor", "java/lang/Class", "getDeclaredConstructor",
+            "([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;"),
+        runtime("Constructor.newInstance", "java/lang/reflect/Constructor", "newInstance",
+            "([Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Method.getName", "java/lang/reflect/Method", "getName", "()Ljava/lang/String;"),
         runtime(
             "Method.getDeclaringClass",
@@ -1838,10 +1842,11 @@ public final class JdkCallSupport {
             return List.of("arrays", "strings");
         }
         if ("java/lang/Class".equals(owner)
-            && ("forName".equals(name) || "getDeclaredMethod".equals(name) || "getMethod".equals(name))) {
+            && ("forName".equals(name) || "getDeclaredMethod".equals(name) || "getMethod".equals(name)
+                || "getDeclaredConstructor".equals(name))) {
             return List.of("reflection-metadata");
         }
-        if ("java/lang/reflect/Method".equals(owner)
+        if ("java/lang/reflect/Method".equals(owner) || "java/lang/reflect/Constructor".equals(owner)
             || "java/lang/reflect/AccessibleObject".equals(owner)) {
             return List.of("reflection-metadata");
         }
@@ -2771,6 +2776,18 @@ public final class JdkCallSupport {
                 "java/lang/NullPointerException",
                 "java/lang/NoSuchMethodException"
             );
+        }
+        if ("java/lang/Class".equals(methodRef.owner()) && "getDeclaredConstructor".equals(methodRef.name())
+            && "([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;".equals(methodRef.descriptor())) {
+            return List.of("java/lang/NullPointerException", "java/lang/NoSuchMethodException",
+                "java/lang/UnsupportedOperationException");
+        }
+        if ("java/lang/reflect/Constructor".equals(methodRef.owner()) && "newInstance".equals(methodRef.name())
+            && "([Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor())) {
+            return List.of("java/lang/NullPointerException", "java/lang/IllegalAccessException",
+                "java/lang/IllegalArgumentException", "java/lang/InstantiationException",
+                "java/lang/reflect/InvocationTargetException", "java/lang/UnsupportedOperationException",
+                "java/lang/ExceptionInInitializerError", "java/lang/NoClassDefFoundError", "java/lang/Error");
         }
         if (methodMetadataAccessor(methodRef)) {
             return List.of("java/lang/NullPointerException");

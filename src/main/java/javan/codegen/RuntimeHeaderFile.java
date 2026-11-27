@@ -1017,6 +1017,7 @@ final class RuntimeHeaderFile {
         void* javan_method_get_return_type(void* value);
         int javan_method_get_modifiers(void* value);
         void* javan_method_new(const JavanMethodMetadata* metadata);
+        void javan_constructor_new_into(void** result, const JavanMethodMetadata* metadata);
         const JavanMethodMetadata* javan_method_metadata(void* value);
         int javan_method_access_override(void* value);
         int javan_method_set_accessible(void* value, int accessible, void* caller_name_value);

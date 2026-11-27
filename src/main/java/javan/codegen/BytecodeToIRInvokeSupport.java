@@ -517,6 +517,7 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (lowerMethodMetadataCall(
+            classes,
             classFile,
             method,
             instruction,
@@ -4596,6 +4597,7 @@ final class BytecodeToIRInvokeSupport {
     }
 
     private static boolean lowerMethodMetadataCall(
+        final Map<String, ClassFile> classes,
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction,
@@ -4606,6 +4608,62 @@ final class BytecodeToIRInvokeSupport {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
     ) {
+        if ("java/lang/reflect/Constructor".equals(methodRef.owner())
+            && "newInstance".equals(methodRef.name())
+            && "([Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor())) {
+            final String argumentsLocal = newObjectLocal(localDeclarations);
+            final String receiverLocal = newObjectLocal(localDeclarations);
+            instructions.add(IrInstruction.assignObject(argumentsLocal, popObject(classFile, method, stack)));
+            instructions.add(IrInstruction.assignObject(receiverLocal, popObject(classFile, method, stack)));
+            final List<StackValue> successStack = List.copyOf(stack);
+            final String receiverPresent = "label_constructor_invoke_receiver_present_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(receiverPresent, IrExpression.objectComparison(
+                "!=", IrExpression.objectLocal(receiverLocal), IrExpression.objectNull())));
+            routePendingPlatformException(classFile, method, instruction, instructions, stack,
+                pendingExceptionHandlerStacks, sourceLines, "java/lang/NullPointerException",
+                IrExpression.stringLiteral("constructor"));
+            instructions.add(IrInstruction.label(receiverPresent));
+            stack.addAll(successStack);
+            pushObjectCall(instructions, stack, localDeclarations, "javan_generated_constructor_invoke", List.of(
+                IrExpression.objectLocal(receiverLocal), IrExpression.objectLocal(argumentsLocal),
+                IrExpression.stringLiteral(classFile.name().replace('/', '.')),
+                IrExpression.stringLiteral(classFile.nestHost().replace('/', '.'))));
+            return true;
+        }
+        if ("java/lang/Class".equals(methodRef.owner())
+            && "getDeclaredConstructor".equals(methodRef.name())
+            && "([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;".equals(methodRef.descriptor())) {
+            final String parametersLocal = newObjectLocal(localDeclarations);
+            final String classLocal = newObjectLocal(localDeclarations);
+            instructions.add(IrInstruction.assignObject(parametersLocal, popObject(classFile, method, stack)));
+            instructions.add(IrInstruction.assignObject(classLocal, popObject(classFile, method, stack)));
+            final List<StackValue> successStack = List.copyOf(stack);
+            final String classPresent = "label_constructor_lookup_class_present_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(classPresent, IrExpression.objectComparison(
+                "!=", IrExpression.objectLocal(classLocal), IrExpression.objectNull())));
+            routePendingPlatformException(classFile, method, instruction, instructions, stack,
+                pendingExceptionHandlerStacks, sourceLines, "java/lang/NullPointerException",
+                IrExpression.stringLiteral("class"));
+            instructions.add(IrInstruction.label(classPresent));
+            stack.addAll(successStack);
+            final String resultLocal = newObjectLocal(localDeclarations);
+            instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectCall(
+                "javan_generated_class_get_declared_constructor",
+                List.of(IrExpression.objectLocal(classLocal), IrExpression.objectLocal(parametersLocal)))));
+            BytecodeToIRControlFlowSupport.appendPendingExceptionDispatch(classes, method, instruction, instructions,
+                List.of("java/lang/UnsupportedOperationException"), pendingExceptionHandlerStacks,
+                "label_constructor_lookup_pending_continue_" + instruction.offset());
+            final String found = "label_constructor_lookup_found_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(found, IrExpression.objectComparison(
+                "!=", IrExpression.objectLocal(resultLocal), IrExpression.objectNull())));
+            routePendingPlatformException(classFile, method, instruction, instructions, stack,
+                pendingExceptionHandlerStacks, sourceLines, "java/lang/NoSuchMethodException",
+                IrExpression.stringLiteral("constructor"));
+            instructions.add(IrInstruction.label(found));
+            stack.addAll(successStack);
+            stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+            return true;
+        }
         if ("java/lang/reflect/Method".equals(methodRef.owner())
             && "invoke".equals(methodRef.name())
             && "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor())) {

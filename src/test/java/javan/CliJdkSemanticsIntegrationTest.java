@@ -17470,6 +17470,441 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void reflectionDeclarationRetainsAndInvokesConstructorWithRuntimeClassName() throws Exception {
+        final Path project = project("declared-reflection-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Target.class.getDeclaredConstructor(String.class)};
+                }
+                public static void main(String[] args) throws Exception {
+                    final Object value = Class.forName(args[0]).getDeclaredConstructor(String.class).newInstance("hello");
+                    System.out.println(((Target) value).message());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                private final String value;
+                public Target(String value) { this.value = value; }
+                public String message() { return value; }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(
+            project.resolve(".javan/bin/declared-reflection-constructor").toString(), "com.acme.Target"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("hello\n");
+    }
+
+    @Test
+    void declaredConstructorLookupAndInvocationReportJavaFailures() throws Exception {
+        final Path project = project("declared-constructor-failures");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {
+                        Target.class.getDeclaredConstructor(String.class), Target.class.getDeclaredConstructor(int.class)
+                    };
+                }
+                public static void main(String[] args) throws Exception {
+                    Class<?> target = Class.forName(args[0]);
+                    missing(target);
+                    inaccessible(target);
+                    badArgument(target);
+                }
+                static void missing(Class<?> target) {
+                    try { target.getDeclaredConstructor(long.class); }
+                    catch (NoSuchMethodException expected) { System.out.println("missing"); }
+                }
+                static void inaccessible(Class<?> target) throws Exception {
+                    var constructor = target.getDeclaredConstructor(int.class);
+                    try { constructor.newInstance(1); }
+                    catch (IllegalAccessException expected) { System.out.println("inaccessible"); }
+                }
+                static void badArgument(Class<?> target) throws Exception {
+                    var constructor = target.getDeclaredConstructor(String.class);
+                    try { constructor.newInstance(1); }
+                    catch (IllegalArgumentException expected) { System.out.println("bad argument"); }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                public Target(String value) { }
+                private Target(int value) { }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(
+            project.resolve(".javan/bin/declared-constructor-failures").toString(), "com.acme.Target"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("missing\ninaccessible\nbad argument\n");
+    }
+
+    @Test
+    void protectedConstructorCannotBeInvokedFromSubclassInAnotherPackage() throws Exception {
+        final Path project = project("protected-reflection-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main extends example.Base {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {example.Base.class.getDeclaredConstructor()};
+                }
+                public static void main(String[] args) throws Exception {
+                    var constructor = Class.forName(args[0]).getDeclaredConstructor();
+                    try { constructor.newInstance(); }
+                    catch (IllegalAccessException expected) { System.out.println("denied"); }
+                }
+            }
+            """);
+        writeJava(project, "example.Base", """
+            package example;
+            public class Base { protected Base() { System.out.println("constructed"); } }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/protected-reflection-constructor").toString(), "example.Base"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("denied\n");
+    }
+
+    @Test
+    void constructorLookupInReachableCodeRequiresNoDeclaration() throws Exception {
+        final Path project = project("automatic-reflection-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    System.out.println(Target.class.getDeclaredConstructor().newInstance().message());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                public Target() { }
+                public String message() { return "automatic"; }
+            }
+            """);
+        writeJava(project, "com.acme.Unrelated", """
+            package com.acme;
+            public final class Unrelated { public Unrelated() { System.out.println("unrelated constructor"); } }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/automatic-reflection-constructor").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("automatic\n");
+        assertThat(generatedProgramSource(project)).doesNotContain("unrelated constructor");
+    }
+
+    @Test
+    void literalConstructorLookupIsAvailableWithAnEmptyDeclaration() throws Exception {
+        final Path project = project("automatic-constructor-empty-declaration");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[0]; }
+                public static void main(String[] args) throws Exception {
+                    System.out.println(Target.class.getDeclaredConstructor(String.class).newInstance("automatic").message());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                private final String value;
+                public Target(String value) { this.value = value; }
+                public Target(int unused) { throw new IllegalStateException("unrelated"); }
+                public String message() { return value; }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/automatic-constructor-empty-declaration").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("automatic\n");
+        assertThat(generatedProgramSource(project)).doesNotContain("unrelated");
+    }
+
+    @Test
+    void dynamicConstructorLookupWithoutDeclarationRemainsConservative() throws Exception {
+        final Path project = project("dynamic-reflection-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    Target.class.getDeclaredConstructor().newInstance();
+                    System.out.println(Class.forName(args[0]).getDeclaredConstructor().newInstance().getClass().getName());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target { public Target() { } }
+            """);
+        writeJava(project, "com.acme.Other", """
+            package com.acme;
+            public final class Other { public Other() { } }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/dynamic-reflection-constructor").toString(), "com.acme.Other"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("com.acme.Other\n");
+    }
+
+    @Test
+    void declaredConstructorAndMethodWorkTogether() throws Exception {
+        final Path project = project("declared-constructor-and-method");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Target.class.getDeclaredConstructor(String.class),
+                        Target.class.getDeclaredMethod("message")};
+                }
+                public static void main(String[] args) throws Exception {
+                    Class<?> type = Class.forName(args[0]);
+                    Object instance = type.getDeclaredConstructor(String.class).newInstance("mixed");
+                    System.out.println((String) type.getDeclaredMethod(args[1]).invoke(instance));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                private final String value;
+                public Target(String value) { this.value = value; }
+                public String message() { return value; }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/declared-constructor-and-method").toString(), "com.acme.Target", "message"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("mixed\n");
+    }
+
+    @Test
+    void reflectionConstructorDeclarationCanBeCalledFromNativeCode() throws Exception {
+        final Path project = project("constructor-declaration-call");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            import java.lang.reflect.Constructor;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Target.class.getDeclaredConstructor(String.class)};
+                }
+                public static void main(String[] args) throws Exception {
+                    final Constructor<?> constructor = (Constructor<?>) javanReflectionTargets()[0];
+                    System.out.println(constructor.getClass().getName());
+                    System.out.println(Constructor.class.isInstance(constructor));
+                    System.out.println(java.lang.reflect.Method.class.isInstance(constructor));
+                    System.out.println(AnnotatedElement.class.isAssignableFrom(constructor.getClass()));
+                    System.out.println(((Target) constructor.newInstance("callable")).message());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                private final String value;
+                public Target(String value) { this.value = value; }
+                public String message() { return value; }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/constructor-declaration-call").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("java.lang.reflect.Constructor\ntrue\nfalse\ntrue\ncallable\n");
+    }
+
+    @Test
+    void reflectiveConstructionRejectsAbstractClasses() throws Exception {
+        final Path project = project("abstract-reflection-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Target.class.getDeclaredConstructor()};
+                }
+                public static void main(String[] args) throws Exception {
+                    var constructor = Class.forName(args[0]).getDeclaredConstructor();
+                    try { constructor.newInstance(); }
+                    catch (InstantiationException expected) { System.out.println("abstract"); }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public abstract class Target { public Target() { System.out.println("constructed"); } }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(
+            project.resolve(".javan/bin/abstract-reflection-constructor").toString(), "com.acme.Target"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("abstract\n");
+    }
+
+    @Test
+    void reflectiveConstructionWrapsConstructorFailure() throws Exception {
+        final Path project = project("reflection-constructor-throws");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            import java.lang.reflect.InvocationTargetException;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Target.class.getDeclaredConstructor()};
+                }
+                public static void main(String[] args) throws Exception {
+                    var constructor = Class.forName(args[0]).getDeclaredConstructor();
+                    try { constructor.newInstance(); }
+                    catch (InvocationTargetException expected) { System.out.println(expected.getCause().getMessage()); }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target { public Target() { throw new IllegalStateException("boom"); } }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(
+            project.resolve(".javan/bin/reflection-constructor-throws").toString(), "com.acme.Target"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("boom\n");
+    }
+
+    @Test
+    void platformConstructorLookupFailsExplicitlyUntilSupported() throws Exception {
+        final Path project = project("platform-reflection-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    Class<?> type = String.class;
+                    try { type.getDeclaredConstructor(); }
+                    catch (UnsupportedOperationException expected) { System.out.println("unsupported"); }
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/platform-reflection-constructor").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("unsupported\n");
+    }
+
+    @Test
+    void reflectiveConstructionInitializesClassBeforeConstructor() throws Exception {
+        final Path project = project("reflection-constructor-initialization");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Target.class.getDeclaredConstructor()};
+                }
+                public static void main(String[] args) throws Exception {
+                    final Class<?> type = Class.forName(args[0], false, ClassLoader.getSystemClassLoader());
+                    System.out.println("loaded");
+                    type.getDeclaredConstructor().newInstance();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                static { System.out.println("initialized"); }
+                public Target() { System.out.println("constructed"); }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(
+            project.resolve(".javan/bin/reflection-constructor-initialization").toString(), "com.acme.Target"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("loaded\ninitialized\nconstructed\n");
+    }
+
+    @Test
+    void reflectiveConstructorsSurviveConcurrentGarbageCollection() throws Exception {
+        final Path project = project("constructor-concurrent-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger successes = new AtomicInteger();
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Target.class.getDeclaredConstructor(String.class)};
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        try { work(); } catch (Exception ignored) { }
+                    }
+                    static void work() throws Exception {
+                        var constructor = Target.class.getDeclaredConstructor(String.class);
+                        for (int i = 0; i < 40; i++) {
+                            String value = Integer.toString(i);
+                            if (constructor.newInstance(value).message().equals(value)) successes.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws InterruptedException {
+                    Thread a = new Thread(new Worker()); Thread b = new Thread(new Worker());
+                    a.start(); b.start(); a.join(); b.join(); System.out.println(successes.get());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                private final String value;
+                public Target(String value) { this.value = value; }
+                public String message() { return value; }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        assertThat(generatedProgramSource(project)).contains(
+            "javan_constructor_new_into(result, &",
+            "javan_runtime_lock_enter();\n        instance = ",
+            "javan_runtime_lock_leave();\n        javan_");
+        final ProcessResult result = process(project,
+            List.of(project.resolve(".javan/bin/constructor-concurrent-gc").toString()), Duration.ofSeconds(60),
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("80\n");
+    }
+
+    @Test
     void reflectionDeclarationRejectsMethodsOnArrayClasses() throws Exception {
         final Path project = project("declared-array-method");
         writeJava(project, "com.acme.Main", """

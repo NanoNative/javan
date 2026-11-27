@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 327 |
-| pass | 326 |
+| rows | 328 |
+| pass | 327 |
 | scoped | 1 |
 | target | 0 |
 | rejected | 0 |
@@ -54,6 +54,7 @@ Status mapping:
 | `polymorphic-virtual` | pass |
 | `interface-polymorphic` | pass |
 | `closed-world-application-method-invocation` | pass |
+| `closed-world-declared-constructor-invocation` | pass |
 | `closed-world-class-for-name-loader` | pass |
 | `string-intrinsics` | pass |
 | `non-ascii-string-semantic-rejection` | pass |

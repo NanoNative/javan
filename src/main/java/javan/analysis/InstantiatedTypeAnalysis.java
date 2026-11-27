@@ -25,7 +25,8 @@ public final class InstantiatedTypeAnalysis {
         ENUM,
         EXTERNAL,
         SUBSTITUTION,
-        SERVICE
+        SERVICE,
+        REFLECTION
     }
 
     /**
@@ -93,15 +94,33 @@ public final class InstantiatedTypeAnalysis {
         final List<String> serviceProviders
     ) {
         final Map<String, List<Origin>> origins = new LinkedHashMap<>();
+        boolean reflectiveConstruction = false;
+        for (final EntryPoint entry : reachableMethods) {
+            final ClassFile owner = classes.get(entry.className());
+            final Optional<MethodInfo> method = owner == null ? Optional.empty() : owner.method(entry.methodName(), entry.descriptor());
+            if (method.isEmpty() || method.orElseThrow().code().isEmpty()) continue;
+            for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
+                if (instruction.methodRef().isPresent()) {
+                    final MethodRef target = instruction.methodRef().orElseThrow();
+                    reflectiveConstruction |= "java/lang/reflect/Constructor".equals(target.owner())
+                        && "newInstance".equals(target.name())
+                        && "([Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor());
+                }
+            }
+        }
         for (final String provider : serviceProviders) {
             addConcrete(classes, origins, provider, Origin.SERVICE);
         }
+        final boolean declarationPresent = reflectiveConstruction && ReflectionDeclaration.analyze(classes).present();
         for (final EntryPoint root : roots) {
             final ClassFile owner = classes.get(root.className());
             final Optional<MethodInfo> rootMethod = owner == null
                 ? Optional.empty()
                 : owner.method(root.methodName(), root.descriptor());
-            if (rootMethod.isPresent() && !rootMethod.orElseThrow().isStatic()) {
+            if (rootMethod.isPresent() && "<init>".equals(root.methodName())) {
+                addConcrete(classes, origins, root.className(),
+                    serviceProviders.contains(root.className()) ? Origin.SERVICE : Origin.REFLECTION);
+            } else if (rootMethod.isPresent() && !rootMethod.orElseThrow().isStatic()) {
                 addExternalTypes(classes, origins, root.className());
             }
             for (final String parameterType : objectParameterTypes(root.descriptor())) {
@@ -112,6 +131,10 @@ public final class InstantiatedTypeAnalysis {
             final ClassFile classFile = classes.get(entryPoint.className());
             if (classFile == null) {
                 continue;
+            }
+            if (reflectiveConstruction && !declarationPresent
+                && "<init>".equals(entryPoint.methodName())) {
+                addConcrete(classes, origins, classFile.name(), Origin.REFLECTION);
             }
             if (classFile.isEnum()) {
                 addEnumTypes(classes, origins, classFile.name());
@@ -296,6 +319,9 @@ public final class InstantiatedTypeAnalysis {
         }
         if (origins.contains(Origin.SERVICE)) {
             result.add(Origin.SERVICE);
+        }
+        if (origins.contains(Origin.REFLECTION)) {
+            result.add(Origin.REFLECTION);
         }
         return List.copyOf(result);
     }

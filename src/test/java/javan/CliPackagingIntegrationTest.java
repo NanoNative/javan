@@ -375,6 +375,38 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanCompilesDeclaredReflectionConstructors() throws Exception {
+        final Path project = project("selfhost-reflection-constructors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] {Target.class.getDeclaredConstructor(String.class)};
+                }
+                public static void main(String[] args) throws Exception {
+                    Object value = Class.forName(args[0]).getDeclaredConstructor(String.class).newInstance("selfhost");
+                    System.out.println(((Target) value).message());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                private final String value;
+                public Target(String value) { this.value = value; }
+                public String message() { return value; }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(
+            project.resolve(".javan/bin/selfhost-reflection-constructors").toString(), "com.acme.Target"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("selfhost\n");
+    }
+
+    @Test
     void nativeBuiltJavanRejectsComputedReflectionDeclarations() throws Exception {
         final Path project = project("selfhost-invalid-reflection-declaration");
         writeJava(project, "com.acme.Main", """

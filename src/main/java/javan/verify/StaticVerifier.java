@@ -2475,6 +2475,12 @@ public final class StaticVerifier {
                 && "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor())) {
                 return true;
             }
+            if ("java/lang/reflect/Constructor".equals(target.owner()) && "newInstance".equals(target.name())
+                && "([Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor())
+                || "java/lang/Class".equals(target.owner()) && "getDeclaredConstructor".equals(target.name())
+                && "([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;".equals(target.descriptor())) {
+                return true;
+            }
         }
         return false;
     }
@@ -3434,7 +3440,18 @@ public final class StaticVerifier {
         }
         if (opcode == 189) {
             return instruction.className().isPresent()
-                && "java/lang/Object".equals(instruction.className().orElseThrow());
+                && ("java/lang/Object".equals(instruction.className().orElseThrow())
+                    || "java/lang/Class".equals(instruction.className().orElseThrow()));
+        }
+        if (opcode == 178 && instruction.fieldRef().isPresent()) {
+            final FieldRef field = instruction.fieldRef().orElseThrow();
+            return "TYPE".equals(field.name()) && "Ljava/lang/Class;".equals(field.descriptor())
+                && switch (field.owner()) {
+                    case "java/lang/Boolean", "java/lang/Byte", "java/lang/Short", "java/lang/Character",
+                        "java/lang/Integer", "java/lang/Long", "java/lang/Float", "java/lang/Double",
+                        "java/lang/Void" -> true;
+                    default -> false;
+                };
         }
         if (instruction.methodRef().isEmpty()) {
             return false;

@@ -128,13 +128,15 @@ public final class ReachabilityAnalyzer {
         }
         final Set<String> reflectionClasses = new HashSet<>(declaration.classes());
         final Set<String> reflectionMethodNames = new HashSet<>();
+        boolean preciseConstructors = false;
+        boolean impreciseConstructors = false;
         CallGraph graph;
         while (true) {
             final List<EntryPoint> roots = new ArrayList<>(entries);
             roots.addAll(reflectionRoots);
             roots.addAll(serviceRoots);
             graph = analyzePass(classes, roots, declaredExternalLeaves, instantiatedTypes, collectionQueries,
-                methodFlows, declaration, reflectionClasses, reflectionMethodNames, false);
+                methodFlows, declaration, reflectionClasses, reflectionMethodNames, preciseConstructors, false);
             if (!serviceProviders.isEmpty()
                 && !serviceRootsResolved
                 && usesServiceLoader(classes, graph.reachableMethods())) {
@@ -149,6 +151,24 @@ public final class ReachabilityAnalyzer {
                 instantiatedTypes = discovered;
                 continue;
             }
+            boolean constructorsChanged = false;
+            final ReflectionConstructorReachability.Result constructorAnalysis =
+                ReflectionConstructorReachability.analyze(classes, graph.reachableMethods());
+            for (final EntryPoint constructor : constructorAnalysis.targets()) {
+                if (!reflectionRoots.contains(constructor)) {
+                    reflectionRoots.add(constructor);
+                    constructorsChanged = true;
+                }
+            }
+            if (preciseConstructors && !constructorAnalysis.complete()) {
+                preciseConstructors = false;
+                impreciseConstructors = true;
+                constructorsChanged = true;
+            } else if (!preciseConstructors && !impreciseConstructors && constructorAnalysis.complete()) {
+                preciseConstructors = true;
+                constructorsChanged = true;
+            }
+            if (constructorsChanged) continue;
             if (declaration.present()) {
                 final ClassInitializationGraph.Result initialization =
                     ClassInitializationGraph.analyze(classes, graph.reachableMethods());
@@ -191,7 +211,7 @@ public final class ReachabilityAnalyzer {
             }
             if (!queriesChanged) {
                 return analyzePass(classes, roots, declaredExternalLeaves, instantiatedTypes, collectionQueries,
-                    methodFlows, declaration, reflectionClasses, reflectionMethodNames, true);
+                    methodFlows, declaration, reflectionClasses, reflectionMethodNames, preciseConstructors, true);
             }
             collectionQueries = Map.copyOf(next);
         }
@@ -359,6 +379,7 @@ public final class ReachabilityAnalyzer {
         final ReflectionDeclaration.Result declaration,
         final Set<String> reflectionClasses,
         final Set<String> reflectionMethodNames,
+        final boolean preciseConstructors,
         final boolean complete
     ) {
         final MethodRefFactsCache methodRefFacts = new MethodRefFactsCache(classes);
@@ -460,6 +481,7 @@ public final class ReachabilityAnalyzer {
                             declaration,
                             reflectionClasses,
                             reflectionMethodNames,
+                            preciseConstructors,
                             work,
                             workSet,
                             current,
@@ -518,6 +540,7 @@ public final class ReachabilityAnalyzer {
         final ReflectionDeclaration.Result declaration,
         final Set<String> reflectionClasses,
         final Set<String> reflectionMethodNames,
+        final boolean preciseConstructors,
         final List<EntryPoint> work,
         final EntryPointMembership workSet,
         final EntryPoint current,
@@ -529,6 +552,24 @@ public final class ReachabilityAnalyzer {
             return;
         }
         final MethodRef target = reference.orElseThrow();
+        if ("java/lang/reflect/Constructor".equals(target.owner()) && "newInstance".equals(target.name())
+            && "([Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor())) {
+            final List<EntryPoint> constructors = new ArrayList<>();
+            for (final ClassFile classFile : classes.values()) {
+                if (declaration.present() && !reflectionClasses.contains(classFile.name())) continue;
+                for (final MethodInfo method : classFile.methods()) {
+                    if (!"<init>".equals(method.name()) || method.code().isEmpty()) continue;
+                    final EntryPoint entry = entryPoints.entry(classFile.name(), method.name(), method.descriptor());
+                    if (!declaration.present() && !preciseConstructors
+                        || declaration.methods().contains(entry) || workSet.contains(entry)) {
+                        constructors.add(entry);
+                    }
+                }
+            }
+            enqueueAll(work, workSet, constructors);
+            addEdges(callEdges, current, constructors, CallEdge.Kind.REFLECTION_CANDIDATE);
+            return;
+        }
         if (!"java/lang/reflect/Method".equals(target.owner())
             || !"invoke".equals(target.name())
             || !"(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;".equals(
