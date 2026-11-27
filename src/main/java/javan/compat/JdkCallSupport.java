@@ -180,6 +180,8 @@ public final class JdkCallSupport {
         ),
         runtime("Class.getDeclaredConstructor", "java/lang/Class", "getDeclaredConstructor",
             "([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;"),
+        runtime("Class.getConstructor", "java/lang/Class", "getConstructor",
+            "([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;"),
         runtime("Constructor.newInstance", "java/lang/reflect/Constructor", "newInstance",
             "([Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Method.getName", "java/lang/reflect/Method", "getName", "()Ljava/lang/String;"),
@@ -1843,7 +1845,7 @@ public final class JdkCallSupport {
         }
         if ("java/lang/Class".equals(owner)
             && ("forName".equals(name) || "getDeclaredMethod".equals(name) || "getMethod".equals(name)
-                || "getDeclaredConstructor".equals(name))) {
+                || "getDeclaredConstructor".equals(name) || "getConstructor".equals(name))) {
             return List.of("reflection-metadata");
         }
         if ("java/lang/reflect/Method".equals(owner) || "java/lang/reflect/Constructor".equals(owner)
@@ -2794,7 +2796,7 @@ public final class JdkCallSupport {
                 "java/lang/NoSuchMethodException"
             );
         }
-        if ("java/lang/Class".equals(methodRef.owner()) && "getDeclaredConstructor".equals(methodRef.name())
+        if ("java/lang/Class".equals(methodRef.owner()) && ("getDeclaredConstructor".equals(methodRef.name()) || "getConstructor".equals(methodRef.name()))
             && "([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;".equals(methodRef.descriptor())) {
             return List.of("java/lang/NullPointerException", "java/lang/NoSuchMethodException",
                 "java/lang/UnsupportedOperationException");

@@ -348,7 +348,7 @@ final class BytecodeToIRMetadataSupport {
                         && "getMethod".equals(reference.name())
                         && "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;".equals(reference.descriptor());
                     declaredConstructorLookup |= "java/lang/Class".equals(reference.owner())
-                        && "getDeclaredConstructor".equals(reference.name())
+                        && ("getDeclaredConstructor".equals(reference.name()) || "getConstructor".equals(reference.name()))
                         && "([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;".equals(reference.descriptor());
                     dynamicClassLookup |= ClassMetadataReachability.isClassForName(reference);
                 }

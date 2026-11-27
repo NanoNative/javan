@@ -185,7 +185,7 @@ public final class CCodegen {
                 .append(System.lineSeparator());
         }
         if (features.constructorLookup()) {
-            c.append("static void javan_generated_class_get_declared_constructor(void** result, void* type, void* parameters);\n");
+            c.append("static void javan_generated_class_get_declared_constructor(void** result, void* type, void* parameters, int public_only);\n");
         }
         if (features.constructorInvocation()) {
             c.append("static void javan_generated_constructor_invoke(void** result, void* constructor, void* arguments, void* caller, void* caller_nest);\n");
@@ -393,7 +393,7 @@ public final class CCodegen {
                 .append("(void** result, void* method, void* target, void* arguments, void* caller, void* caller_nest);\n");
         }
         if (features.constructorLookup()) {
-            header.append("void javan_generated_class_get_declared_constructor(void** result, void* type, void* parameters);\n");
+            header.append("void javan_generated_class_get_declared_constructor(void** result, void* type, void* parameters, int public_only);\n");
         }
         if (features.constructorInvocation()) {
             header.append("void javan_generated_constructor_invoke(void** result, void* constructor, void* arguments, void* caller, void* caller_nest);\n");
@@ -658,7 +658,7 @@ public final class CCodegen {
                 .append(System.lineSeparator());
         }
         if (features.constructorLookup()) {
-            c.append("static void javan_generated_class_get_declared_constructor(void** result, void* type, void* parameters);\n");
+            c.append("static void javan_generated_class_get_declared_constructor(void** result, void* type, void* parameters, int public_only);\n");
         }
         if (features.constructorInvocation()) {
             c.append("static void javan_generated_constructor_invoke(void** result, void* constructor, void* arguments, void* caller, void* caller_nest);\n");
@@ -1844,12 +1844,14 @@ public final class CCodegen {
 
     private static void emitConstructorLookupHelper(final IrProgram program, final StringBuilder c) {
         final Map<IrMethodMetadata, Integer> symbols = methodMetadataSymbols(program);
-        c.append("JAVAN_PROGRAM_LINKAGE void javan_generated_class_get_declared_constructor(void** result, void* type, void* parameters) {\n")
+        c.append("JAVAN_PROGRAM_LINKAGE void javan_generated_class_get_declared_constructor(void** result, void* type, void* parameters, int public_only) {\n")
             .append("    if (type == NULL) return;\n")
             .append("    int count = parameters == NULL ? 0 : javan_array_length(parameters);\n");
         for (final IrReflectedClass reflectedClass : program.reflectedClasses()) {
             for (final IrMethodMetadata constructor : reflectedClass.declaredConstructors()) {
-                c.append("    if (javan_class_name_equals(type, ")
+                c.append("    if (");
+                if ((constructor.modifiers() & 1) == 0) c.append("!public_only && ");
+                c.append("javan_class_name_equals(type, ")
                     .append(emitCStringLiteral(displayClassName(reflectedClass.jvmName())))
                     .append(") && count == ").append(constructor.parameterDescriptors().size());
                 for (int index = 0; index < constructor.parameterDescriptors().size(); index++) {

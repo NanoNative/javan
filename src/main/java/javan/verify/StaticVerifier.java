@@ -2477,7 +2477,7 @@ public final class StaticVerifier {
             }
             if ("java/lang/reflect/Constructor".equals(target.owner()) && "newInstance".equals(target.name())
                 && "([Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor())
-                || "java/lang/Class".equals(target.owner()) && "getDeclaredConstructor".equals(target.name())
+                || "java/lang/Class".equals(target.owner()) && ("getDeclaredConstructor".equals(target.name()) || "getConstructor".equals(target.name()))
                 && "([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;".equals(target.descriptor())) {
                 return true;
             }

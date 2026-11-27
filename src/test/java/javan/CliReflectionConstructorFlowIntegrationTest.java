@@ -99,4 +99,116 @@ final class CliReflectionConstructorFlowIntegrationTest extends CliIntegrationSu
         assertThat(generatedProgramSource(project)).doesNotContain("unreachable constructor");
     }
 
+    @Test
+    void publicConstructorLookupRetainsExactOverloadAndRejectsPrivateConstructors() throws Exception {
+        final Path project = project("reflection-public-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[0]; }
+                public static void main(String[] args) throws Exception {
+                    Object value = Target.class.getConstructor(String.class).newInstance("public");
+                    System.out.println(((Target) value).message());
+                    try { Target.class.getConstructor(int.class); }
+                    catch (NoSuchMethodException expected) { System.out.println("private"); }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                private final String value;
+                public Target(String value) { this.value = value; }
+                private Target(int unused) { throw new IllegalStateException("private constructor body"); }
+                public String message() { return value; }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-public-constructor").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("public\nprivate\n");
+        assertThat(generatedProgramSource(project)).doesNotContain("private constructor body");
+    }
+
+    @Test
+    void publicConstructorDeclarationAllowsExternalClassName() throws Exception {
+        final Path project = project("reflection-public-constructor-declaration");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws Exception {
+                    return new AnnotatedElement[] { Target.class.getConstructor(String.class) };
+                }
+                public static void main(String[] args) throws Exception {
+                    System.out.println(javanReflectionTargets().length);
+                    Object value = Class.forName(args.length == 0 ? "com.acme.Target" : args[0]).getConstructor(String.class).newInstance("declared");
+                    System.out.println(((Target) value).message());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", """
+            package com.acme;
+            public final class Target {
+                private final String value;
+                public Target(String value) { this.value = value; }
+                public String message() { return value; }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-public-constructor-declaration").toString(), "com.acme.Target"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("1\ndeclared\n");
+    }
+
+    @Test
+    void publicLookupDoesNotExposeDeclaredPrivateConstructor() throws Exception {
+        final Path project = project("reflection-public-private-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws Exception {
+                    return new AnnotatedElement[] { Target.class.getDeclaredConstructor(int.class) };
+                }
+                public static void main(String[] args) throws Exception {
+                    System.out.println(Target.class.getDeclaredConstructor(int.class) != null);
+                    try { Target.class.getConstructor(int.class); }
+                    catch (NoSuchMethodException expected) { System.out.println("private"); }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", "package com.acme; public final class Target { private Target(int value) { } }");
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-public-private-constructor").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("true\nprivate\n");
+    }
+
+    @Test
+    void publicConstructorDeclarationRejectsPrivateTarget() throws Exception {
+        final Path project = project("reflection-invalid-public-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static AnnotatedElement[] javanReflectionTargets() throws Exception {
+                    return new AnnotatedElement[] { Target.class.getConstructor(int.class) };
+                }
+                public static void main(String[] args) { }
+            }
+            """);
+        writeJava(project, "com.acme.Target", "package com.acme; public final class Target { private Target(int value) { } }");
+        final CliRun check = run(tempDir, "check", project.toString());
+        assertThat(check.exitCode()).isNotZero();
+        assertThat(check.stderr()).contains("JAVAN096");
+    }
+
 }

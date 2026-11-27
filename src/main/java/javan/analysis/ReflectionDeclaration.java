@@ -147,7 +147,7 @@ public final class ReflectionDeclaration {
                 if (cursor + 2 >= instructions.size() || instructions.get(cursor).intValue().isEmpty()
                     || instructions.get(cursor + 1).opcode() != 189
                     || !instructions.get(cursor + 1).className().orElse("").equals("java/lang/Class")) {
-                    return invalid(ownerName, "Use getDeclaredMethod or getDeclaredConstructor with literal parameters.");
+                    return invalid(ownerName, "Use getDeclaredMethod, getDeclaredConstructor or getConstructor with literal parameters.");
                 }
                 final int parameters = instructions.get(cursor).intValue().orElseThrow();
                 cursor += 2;
@@ -183,14 +183,16 @@ public final class ReflectionDeclaration {
                 final Instruction lookup = instructions.get(cursor++);
                 final MethodRef reference = lookup.methodRef().orElse(null);
                 if (lookup.opcode() != 182 || reference == null || !"java/lang/Class".equals(reference.owner())
-                    || !(constructor ? "getDeclaredConstructor" : "getDeclaredMethod").equals(reference.name())
+                    || !(constructor ? "getDeclaredConstructor".equals(reference.name()) || "getConstructor".equals(reference.name())
+                        : "getDeclaredMethod".equals(reference.name()))
                     || !(constructor ? "([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;"
                         : "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;").equals(reference.descriptor())) {
-                    return invalid(ownerName, "Use getDeclaredMethod or getDeclaredConstructor with literal parameters for " + name + ".");
+                    return invalid(ownerName, "Use getDeclaredMethod, getDeclaredConstructor or getConstructor with literal parameters for " + name + ".");
                 }
                 boolean found = false;
                 for (final MethodInfo method : classes.get(target).methods()) {
-                    if (name.equals(method.name()) && method.descriptor().startsWith(descriptor.toString())) {
+                    if (name.equals(method.name()) && method.descriptor().startsWith(descriptor.toString())
+                        && (!constructor || !"getConstructor".equals(reference.name()) || method.isPublic())) {
                         found = true;
                         methods.add(new EntryPoint(target, method.name(), method.descriptor()));
                     }
@@ -236,7 +238,7 @@ public final class ReflectionDeclaration {
     private static Result invalid(final String owner, final String reason) {
         return new Result(false, List.of(), List.of(), List.of(Diagnostic.error(
             "JAVAN096", "invalid reflection declaration", owner, METHOD, METHOD, reason,
-            "Return compiled class literals or getDeclaredMethod/getDeclaredConstructor calls with literal parameters."
+            "Return compiled class literals or getDeclaredMethod/getDeclaredConstructor/getConstructor calls with literal parameters."
         )));
     }
 }

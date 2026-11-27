@@ -74,7 +74,7 @@ bytecode without executing the method or initializing its declaring class. Suppo
 are class literals from the compiled application or scanned dependencies, their array class
 literals, primitive and void class literals, primitive array class literals,
 `getDeclaredMethod` on non-array classes with a literal name and literal parameter types,
-and `getDeclaredConstructor` on compiled classes with literal parameter types:
+and `getDeclaredConstructor` or `getConstructor` on compiled classes with literal parameter types:
 
 ```java
 public static java.lang.reflect.AnnotatedElement[] javanReflectionTargets()
@@ -109,11 +109,12 @@ yet be proven require an explicit declaration. Other dynamic application method 
 Supported platform method metadata remains available. Automatically proven targets remain
 available without the declaration.
 
-Within the compiled application and dependencies, `getDeclaredConstructor` and
+Within the compiled application and dependencies, `getDeclaredConstructor`, `getConstructor` and
 `Constructor.newInstance` support exact overload lookup, argument conversion, access checks,
 class initialization and wrapped constructor exceptions. A direct class literal or a
 straight-line one-argument `Class.forName` literal, including copies through local variables,
 together with inline parameter literals, is retained automatically even with an empty declaration.
+`getConstructor` selects only public constructors, even when non-public constructors are declared.
 Local targets across branches or exception handlers remain conservative.
 With a declaration, other dynamic targets require a declared constructor. Without one,
 unresolved constructor lookups retain the parsed world conservatively. Platform constructor

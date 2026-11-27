@@ -4631,7 +4631,7 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         if ("java/lang/Class".equals(methodRef.owner())
-            && "getDeclaredConstructor".equals(methodRef.name())
+            && ("getDeclaredConstructor".equals(methodRef.name()) || "getConstructor".equals(methodRef.name()))
             && "([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;".equals(methodRef.descriptor())) {
             final String parametersLocal = newObjectLocal(localDeclarations);
             final String classLocal = newObjectLocal(localDeclarations);
@@ -4649,7 +4649,8 @@ final class BytecodeToIRInvokeSupport {
             final String resultLocal = newObjectLocal(localDeclarations);
             instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectCall(
                 "javan_generated_class_get_declared_constructor",
-                List.of(IrExpression.objectLocal(classLocal), IrExpression.objectLocal(parametersLocal)))));
+                List.of(IrExpression.objectLocal(classLocal), IrExpression.objectLocal(parametersLocal),
+                    IrExpression.intLiteral("getConstructor".equals(methodRef.name()) ? 1 : 0)))));
             BytecodeToIRControlFlowSupport.appendPendingExceptionDispatch(classes, method, instruction, instructions,
                 List.of("java/lang/UnsupportedOperationException"), pendingExceptionHandlerStacks,
                 "label_constructor_lookup_pending_continue_" + instruction.offset());

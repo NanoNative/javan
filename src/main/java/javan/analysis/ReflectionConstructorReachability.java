@@ -46,7 +46,7 @@ public final class ReflectionConstructorReachability {
                 final Instruction lookup = code.get(index);
                 final MethodRef reference = lookup.methodRef().orElse(null);
                 if (lookup.opcode() != 182 || reference == null || !"java/lang/Class".equals(reference.owner())
-                    || !"getDeclaredConstructor".equals(reference.name())
+                    || !("getDeclaredConstructor".equals(reference.name()) || "getConstructor".equals(reference.name()))
                     || !"([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;".equals(reference.descriptor())) continue;
                 lookups++;
                 int cursor = index - 1;
@@ -115,7 +115,9 @@ public final class ReflectionConstructorReachability {
                 final StringBuilder descriptor = new StringBuilder("(");
                 for (int parameter = reversed.size() - 1; parameter >= 0; parameter--) descriptor.append(reversed.get(parameter));
                 descriptor.append(")V");
-                if (targetClass.method("<init>", descriptor.toString()).isPresent()) {
+                final Optional<MethodInfo> constructor = targetClass.method("<init>", descriptor.toString());
+                if (constructor.isPresent()
+                    && (!"getConstructor".equals(reference.name()) || constructor.orElseThrow().isPublic())) {
                     final EntryPoint candidate = new EntryPoint(target, "<init>", descriptor.toString());
                     if (!result.contains(candidate)) result.add(candidate);
                 }
