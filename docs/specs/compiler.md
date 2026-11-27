@@ -112,10 +112,11 @@ These class-name and method-name bounds apply without a declaration as well.
 
 Within the compiled application and dependencies, `getDeclaredConstructor`, `getConstructor` and
 `Constructor.newInstance` support exact overload lookup, argument conversion, access checks,
-class initialization and wrapped constructor exceptions. Class literals and one-argument
+class initialization and wrapped constructor exceptions. Class literals and supported
 `Class.forName` string literals traced through local variables and control flow in the same method,
 together with inline parameter literals, retain the matching constructors automatically even
-with an empty declaration.
+with an empty declaration. For the three-argument overload, the initialization flag and loader
+must use the simple expressions described above.
 `getConstructor` selects only public constructors, even when non-public constructors are declared.
 Constructor metadata supports `getName`, `getDeclaringClass`, `getParameterCount`, `getParameterTypes`
 and `getModifiers`. Each `getParameterTypes` call returns a fresh array.

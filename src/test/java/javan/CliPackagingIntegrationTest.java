@@ -544,6 +544,33 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanFollowsSystemLoaderConstructorNames() throws Exception {
+        final Path project = project("selfhost-system-loader-constructors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    String name = args.length == 0 ? "com.acme.First" : "com.acme.Second";
+                    ClassLoader loader = ClassLoader.getSystemClassLoader();
+                    Class<?> type = Class.forName(name, false, loader);
+                    System.out.println(type.getDeclaredConstructor().newInstance().getClass().getName());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.First", "package com.acme; public final class First { public First() { } }");
+        writeJava(project, "com.acme.Second", "package com.acme; public final class Second { public Second() { } }");
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final String executable = project.resolve(".javan/bin/selfhost-system-loader-constructors").toString();
+        final ProcessResult first = process(project, List.of(executable));
+        final ProcessResult second = process(project, List.of(executable, "second"));
+        assertThat(first.exitCode()).as(first.stderr()).isZero();
+        assertThat(first.stdout()).isEqualTo("com.acme.First\n");
+        assertThat(second.exitCode()).as(second.stderr()).isZero();
+        assertThat(second.stdout()).isEqualTo("com.acme.Second\n");
+    }
+
+    @Test
     void nativeBuiltJavanFollowsBranchedConstructorClasses() throws Exception {
         final Path project = project("selfhost-branched-constructors");
         writeJava(project, "com.acme.Main", """

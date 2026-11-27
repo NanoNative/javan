@@ -65,31 +65,8 @@ public final class ClassMetadataReachability {
                 if (instruction.methodRef().isPresent()) {
                     final MethodRef reference = instruction.methodRef().orElseThrow();
                     if (isClassForName(reference)) {
-                        final Optional<String> target = ReachabilityAnalyzer.literalClassForNameTarget(code, instruction);
-                        if (target.isPresent() && classes.containsKey(target.orElseThrow())) {
-                            addClass(classes, retained, target.orElseThrow());
-                        } else if ("(Ljava/lang/String;)Ljava/lang/Class;".equals(reference.descriptor())) {
-                            for (final String literal : ReflectionLiteralFlow.literals(method.orElseThrow(), index - 1)) {
-                                addClass(classes, retained, literal.replace('.', '/'));
-                            }
-                        } else if (index >= 3) {
-                            final Instruction loader = instructions.get(index - 1);
-                            final Instruction initialize = instructions.get(index - 2);
-                            final int loaderOpcode = loader.opcode();
-                            final boolean directLoader = loaderOpcode == 1 || loaderOpcode == 25
-                                || loaderOpcode >= 42 && loaderOpcode <= 45
-                                || loaderOpcode == 184 && loader.methodRef().isPresent()
-                                    && "java/lang/ClassLoader".equals(loader.methodRef().orElseThrow().owner())
-                                    && "getSystemClassLoader".equals(loader.methodRef().orElseThrow().name())
-                                    && "()Ljava/lang/ClassLoader;".equals(loader.methodRef().orElseThrow().descriptor());
-                            final int flagOpcode = initialize.opcode();
-                            final boolean directFlag = initialize.intValue().isPresent() || flagOpcode == 21
-                                || flagOpcode >= 26 && flagOpcode <= 29;
-                            if (directLoader && directFlag) {
-                                for (final String literal : ReflectionLiteralFlow.literals(method.orElseThrow(), index - 3)) {
-                                    addClass(classes, retained, literal.replace('.', '/'));
-                                }
-                            }
+                        for (final String name : ReflectionLiteralFlow.classForNameNames(method.orElseThrow(), index)) {
+                            addClass(classes, retained, name);
                         }
                     }
                     addClass(classes, retained, reference.owner());

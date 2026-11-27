@@ -33,7 +33,7 @@ public final class ReflectionLiteralFlow {
     }
 
     /**
-     * Finds class literals and one-argument Class.forName literals reaching an expression.
+     * Finds class literals and supported Class.forName literals reaching an expression.
      *
      * @param method enclosing method with decoded code
      * @param sourceIndex index of the instruction producing the class argument
@@ -41,6 +41,48 @@ public final class ReflectionLiteralFlow {
      */
     public static Set<String> classNames(final MethodInfo method, final int sourceIndex) {
         return literals(method, sourceIndex, true);
+    }
+
+    /**
+     * Finds class-name literals supplied to a supported Class.forName call.
+     *
+     * @param method enclosing method with decoded code
+     * @param callIndex index of the Class.forName invocation
+     * @return discovered JVM class names
+     */
+    public static Set<String> classForNameNames(final MethodInfo method, final int callIndex) {
+        if (method.code().isEmpty()) return Set.of();
+        final List<Instruction> instructions = method.code().orElseThrow().instructions();
+        if (callIndex < 0 || callIndex >= instructions.size()) return Set.of();
+        final Instruction call = instructions.get(callIndex);
+        if (call.opcode() != 184 || call.methodRef().isEmpty()) return Set.of();
+        final var target = call.methodRef().orElseThrow();
+        if (!"java/lang/Class".equals(target.owner()) || !"forName".equals(target.name())) return Set.of();
+        final int argumentIndex;
+        if ("(Ljava/lang/String;)Ljava/lang/Class;".equals(target.descriptor())) {
+            argumentIndex = callIndex - 1;
+        } else if ("(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;".equals(target.descriptor())
+            && callIndex >= 3) {
+            final Instruction loader = instructions.get(callIndex - 1);
+            final Instruction initialize = instructions.get(callIndex - 2);
+            final int loaderOpcode = loader.opcode();
+            final boolean directLoader = loaderOpcode == 1 || loaderOpcode == 25
+                || loaderOpcode >= 42 && loaderOpcode <= 45
+                || loaderOpcode == 184 && loader.methodRef().isPresent()
+                    && "java/lang/ClassLoader".equals(loader.methodRef().orElseThrow().owner())
+                    && "getSystemClassLoader".equals(loader.methodRef().orElseThrow().name())
+                    && "()Ljava/lang/ClassLoader;".equals(loader.methodRef().orElseThrow().descriptor());
+            final int flagOpcode = initialize.opcode();
+            final boolean directFlag = initialize.intValue().isPresent() || flagOpcode == 21
+                || flagOpcode >= 26 && flagOpcode <= 29;
+            if (!directLoader || !directFlag) return Set.of();
+            argumentIndex = callIndex - 3;
+        } else {
+            return Set.of();
+        }
+        final Set<String> names = new HashSet<>();
+        for (final String name : literals(method, argumentIndex)) names.add(name.replace('.', '/'));
+        return Set.copyOf(names);
     }
 
     private static Set<String> literals(final MethodInfo method, final int sourceIndex, final boolean classes) {
@@ -153,15 +195,7 @@ public final class ReflectionLiteralFlow {
         if ((instruction.opcode() == 18 || instruction.opcode() == 19) && instruction.className().isPresent()) {
             return Set.of(instruction.className().orElseThrow());
         }
-        if (instruction.opcode() == 184 && instruction.methodRef().isPresent()) {
-            final var target = instruction.methodRef().orElseThrow();
-            if ("java/lang/Class".equals(target.owner()) && "forName".equals(target.name())
-                && "(Ljava/lang/String;)Ljava/lang/Class;".equals(target.descriptor())) {
-                final Set<String> names = new HashSet<>();
-                for (final String name : literals(method, index - 1)) names.add(name.replace('.', '/'));
-                return Set.copyOf(names);
-            }
-        }
+        if (instruction.opcode() == 184) return classForNameNames(method, index);
         return Set.of();
     }
 

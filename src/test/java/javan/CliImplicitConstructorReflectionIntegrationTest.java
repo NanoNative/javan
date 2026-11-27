@@ -9,6 +9,57 @@ import static org.assertj.core.api.Assertions.assertThat;
 @NativeTest
 final class CliImplicitConstructorReflectionIntegrationTest extends CliIntegrationSupport {
     @Test
+    void systemLoaderClassNameFlowRetainsConstructorsWithoutEarlyInitialization() throws Exception {
+        final Path project = project("implicit-constructor-system-loader");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    String name = args.length == 0 ? "com.acme.First" : "com.acme.Second";
+                    ClassLoader loader = ClassLoader.getSystemClassLoader();
+                    Class<?> type = Class.forName(name, false, loader);
+                    System.out.println("loaded");
+                    Object value = type.getDeclaredConstructor().newInstance();
+                    System.out.println(value.getClass().getName());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.First", "package com.acme; public final class First { static { System.out.println(\"first-init\"); } public First() { System.out.println(\"first-ctor\"); } }");
+        writeJava(project, "com.acme.Second", "package com.acme; public final class Second { static { System.out.println(\"second-init\"); } public Second() { System.out.println(\"second-ctor\"); } }");
+        writeJava(project, "com.acme.Unrelated", "package com.acme; public final class Unrelated { public Unrelated() { System.setProperty(\"unused\", \"never\"); } }");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final String binary = project.resolve(".javan/bin/implicit-constructor-system-loader").toString();
+        final ProcessResult first = process(project, List.of(binary));
+        final ProcessResult second = process(project, List.of(binary, "second"));
+        assertThat(first.exitCode()).as(first.stderr()).isZero();
+        assertThat(first.stdout()).isEqualTo("loaded\nfirst-init\nfirst-ctor\ncom.acme.First\n");
+        assertThat(second.exitCode()).as(second.stderr()).isZero();
+        assertThat(second.stdout()).isEqualTo("loaded\nsecond-init\nsecond-ctor\ncom.acme.Second\n");
+    }
+
+    @Test
+    void directSystemLoaderLookupRetainsPublicConstructorAndInitializesBeforeInvocation() throws Exception {
+        final Path project = project("implicit-public-constructor-system-loader");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    Object value = Class.forName("com.acme.Target", true, ClassLoader.getSystemClassLoader())
+                        .getConstructor().newInstance();
+                    System.out.println(value.getClass().getName());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Target", "package com.acme; public final class Target { static { System.out.println(\"init\"); } public Target() { System.out.println(\"constructed\"); } }");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/implicit-public-constructor-system-loader").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("init\nconstructed\ncom.acme.Target\n");
+    }
+
+    @Test
     void knownConstructorSupportsDynamicClassNameWithoutRetainingUnrelatedClasses() throws Exception {
         final Path project = project("implicit-dynamic-constructor");
         writeJava(project, "com.acme.Main", """
