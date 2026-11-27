@@ -766,8 +766,7 @@ public final class FunctionValueFlow {
             // Only track fresh arrays through straight-line locals and operand stacks.
             // Any escape, control-flow split or opaque stack manipulation loses the fact.
             if (callbackKind == CallbackKind.COLLECTION_QUERY
-                && (opcode >= 87 && opcode <= 88
-                    || opcode >= 90 && opcode <= 95 || opcode >= 153 && opcode <= 177
+                && (opcode >= 90 && opcode <= 95 || opcode >= 153 && opcode <= 177
                     || opcode >= 179 && opcode <= 181 || opcode == 186 || opcode >= 191 && opcode <= 201)) {
                 state.clearInlineEntryArrays();
             }
