@@ -26,13 +26,19 @@ final class CiTestWorkerPlannerTest {
             .collect(Collectors.groupingBy(CiTestWorkerPlannerTest::className, Collectors.counting()));
         final List<Double> estimates = workers.stream()
             .map(worker -> worker.stream().collect(Collectors.groupingBy(CiTestWorkerPlannerTest::className, Collectors.counting()))
-                .entrySet().stream().mapToDouble(entry -> CiTestWorkerPlanner.estimatedSeconds("native", entry.getKey() + "#method")
+                .entrySet().stream().mapToDouble(entry -> CiTestWorkerPlanner.estimatedSeconds(
+                    "native", entry.getKey(), methodsByClass.get(entry.getKey()).intValue())
                     * entry.getValue() / methodsByClass.get(entry.getKey())).sum())
             .toList();
 
         assertThat(estimates).allMatch(estimate -> estimate > 0.0d);
         assertThat(estimates.stream().max(Double::compareTo).orElseThrow()
             - estimates.stream().min(Double::compareTo).orElseThrow()).isLessThan(30.0d);
+    }
+
+    @Test
+    void unprofiledClassEstimateUsesItsActualMethodCount() {
+        assertThat(CiTestWorkerPlanner.estimatedSeconds("native", "example.UnprofiledTest", 12)).isEqualTo(12.0d);
     }
 
     @Test

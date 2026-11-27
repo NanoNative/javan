@@ -25,7 +25,7 @@ import static org.junit.platform.launcher.TagFilter.includeTags;
 
 /** Discovers one execution suite and deterministically divides it between CI workers. */
 public final class CiTestWorkerPlanner {
-    private static final int LARGE_CLASS_METHODS = 80;
+    private static final int LARGE_CLASS_METHODS = 100;
     private static final Map<String, Double> NATIVE_CLASS_SECONDS = durations();
 
     private CiTestWorkerPlanner() {
@@ -92,9 +92,8 @@ public final class CiTestWorkerPlanner {
         return workers.stream().map(worker -> List.copyOf(worker.tests)).toList();
     }
 
-    static double estimatedSeconds(final String suite, final String test) {
-        final int separator = test.indexOf('#');
-        return weight(suite, test.substring(0, separator), 1);
+    static double estimatedSeconds(final String suite, final String className, final int methods) {
+        return weight(suite, className, methods);
     }
 
     private static Worker leastLoaded(final List<Worker> workers) {
