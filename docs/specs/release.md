@@ -79,7 +79,12 @@ Historical runs and archives with unknown or different commit metadata cannot ce
    Acquire candidate archives, checksums and matching rehearsal sidecars from a recorded full
    package build. A normal PR's `bootstrap` package is not sufficient evidence.
 2. If that candidate has no full artifact set, prepare a disposable checkout of the clean
-   candidate on each required host. The POM's local default `1.0.0` is not a valid package
+   candidate on each required host, or run the [Verify workflow](../../.github/workflows/build-common.yml)
+   on the candidate branch with `rehearse_candidate=true`. Verify builds full packages and runs
+   full self-host sanitizers and artifact rehearsals on the required hosts. Its manual inputs
+   leave release publication disabled. Download the package and rehearsal artifacts from that run.
+
+   For a disposable local checkout, the POM default `1.0.0` is not a valid package
    version. As in CI, temporarily set a date version and recompile before building the package,
    so the executable, archive and `VERSION` file agree. This example is for macOS ARM64;
    use the same candidate version and the table's matching script target on the other hosts:

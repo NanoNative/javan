@@ -41,6 +41,11 @@ on:
         required: false
         default: false
         type: boolean
+      rehearse_candidate:
+        description: Run full artifact rehearsals on required native hosts
+        required: false
+        default: false
+        type: boolean
       bootstrap_generation:
         description: Native compiler bootstrap generation
         required: false
@@ -60,6 +65,8 @@ jobs:
       resolved_version: ${{ steps.info.outputs.resolved_version }}
       commit_sha: ${{ steps.info.outputs.commit_sha }}
       build_output_timestamp: ${{ steps.info.outputs.build_output_timestamp }}
+      package_scope: ${{ (inputs.rehearse_candidate || (!inputs.snapshot && inputs.prepare_publication)) && 'full' || 'bootstrap' }}
+      package_sanitizer_scope: ${{ inputs.rehearse_candidate && 'full' || 'platform-smoke' }}
     steps:
       - name: "🧑‍💻 Checkout [${{ inputs.ref || github.sha }}]"
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -366,14 +373,14 @@ jobs:
       runner: ubuntu-24.04
       target: linux-x64
       label: package_linux_x64
-      sanitizer_scope: platform-smoke
+      sanitizer_scope: ${{ needs.build-info.outputs.package_sanitizer_scope }}
       proof: package-self-host
       version: ${{ needs.build-info.outputs.resolved_version }}
       bootstrap_generation: 2
       timeout_minutes: 60
       # Snapshot publication proves the native artifact without repeating the
       # full self-host rehearsal reserved for immutable stable releases.
-      package_scope: ${{ inputs.snapshot && 'bootstrap' || inputs.prepare_publication && 'full' || 'bootstrap' }}
+      package_scope: ${{ needs.build-info.outputs.package_scope }}
     secrets: inherit
 
   linux-package-generation3:
@@ -389,14 +396,14 @@ jobs:
       runner: ubuntu-24.04
       target: linux-x64
       label: package_linux_x64
-      sanitizer_scope: platform-smoke
+      sanitizer_scope: ${{ needs.build-info.outputs.package_sanitizer_scope }}
       proof: package-self-host
       version: ${{ needs.build-info.outputs.resolved_version }}
       bootstrap_generation: 3
       timeout_minutes: 90
       # Snapshot publication proves the native artifact without repeating the
       # full self-host rehearsal reserved for immutable stable releases.
-      package_scope: ${{ inputs.snapshot && 'bootstrap' || inputs.prepare_publication && 'full' || 'bootstrap' }}
+      package_scope: ${{ needs.build-info.outputs.package_scope }}
       upload_bootstrap_source: true
     secrets: inherit
 
@@ -414,7 +421,7 @@ jobs:
       runner: ubuntu-24.04-arm
       target: linux-aarch64
       label: package_linux_arm64
-      sanitizer_scope: platform-smoke
+      sanitizer_scope: ${{ needs.build-info.outputs.package_sanitizer_scope }}
       proof: package-self-host
       enabled: true
       version: ${{ needs.build-info.outputs.resolved_version }}
@@ -422,7 +429,7 @@ jobs:
       bootstrap_source_artifact: ${{ inputs.bootstrap_generation == 3 && 'bootstrap-source-linux-x64' || '' }}
       # Snapshot publication proves the native artifact without repeating the
       # full self-host rehearsal reserved for immutable stable releases.
-      package_scope: ${{ inputs.snapshot && 'bootstrap' || inputs.prepare_publication && 'full' || 'bootstrap' }}
+      package_scope: ${{ needs.build-info.outputs.package_scope }}
       timeout_minutes: 90
     secrets: inherit
 
@@ -487,7 +494,7 @@ jobs:
       runner: macos-15
       target: macos-aarch64
       label: package_mac_arm64
-      sanitizer_scope: platform-smoke
+      sanitizer_scope: ${{ needs.build-info.outputs.package_sanitizer_scope }}
       proof: package-self-host
       enabled: true
       version: ${{ needs.build-info.outputs.resolved_version }}
@@ -495,7 +502,7 @@ jobs:
       bootstrap_source_artifact: ${{ inputs.bootstrap_generation == 3 && 'bootstrap-source-linux-x64' || '' }}
       # Snapshot publication needs the native artifact proof. Keep the heavier
       # full self-host proof for manual releases, where every target is gated.
-      package_scope: ${{ inputs.snapshot && 'bootstrap' || inputs.prepare_publication && 'full' || 'bootstrap' }}
+      package_scope: ${{ needs.build-info.outputs.package_scope }}
       timeout_minutes: 90
     secrets: inherit
 

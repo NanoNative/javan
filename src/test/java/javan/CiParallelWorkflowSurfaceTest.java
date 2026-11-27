@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -147,11 +148,33 @@ final class CiParallelWorkflowSurfaceTest {
             common.indexOf("  platform-smoke:")
         );
         assertThat(macPackage).contains(
-            "package_scope: ${{ inputs.snapshot && 'bootstrap' || inputs.prepare_publication && 'full' || 'bootstrap' }}"
+            "package_scope: ${{ needs.build-info.outputs.package_scope }}",
+            "sanitizer_scope: ${{ needs.build-info.outputs.package_sanitizer_scope }}"
         );
         assertThat(Files.readString(Path.of(".github/workflows/native-proof.yml")))
             .contains("JAVAN_BOOTSTRAP_GENERATION: ${{ inputs.bootstrap_generation }}")
             .contains("JAVAN_PACKAGE_PROOF_SCOPE: ${{ inputs.package_scope }}");
+    }
+
+    @Test
+    void manualVerificationCanRehearseRequiredPackagesWithoutPublication() throws Exception {
+        final String common = Files.readString(BUILD_COMMON);
+        final String dispatch = common.substring(common.indexOf("  workflow_dispatch:"), common.indexOf("permissions: {}"));
+        assertThat(dispatch)
+            .contains("rehearse_candidate:\n        description: Run full artifact rehearsals on required native hosts\n"
+                + "        required: false\n        default: false\n        type: boolean")
+            .doesNotContain("prepare_publication:");
+        assertThat(common)
+            .contains("package_scope: ${{ (inputs.rehearse_candidate || (!inputs.snapshot && inputs.prepare_publication))"
+                + " && 'full' || 'bootstrap' }}")
+            .contains("package_sanitizer_scope: ${{ inputs.rehearse_candidate && 'full' || 'platform-smoke' }}")
+            .contains("&& inputs.prepare_publication\n");
+        for (final String lane : List.of("linux-package-generation2", "linux-package-generation3", "linux-package-arm64", "macos-package-self-host")) {
+            final String job = common.split("\n  " + lane + ":\n", 2)[1].split("\n  \\S", 2)[0];
+            assertThat(job).as(lane)
+                .contains("package_scope: ${{ needs.build-info.outputs.package_scope }}")
+                .contains("sanitizer_scope: ${{ needs.build-info.outputs.package_sanitizer_scope }}");
+        }
     }
 
     @Test
