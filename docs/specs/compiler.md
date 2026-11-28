@@ -358,8 +358,10 @@ String concatenation converts statically typed boxed primitive operands and null
 string forms. The generated conversion keeps intermediate strings reachable during concurrent
 collection. `String.valueOf(Object)` and the object conversion inserted by `javac` for string
 concatenation call a reachable application `toString` override when the receiver types are proven.
-Supported exceptions and null return values are preserved. Unknown receiver types do not cause
-unrelated overrides to be retained and may still fail at runtime when no implementation was retained.
+Supported exceptions and null return values are preserved. Plain objects and application classes
+whose known superclass chain reaches `Object` without a `toString` override use their runtime class
+name and virtual `hashCode`, including identity hashing when no override exists. Unknown receiver
+types do not cause unrelated overrides to be retained and may still fail at runtime when no implementation was retained.
 `String.startsWith` and `String.endsWith` preserve UTF-16 comparisons and transport null failures
 within supported handler shapes; a negative start offset returns false for a non-null receiver.
 `String.equals` compares only strings and transports null-receiver failures within supported

@@ -2158,12 +2158,26 @@ public final class CCodegen {
         }
         emitDispatchSignature(dispatch, c, isStatic);
         c.append(" {").append(System.lineSeparator());
-        if (BytecodeToIR.OBJECT_STRING_DISPATCH.equals(dispatch.symbol())) {
+        if (BytecodeToIR.DEFAULT_OBJECT_HASH_DISPATCH.equals(dispatch.symbol())) {
             c.append("    switch (javan_object_registered_type_id(self)) {\n");
             for (final IrDispatchTarget target : dispatch.targets()) {
                 c.append("        case ").append(typeIds.get(target.owner()).intValue())
-                    .append(": ").append(target.functionSymbol()).append("(")
-                    .append(dispatchResultArguments(dispatch)).append("); return;\n");
+                    .append(": return ").append(target.functionSymbol()).append("(self);\n");
+            }
+            c.append("        default: return javan_record_reference_identity_hash_code(self);\n    }\n}\n\n");
+            return;
+        }
+        if (BytecodeToIR.OBJECT_STRING_DISPATCH.equals(dispatch.symbol())) {
+            c.append("    switch (javan_object_registered_type_id(self)) {\n");
+            for (final IrDispatchTarget target : dispatch.targets()) {
+                c.append("        case ").append(typeIds.get(target.owner()).intValue()).append(": ");
+                if (BytecodeToIR.DEFAULT_OBJECT_STRING.equals(target.functionSymbol())) {
+                    c.append("{ int hash = ").append(BytecodeToIR.DEFAULT_OBJECT_HASH_DISPATCH).append("(self); ")
+                        .append("if (javan_pending_has()) return; javan_runtime_lock_enter(); ")
+                        .append("*result = javan_default_object_string(self, hash); javan_runtime_lock_leave(); return; }\n");
+                } else {
+                    c.append(target.functionSymbol()).append("(").append(dispatchResultArguments(dispatch)).append("); return;\n");
+                }
             }
             c.append("        default: break;\n    }\n")
                 .append("    javan_runtime_lock_enter();\n")

@@ -1114,6 +1114,7 @@ final class RuntimeHeaderFile {
         void* javan_string_value_of_char(int value);
         void javan_string_value_of_char_into(void** result, int value);
         void* javan_printable_object_string(void* value);
+        void* javan_default_object_string(void* value, int hash);
         void* javan_string_concat_java(const char* left, const char* right);
         void javan_string_concat_java_into(void** result, const char* left, const char* right);
         void* javan_string_concat(const char* recipe, int argc, const char** values);

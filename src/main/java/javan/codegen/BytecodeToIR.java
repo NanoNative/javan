@@ -55,6 +55,8 @@ import java.util.Set;
  */
 public final class BytecodeToIR {
     static final String OBJECT_STRING_DISPATCH = "javan_dispatch_string_value_of_object";
+    static final String DEFAULT_OBJECT_STRING = "javan_default_object_string";
+    static final String DEFAULT_OBJECT_HASH_DISPATCH = "javan_dispatch_default_object_hash";
     static final String COLLECTION_EQUALS_DISPATCH = "javan_dispatch_collection_equals";
     static final String UNAVAILABLE_COLLECTION_EQUALS = "javan_unavailable_collection_equals";
     static final String UNAVAILABLE_MAP_EQUALS = "javan_unavailable_map_equals";
@@ -281,8 +283,26 @@ public final class BytecodeToIR {
                 final Optional<EntryPoint> implementation = lowerableResolvedVirtualTarget(classes, receiver.className(), toString);
                 if (implementation.isPresent() && reachable.contains(implementation.orElseThrow().display())) targets.add(receiver);
             }
-            dispatches.putIfAbsent(OBJECT_STRING_DISPATCH, BytecodeToIRDynamicSupport.dispatch(
-                classes, OBJECT_STRING_DISPATCH, MethodDescriptor.parse(toString.descriptor()), targets));
+            final IrDispatch objectString = BytecodeToIRDynamicSupport.dispatch(
+                classes, OBJECT_STRING_DISPATCH, MethodDescriptor.parse(toString.descriptor()), targets);
+            final List<IrDispatchTarget> objectTargets = new ArrayList<>(objectString.targets());
+            final MethodRef hashCode = new MethodRef("java/lang/Object", "hashCode", "()I");
+            final List<EntryPoint> hashTargets = new ArrayList<>();
+            for (final EntryPoint receiver : virtualTargets(classes, hashCode, callGraph.instantiatedTypes())) {
+                final Optional<EntryPoint> implementation = lowerableResolvedVirtualTarget(classes, receiver.className(), hashCode);
+                if (implementation.isPresent() && reachable.contains(implementation.orElseThrow().display())) hashTargets.add(receiver);
+            }
+            for (final ClassFile candidate : dispatchCandidates(classes, callGraph.instantiatedTypes())) {
+                if (candidate.isInterface() || !javan.analysis.ReachabilityAnalyzer.inheritsObjectDefaultToString(classes, candidate.name())) continue;
+                final Optional<EntryPoint> hash = resolvedVirtualTarget(classes, candidate.name(), hashCode);
+                if (hash.isEmpty() || reachable.contains(hash.orElseThrow().display())) {
+                    objectTargets.add(new IrDispatchTarget(candidate.name(), DEFAULT_OBJECT_STRING));
+                }
+            }
+            dispatches.putIfAbsent(OBJECT_STRING_DISPATCH,
+                new IrDispatch(objectString.symbol(), objectString.returnType(), objectString.parameters(), List.copyOf(objectTargets)));
+            dispatches.putIfAbsent(DEFAULT_OBJECT_HASH_DISPATCH, BytecodeToIRDynamicSupport.dispatch(
+                classes, DEFAULT_OBJECT_HASH_DISPATCH, MethodDescriptor.parse(hashCode.descriptor()), hashTargets));
         }
         if (usesCollectionEqualitySearch(classes, reachableMethods)) {
             final MethodRef equals = new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z");
@@ -633,6 +653,9 @@ public final class BytecodeToIR {
                                     && "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;".equals(calledMethod.descriptor())))
                             && "toString".equals(callee.methodName())
                             && "()Ljava/lang/String;".equals(callee.descriptor());
+                        final boolean objectStringConversion = JdkCallSupport.isStringValueOfObject(calledMethod)
+                            && ("toString".equals(callee.methodName()) && "()Ljava/lang/String;".equals(callee.descriptor())
+                                || "hashCode".equals(callee.methodName()) && "()I".equals(callee.descriptor()));
                         final boolean collectionEquality = (JdkCallSupport.isCollectionEqualitySearch(calledMethod)
                             || JdkCallSupport.isCollectionContainsAll(calledMethod)
                             || JdkCallSupport.isCollectionFilterAll(calledMethod)
@@ -646,7 +669,7 @@ public final class BytecodeToIR {
                                 || JdkCallSupport.isMapEntryArrayFactory(calledMethod))
                             && "hashCode".equals(callee.methodName())
                             && "()I".equals(callee.descriptor());
-                        if (!directCall && !charSequenceConversion && !collectionEquality) {
+                        if (!directCall && !charSequenceConversion && !objectStringConversion && !collectionEquality) {
                             continue;
                         }
                         for (final String throwableType : typesByMethod.getOrDefault(callee, Set.of())) {
@@ -1705,6 +1728,9 @@ public final class BytecodeToIR {
                 || JdkCallSupport.isListEndpointRemove(reference)
                 || JdkCallSupport.isListEndpointAdd(reference)) {
                 possibleTypes.addAll(JdkCallSupport.transportedPlatformThrowableTypes(reference));
+            }
+            if (JdkCallSupport.isStringValueOfObject(reference)) {
+                addTransportedThrowableTypes(DEFAULT_OBJECT_HASH_DISPATCH, dispatches, transportedThrowableTypes, possibleTypes);
             }
             if (JdkCallSupport.isMapKeyOperation(reference) || JdkCallSupport.isMapMultiEntryFactory(reference)
                 || JdkCallSupport.isMapCopyOf(reference) || JdkCallSupport.isMapEntryArrayFactory(reference)

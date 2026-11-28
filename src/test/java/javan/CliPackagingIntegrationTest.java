@@ -341,6 +341,26 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanFormatsTheDefaultObjectToString() throws Exception {
+        final Path project = project("selfhost-default-object-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static final class Value { public int hashCode() { return 42; } }
+                public static void main(String[] args) {
+                    Object value = new Value();
+                    System.out.println("value:" + value);
+                }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()), Duration.ofSeconds(60));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-default-object-string").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("value:com.acme.Main$Value@2a\n");
+    }
+
+    @Test
     void nativeBuiltJavanCallsTheProvenObjectToString() throws Exception {
         final Path project = project("selfhost-object-string");
         writeJava(project, "com.acme.Main", """

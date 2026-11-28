@@ -895,6 +895,10 @@ public final class ReachabilityAnalyzer {
         }
 
         private List<EntryPoint> collectionTargets(final Instruction instruction, final MethodRef member, final String site) {
+            return objectUseTargets(instruction, member, site, false);
+        }
+
+        private List<EntryPoint> objectUseTargets(final Instruction instruction, final MethodRef member, final String site, final boolean defaultStringOnly) {
             final FunctionValueFlow.ObjectUse provenance = objectUses.get(site);
             if (provenance == null) {
                 return List.of();
@@ -926,6 +930,7 @@ public final class ReachabilityAnalyzer {
                 candidates.addAll(provenance.types());
             }
             for (final String type : candidates) {
+                if (defaultStringOnly && !inheritsObjectDefaultToString(classes, type)) continue;
                 final Optional<EntryPoint> target = lowerableResolvedVirtualTarget(classes, type, member, entryPoints);
                 if (target.isPresent()) {
                     final EntryPoint entry = target.orElseThrow();
@@ -1475,6 +1480,11 @@ public final class ReachabilityAnalyzer {
             final List<EntryPoint> targetMethods = dispatchTargets.collectionTargets(current, instruction, toString);
             enqueueAll(work, workSet, targetMethods);
             addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            final MethodRef hashCode = new MethodRef("java/lang/Object", "hashCode", "()I");
+            final List<EntryPoint> hashTargets = dispatchTargets.objectUseTargets(
+                instruction, hashCode, FunctionValueFlow.objectUseSiteKey(current, instruction), true);
+            enqueueAll(work, workSet, hashTargets);
+            addEdges(callEdges, current, hashTargets, CallEdge.Kind.CALL);
             return;
         }
         if (instruction.opcode() == 182 && "java/lang/Object".equals(target.owner()) && "equals".equals(target.name())
@@ -3299,6 +3309,24 @@ public final class ReachabilityAnalyzer {
             current = classes.get(current).superName();
         }
         return current.equals(expectedSuper);
+    }
+
+    /**
+     * Determines whether an application class inherits Object's default string conversion.
+     *
+     * @param classes parsed closed-world classes
+     * @param candidate application class name
+     * @return whether the complete known hierarchy reaches Object without an override
+     */
+    public static boolean inheritsObjectDefaultToString(final Map<String, ClassFile> classes, final String candidate) {
+        String current = candidate;
+        final Set<String> seen = new HashSet<>();
+        while (classes.containsKey(current) && seen.add(current)) {
+            final ClassFile type = classes.get(current);
+            if (type.method("toString", "()Ljava/lang/String;").isPresent()) return false;
+            current = type.superName();
+        }
+        return "java/lang/Object".equals(current);
     }
 
     /**

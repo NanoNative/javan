@@ -2263,6 +2263,34 @@ final class RuntimeSourceMemorySections {
             }
         }
 
+        void* javan_default_object_string(void* value, int hash) {
+            const int type = javan_object_registered_type_id(value);
+            JavanTypeDescriptor* descriptor = javan_type_descriptor_for(type);
+            const char* name = descriptor == NULL ? NULL : descriptor->name;
+            javan_allocation_metadata snapshot;
+            if (name == NULL && javan_find_allocation(value, &snapshot) != 0
+                && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_PLAIN_OBJECT) name = "java.lang.Object";
+            if (name == NULL) {
+                javan_panic("unsupported default object string type");
+                return NULL;
+            }
+            char hex[9];
+            snprintf(hex, sizeof(hex), "%x", (unsigned int) (uint32_t) hash);
+            const size_t name_length = strlen(name);
+            const size_t hex_length = strlen(hex);
+            char* text = (char*) malloc(name_length + hex_length + 2);
+            if (text == NULL) {
+                javan_panic("out of memory");
+                return NULL;
+            }
+            memcpy(text, name, name_length);
+            text[name_length] = '@';
+            memcpy(text + name_length + 1, hex, hex_length + 1);
+            void* result = javan_string_from(text);
+            free(text);
+            return result;
+        }
+
         void* javan_printable_object_string(void* value) {
             if (value == NULL) {
                 return (void*) "null";
@@ -2276,6 +2304,9 @@ final class RuntimeSourceMemorySections {
             javan_allocation_metadata snapshot;
             if (javan_find_allocation(value, &snapshot) == 0) {
                 return value;
+            }
+            if (snapshot.runtime_kind == JAVAN_RUNTIME_KIND_PLAIN_OBJECT) {
+                return javan_default_object_string(value, javan_record_reference_identity_hash_code(value));
             }
             if (snapshot.runtime_kind == JAVAN_RUNTIME_KIND_STRING) {
                 return value;

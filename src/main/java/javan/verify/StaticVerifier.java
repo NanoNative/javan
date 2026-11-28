@@ -3680,6 +3680,14 @@ public final class StaticVerifier {
             visiting.remove(target);
             return result;
         }
+        if (JdkCallSupport.isStringValueOfObject(target)) {
+            final Set<String> result = new HashSet<>(escapingPlatformExceptionTypes(classes,
+                new MethodRef("java/lang/Object", "toString", "()Ljava/lang/String;"), visiting));
+            result.addAll(escapingPlatformExceptionTypes(classes,
+                new MethodRef("java/lang/Object", "hashCode", "()I"), visiting));
+            visiting.remove(target);
+            return result;
+        }
         if (JdkCallSupport.isCollectionEqualitySearch(target) || JdkCallSupport.isCollectionContainsAll(target)
             || JdkCallSupport.isCollectionFilterAll(target)) {
             final Set<String> result = escapingPlatformExceptionTypes(classes,
@@ -3689,7 +3697,8 @@ public final class StaticVerifier {
         }
         if (("java/lang/Object".equals(target.owner()) && ("equals".equals(target.name())
                 && "(Ljava/lang/Object;)Z".equals(target.descriptor())
-                || "hashCode".equals(target.name()) && "()I".equals(target.descriptor())))
+                || "hashCode".equals(target.name()) && "()I".equals(target.descriptor())
+                || "toString".equals(target.name()) && "()Ljava/lang/String;".equals(target.descriptor())))
             || ("java/util/random/RandomGenerator".equals(target.owner())
             && (("nextLong".equals(target.name()) && "()J".equals(target.descriptor()))
                 || ("nextBytes".equals(target.name()) && "([B)V".equals(target.descriptor()))
