@@ -17917,7 +17917,9 @@ final class BytecodeToIRTest {
             plain(2, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).anyMatch(instruction -> instruction.op() == IrInstruction.Op.THROW_PENDING
+            && instruction.value().filter("java/lang/NullPointerException"::equals).isPresent());
+        assertThat(function.instructions()).contains(
             IrInstruction.returnInt(IrExpression.intCall(
                 "javan_integer_int_value",
                 List.of(IrExpression.objectLocal("arg0"))
@@ -17956,7 +17958,9 @@ final class BytecodeToIRTest {
             plain(2, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).anyMatch(instruction -> instruction.op() == IrInstruction.Op.THROW_PENDING
+            && instruction.value().filter("java/lang/NullPointerException"::equals).isPresent());
+        assertThat(function.instructions()).contains(
             IrInstruction.returnInt(IrExpression.intCall(
                 "javan_boolean_boolean_value",
                 List.of(IrExpression.objectLocal("arg0"))
@@ -17977,7 +17981,9 @@ final class BytecodeToIRTest {
             plain(2, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).anyMatch(instruction -> instruction.op() == IrInstruction.Op.THROW_PENDING
+            && instruction.value().filter("java/lang/NullPointerException"::equals).isPresent());
+        assertThat(function.instructions()).contains(
             IrInstruction.returnInt(IrExpression.intCall(
                 "javan_byte_byte_value",
                 List.of(IrExpression.objectLocal("arg0"))
@@ -17998,7 +18004,9 @@ final class BytecodeToIRTest {
             plain(2, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).anyMatch(instruction -> instruction.op() == IrInstruction.Op.THROW_PENDING
+            && instruction.value().filter("java/lang/NullPointerException"::equals).isPresent());
+        assertThat(function.instructions()).contains(
             IrInstruction.returnInt(IrExpression.intCall(
                 "javan_short_short_value",
                 List.of(IrExpression.objectLocal("arg0"))
@@ -18019,7 +18027,9 @@ final class BytecodeToIRTest {
             plain(4, 172, "ireturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).anyMatch(instruction -> instruction.op() == IrInstruction.Op.THROW_PENDING
+            && instruction.value().filter("java/lang/NullPointerException"::equals).isPresent());
+        assertThat(function.instructions()).contains(
             IrInstruction.returnInt(IrExpression.intCall(
                 "javan_character_char_value",
                 List.of(IrExpression.objectLocal("arg0"))
@@ -18100,7 +18110,9 @@ final class BytecodeToIRTest {
             plain(2, 173, "lreturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).anyMatch(instruction -> instruction.op() == IrInstruction.Op.THROW_PENDING
+            && instruction.value().filter("java/lang/NullPointerException"::equals).isPresent());
+        assertThat(function.instructions()).contains(
             IrInstruction.returnLong(IrExpression.longCall(
                 "javan_long_long_value",
                 List.of(IrExpression.objectLocal("arg0"))
@@ -18139,7 +18151,9 @@ final class BytecodeToIRTest {
             plain(2, 174, "freturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).anyMatch(instruction -> instruction.op() == IrInstruction.Op.THROW_PENDING
+            && instruction.value().filter("java/lang/NullPointerException"::equals).isPresent());
+        assertThat(function.instructions()).contains(
             IrInstruction.returnFloat(IrExpression.floatCall(
                 "javan_float_float_value",
                 List.of(IrExpression.objectLocal("arg0"))
@@ -18178,7 +18192,9 @@ final class BytecodeToIRTest {
             plain(2, 175, "dreturn")
         ));
 
-        assertThat(function.instructions()).containsExactly(
+        assertThat(function.instructions()).anyMatch(instruction -> instruction.op() == IrInstruction.Op.THROW_PENDING
+            && instruction.value().filter("java/lang/NullPointerException"::equals).isPresent());
+        assertThat(function.instructions()).contains(
             IrInstruction.returnDouble(IrExpression.doubleCall(
                 "javan_double_double_value",
                 List.of(IrExpression.objectLocal("arg0"))

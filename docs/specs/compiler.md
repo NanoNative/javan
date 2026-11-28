@@ -387,7 +387,8 @@ and `double`, including NaN, infinities, subnormal values and the sign of zero. 
 order is preserved. The static `Float.isNaN`, `Float.isInfinite`, `Double.isNaN` and
 `Double.isInfinite` methods classify finite values, infinities and NaNs by their representations.
 The corresponding boxed `Float` and `Double` instance methods preserve receiver evaluation and
-transport null-receiver `NullPointerException`.
+transport null-receiver `NullPointerException`. Boxed primitive value methods also transport a
+null receiver as `NullPointerException`, including compiler-generated unboxing.
 Multi-dimensional array allocation evaluates every dimension before allocation, checks negative
 sizes in order, and supports partially allocated arrays and concurrent garbage collection.
 Array values converted to strings use their runtime array class name and identity hash, including

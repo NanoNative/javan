@@ -2120,6 +2120,26 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies the primitive value method of a boxed primitive.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the call unboxes its receiver
+     */
+    public static boolean isBoxedPrimitiveValueAccess(final MethodRef methodRef) {
+        return switch (methodRef.owner()) {
+            case "java/lang/Boolean" -> "booleanValue".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor());
+            case "java/lang/Byte" -> "byteValue".equals(methodRef.name()) && "()B".equals(methodRef.descriptor());
+            case "java/lang/Short" -> "shortValue".equals(methodRef.name()) && "()S".equals(methodRef.descriptor());
+            case "java/lang/Character" -> "charValue".equals(methodRef.name()) && "()C".equals(methodRef.descriptor());
+            case "java/lang/Integer" -> "intValue".equals(methodRef.name()) && "()I".equals(methodRef.descriptor());
+            case "java/lang/Long" -> "longValue".equals(methodRef.name()) && "()J".equals(methodRef.descriptor());
+            case "java/lang/Float" -> "floatValue".equals(methodRef.name()) && "()F".equals(methodRef.descriptor());
+            case "java/lang/Double" -> "doubleValue".equals(methodRef.name()) && "()D".equals(methodRef.descriptor());
+            default -> false;
+        };
+    }
+
+    /**
      * Identifies supported no-argument collection size queries.
      *
      * @param methodRef referenced JDK method
@@ -2736,7 +2756,8 @@ public final class JdkCallSupport {
             return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
         }
         if (isCollectionObjectSearch(methodRef) || isCollectionSizeQuery(methodRef)
-            || isConcurrentKeyViewReceiver(methodRef) || isBoxedFloatingClassification(methodRef)) {
+            || isConcurrentKeyViewReceiver(methodRef) || isBoxedFloatingClassification(methodRef)
+            || isBoxedPrimitiveValueAccess(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
         if ("java/lang/Object".equals(methodRef.owner()) && "equals".equals(methodRef.name())

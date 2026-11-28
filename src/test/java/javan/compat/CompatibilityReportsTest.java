@@ -147,6 +147,7 @@ final class CompatibilityReportsTest {
             "| `floating-point-remainder` | pass |",
             "| `floating-point-classification` | pass |",
             "| `boxed-floating-point-classification` | pass |",
+            "| `boxed-primitive-null-unboxing` | pass |",
             "| `boxed-primitive-gc` | pass |",
             "| `enum-basic` | pass |",
             "| `enum-ordinal` | pass |",
@@ -662,10 +663,10 @@ final class CompatibilityReportsTest {
             "A broad JDK-compatibility release must report:",
             "The first native release is scenario-bounded.",
             "not a release-completion percentage.",
-            "| support rows | 358 |",
-            "| pass rows | 356 |",
+            "| support rows | 359 |",
+            "| pass rows | 357 |",
             "| scoped rows | 2 |",
-            "| accounted rows | 356 |",
+            "| accounted rows | 357 |",
             "| unaccounted rows | 2 |"
         );
         assertThat(matrix).contains(

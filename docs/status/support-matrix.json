@@ -11,8 +11,8 @@
     "rule": "a broad JDK-compatibility release requires zero unknown leftovers; the first native release is scenario-bounded and requires declared reachable behavior to be supported or rejected"
   },
   "counts": {
-    "rows": 358,
-    "pass": 356,
+    "rows": 359,
+    "pass": 357,
     "scoped": 2,
     "target": 0,
     "rejected": 0
@@ -35,6 +35,7 @@
     {"feature": "floating-point-classification", "jdk25": "pass"},
     {"feature": "boxed-floating-point-classification", "jdk25": "pass"},
     {"feature": "boxed-primitive-gc", "jdk25": "pass"},
+    {"feature": "boxed-primitive-null-unboxing", "jdk25": "pass"},
     {"feature": "boolean-basic", "jdk25": "pass"},
     {"feature": "static-fields", "jdk25": "pass"},
     {"feature": "string-concat", "jdk25": "pass"},

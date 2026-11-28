@@ -452,6 +452,7 @@ public final class CompatibilityReports {
             pass("floating-point-classification"),
             pass("boxed-floating-point-classification"),
             pass("boxed-primitive-gc"),
+            pass("boxed-primitive-null-unboxing"),
             pass("boolean-basic"),
             pass("static-fields"),
             pass("string-concat"),

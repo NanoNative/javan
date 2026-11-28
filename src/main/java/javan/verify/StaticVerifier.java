@@ -658,7 +658,7 @@ public final class StaticVerifier {
         if (defersToSpecializedStreamReceiverDiagnostic(methodRef)
             || JdkCallSupport.isCollectionSizeQuery(methodRef) || JdkCallSupport.isCollectionClear(methodRef)
             || JdkCallSupport.isMapClear(methodRef) || JdkCallSupport.isConcurrentKeyViewReceiver(methodRef)
-            || JdkCallSupport.isBoxedFloatingClassification(methodRef)) {
+            || JdkCallSupport.isBoxedFloatingClassification(methodRef) || JdkCallSupport.isBoxedPrimitiveValueAccess(methodRef)) {
             return false;
         }
         return MethodDescriptor.parse(methodRef.descriptor()).parameterTypes().isEmpty();
