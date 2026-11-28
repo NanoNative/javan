@@ -445,13 +445,28 @@ final class BytecodeToIRDynamicSupport {
                 final String selfLocal = newObjectLocal(localDeclarations);
                 instructions.add(IrInstruction.assignObject(selfLocal, self));
                 final IrExpression receiver = IrExpression.objectLocal(selfLocal);
+                boolean hasReference = false;
+                for (final RecordObjectMethodsCall.Component component : recordString.orElseThrow().components()) {
+                    hasReference |= RecordObjectMethodsCall.stringReferencePlan(classes, component.shape()).isPresent();
+                }
+                final String resultLocal = hasReference ? newObjectLocal(localDeclarations) : "";
+                final String doneLabel = "label_record_string_done_" + instruction.offset() + "_" + resultLocal;
+                if (hasReference) instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectNull()));
                 final List<IrExpression> parts = new ArrayList<>();
                 parts.add(IrExpression.stringLiteral(classFile.simpleName() + "["));
                 int index = 0;
                 for (final RecordObjectMethodsCall.Component component : recordString.orElseThrow().components()) {
                     final javan.classfile.FieldInfo field = component.field();
                     parts.add(IrExpression.stringLiteral((index++ == 0 ? "" : ", ") + field.name() + "="));
-                    final IrExpression value = switch (field.descriptor()) {
+                    final IrExpression value;
+                    if (RecordObjectMethodsCall.stringReferencePlan(classes, component.shape()).isPresent()) {
+                        final String converted = newObjectLocal(localDeclarations);
+                        instructions.add(IrInstruction.assignObject(converted, IrExpression.objectCall(BytecodeToIR.OBJECT_STRING_DISPATCH,
+                            List.of(IrExpression.objectField(classFile.name(), field.name(), receiver)))));
+                        instructions.add(IrInstruction.branchIf(doneLabel, IrExpression.intCall("javan_pending_has", List.of())));
+                        value = IrExpression.objectLocal(converted);
+                    } else {
+                        value = switch (field.descriptor()) {
                         case "Z" -> IrExpression.objectCall("javan_string_value_of_bool", List.of(IrExpression.intField(classFile.name(), field.name(), receiver)));
                         case "B", "S", "I" -> IrExpression.objectCall("javan_string_value_of_int", List.of(IrExpression.intField(classFile.name(), field.name(), receiver)));
                         case "C" -> IrExpression.objectCall("javan_string_value_of_char", List.of(IrExpression.intField(classFile.name(), field.name(), receiver)));
@@ -463,14 +478,22 @@ final class BytecodeToIRDynamicSupport {
                             "Ljava/lang/Integer;", "Ljava/lang/Long;", "Ljava/lang/Float;", "Ljava/lang/Double;" ->
                             IrExpression.objectCall("javan_printable_object_string",
                                 List.of(IrExpression.objectField(classFile.name(), field.name(), receiver)));
-                        default -> throw unsupported(classFile, method, instruction);
-                    };
+                            default -> throw unsupported(classFile, method, instruction);
+                        };
+                    }
                     parts.add(value);
                 }
                 parts.add(IrExpression.stringLiteral("]"));
                 final StringBuilder recipe = new StringBuilder();
                 for (int part = 0; part < parts.size(); part++) recipe.append('\u0001');
-                stack.add(StackValue.objectExpression(IrExpression.stringConcat(recipe.toString(), List.copyOf(parts))));
+                final IrExpression result = IrExpression.stringConcat(recipe.toString(), List.copyOf(parts));
+                if (hasReference) {
+                    instructions.add(IrInstruction.assignObject(resultLocal, result));
+                    instructions.add(IrInstruction.label(doneLabel));
+                    stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+                } else {
+                    stack.add(StackValue.objectExpression(result));
+                }
                 return;
             }
         }

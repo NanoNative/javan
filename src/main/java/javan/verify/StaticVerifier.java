@@ -3786,6 +3786,21 @@ public final class StaticVerifier {
                 )) {
                 result.add("java/lang/NegativeArraySizeException");
             }
+            if (instruction.dynamicRef().isPresent()) {
+                final Optional<RecordObjectMethodsCall> record = RecordObjectMethodsCall.resolveToString(
+                    targetClass, targetMethod.orElseThrow(), instruction.dynamicRef().orElseThrow());
+                if (record.isPresent()) {
+                    for (final RecordObjectMethodsCall.Component component : record.orElseThrow().components()) {
+                        final Optional<MethodRef> targetMethodRef =
+                            RecordObjectMethodsCall.stringReferenceMethod(classes, component.shape());
+                        if (targetMethodRef.isPresent()) {
+                            for (final String throwableType : escapingPlatformExceptionTypes(classes, targetMethodRef.orElseThrow(), visiting)) {
+                                if (!caughtByThrowableHandler(classes, code, instruction.offset(), throwableType)) result.add(throwableType);
+                            }
+                        }
+                    }
+                }
+            }
             if (instruction.methodRef().isPresent()) {
                 final MethodRef called = instruction.methodRef().orElseThrow();
                 for (final String throwableType : JdkCallSupport.transportedPlatformThrowableTypes(called)) {
@@ -6691,7 +6706,8 @@ public final class StaticVerifier {
                 final String descriptor = component.field().descriptor();
                 if (!(descriptor.length() == 1 || "Ljava/lang/String;".equals(descriptor)
                     || descriptor.startsWith("L") && descriptor.endsWith(";")
-                        && isRecordBoxedPrimitive(descriptor.substring(1, descriptor.length() - 1)))) return false;
+                        && isRecordBoxedPrimitive(descriptor.substring(1, descriptor.length() - 1))
+                    || RecordObjectMethodsCall.stringReferencePlan(classes, component.shape()).isPresent())) return false;
             }
             return true;
         }

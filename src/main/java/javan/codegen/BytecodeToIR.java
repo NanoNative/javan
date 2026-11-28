@@ -11,12 +11,14 @@ import javan.analysis.RecordMapKeySupport;
 import javan.analysis.ThrowableReturnAnalysis;
 import javan.build.NativeInteropConfig;
 import javan.classfile.ClassFile;
+import javan.classfile.DynamicRef;
 import javan.classfile.CodeAttribute;
 import javan.classfile.FieldRef;
 import javan.classfile.FieldInfo;
 import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
+import javan.classfile.RecordObjectMethodsCall;
 import javan.classfile.ServiceProvider;
 import javan.compat.BytecodeSupport;
 import javan.compat.ExactMethodSupport;
@@ -498,6 +500,15 @@ public final class BytecodeToIR {
             if (method.isEmpty() || method.orElseThrow().code().isEmpty()) continue;
             for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
                 if (instruction.methodRef().isPresent() && JdkCallSupport.isStringValueOfObject(instruction.methodRef().orElseThrow())) return true;
+                if (instruction.dynamicRef().isPresent()) {
+                    final Optional<RecordObjectMethodsCall> record =
+                        RecordObjectMethodsCall.resolveToString(owner, method.orElseThrow(), instruction.dynamicRef().orElseThrow());
+                    if (record.isPresent()) {
+                        for (final RecordObjectMethodsCall.Component component : record.orElseThrow().components()) {
+                            if (RecordObjectMethodsCall.stringReferencePlan(classes, component.shape()).isPresent()) return true;
+                        }
+                    }
+                }
             }
         }
         return false;
@@ -641,6 +652,16 @@ public final class BytecodeToIR {
                 final Set<String> callerTypes = typesByMethod.get(caller);
                 for (final Instruction instruction : method.code().orElseThrow().instructions()) {
                     if (instruction.methodRef().isEmpty()) {
+                        if (instruction.dynamicRef().isPresent()
+                            && RecordObjectMethodsCall.resolveToString(classFile, method, instruction.dynamicRef().orElseThrow()).isPresent()) {
+                            for (final EntryPoint callee : calleesByCaller.getOrDefault(caller, List.of())) {
+                                for (final String throwableType : typesByMethod.getOrDefault(callee, Set.of())) {
+                                    if (!caughtBy(classes, method, instruction.offset(), throwableType) && callerTypes.add(throwableType)) {
+                                        changed = true;
+                                    }
+                                }
+                            }
+                        }
                         continue;
                     }
                     final MethodRef calledMethod = instruction.methodRef().orElseThrow();
@@ -1753,6 +1774,12 @@ public final class BytecodeToIR {
                 && ("load".equals(reference.name()) || "loadInstalled".equals(reference.name())
                     || "findFirst".equals(reference.name()))) {
                 possibleTypes.addAll(JdkCallSupport.transportedPlatformThrowableTypes(reference));
+            }
+        }
+        if (bytecodeInstruction.dynamicRef().isPresent()) {
+            final DynamicRef dynamic = bytecodeInstruction.dynamicRef().orElseThrow();
+            if ("java/lang/runtime/ObjectMethods".equals(dynamic.bootstrapOwner()) && "toString".equals(dynamic.name())) {
+                addTransportedThrowableTypes(DEFAULT_OBJECT_HASH_DISPATCH, dispatches, transportedThrowableTypes, possibleTypes);
             }
         }
         for (int index = instructionStart; index < instructions.size(); index++) {

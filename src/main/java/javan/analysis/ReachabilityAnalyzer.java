@@ -669,6 +669,19 @@ public final class ReachabilityAnalyzer {
             return;
         }
         final DynamicRef dynamicRef = instruction.dynamicRef().orElseThrow();
+        final Optional<RecordObjectMethodsCall> stringCall = RecordObjectMethodsCall.resolveToString(classFile, method, dynamicRef);
+        if (stringCall.isPresent()) {
+            for (final RecordObjectMethodsCall.Component component : stringCall.orElseThrow().components()) {
+                final Optional<MethodRef> target = RecordObjectMethodsCall.stringReferenceMethod(classes, component.shape());
+                if (target.isPresent()) {
+                    final MethodRef methodRef = target.orElseThrow();
+                    final EntryPoint entry = entryPoints.entry(methodRef.owner(), methodRef.name(), methodRef.descriptor());
+                    enqueueAll(work, workSet, List.of(entry));
+                    addEdges(callEdges, current, List.of(entry), CallEdge.Kind.CALL);
+                }
+            }
+            return;
+        }
         final boolean hashCode = "hashCode".equals(method.name());
         final Optional<RecordObjectMethodsCall> recordCall = hashCode
             ? RecordObjectMethodsCall.resolveHashCode(classFile, method, dynamicRef)

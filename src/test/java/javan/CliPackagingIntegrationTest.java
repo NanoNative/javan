@@ -341,6 +341,26 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanFormatsProvenRecordReferenceComponents() throws Exception {
+        final Path project = project("selfhost-record-string-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static final class Item { public String toString() { return "item"; } }
+                record Value(Item item) { }
+                public static void main(String[] args) {
+                    System.out.println(new Value(new Item()).toString());
+                }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()), Duration.ofSeconds(60));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-record-string-reference").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("Value[item=item]\n");
+    }
+
+    @Test
     void nativeBuiltJavanFormatsBoxedRecordComponents() throws Exception {
         final Path project = project("selfhost-record-string-boxed");
         writeJava(project, "com.acme.Main", """

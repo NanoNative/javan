@@ -203,6 +203,59 @@ public record RecordObjectMethodsCall(List<RecordObjectMethodsCall.Component> co
         return Optional.of(new SealedReferenceUnionPlan(targets));
     }
 
+    /**
+     * Resolves an exact application reference component for generated string conversion.
+     *
+     * @param classes parsed closed-world classes
+     * @param shape record component shape
+     * @return exact receiver and override owner, or empty when the hierarchy is not bounded
+     */
+    public static Optional<ReferenceTarget> stringReferencePlan(final Map<String, ClassFile> classes, final Shape shape) {
+        if (!shape.valid() || shape.isArray() || shape.isList() || shape.isStringMap() || shape.referenceOwner().isEmpty()) {
+            return Optional.empty();
+        }
+        final ClassFile receiver = classes.get(shape.referenceOwner().orElseThrow());
+        if (receiver == null || receiver.isInterface() || receiver.isAbstract() || receiver.isEnum() || !receiver.isFinal()) {
+            return Optional.empty();
+        }
+        String current = receiver.name();
+        final Set<String> visited = new HashSet<>();
+        while (visited.add(current)) {
+            if ("java/lang/Object".equals(current)) {
+                return referenceTarget(classes, receiver, true).isPresent()
+                    ? Optional.of(new ReferenceTarget(receiver.name(), "")) : Optional.empty();
+            }
+            final ClassFile owner = classes.get(current);
+            if (owner == null) return Optional.empty();
+            final Optional<MethodInfo> method = owner.method("toString", "()Ljava/lang/String;");
+            if (method.isPresent()) {
+                return !method.orElseThrow().isStatic() && method.orElseThrow().code().isPresent()
+                    ? Optional.of(new ReferenceTarget(receiver.name(), current)) : Optional.empty();
+            }
+            current = owner.superName();
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Returns the application method used by a proven component conversion, when one exists.
+     *
+     * @param classes parsed closed-world classes
+     * @param shape record component shape
+     * @return the `toString` or default conversion's `hashCode` target, or empty if no application method is selected
+     */
+    public static Optional<MethodRef> stringReferenceMethod(final Map<String, ClassFile> classes, final Shape shape) {
+        final Optional<ReferenceTarget> plan = stringReferencePlan(classes, shape);
+        if (plan.isEmpty()) return Optional.empty();
+        final String owner = plan.orElseThrow().executableOwner();
+        if (!owner.isEmpty()) return Optional.of(new MethodRef(owner, "toString", "()Ljava/lang/String;"));
+        final Optional<DirectReferencePlan> hash = directReferencePlan(classes, shape, true);
+        if (hash.isEmpty()) return Optional.empty();
+        final String hashOwner = hash.orElseThrow().targets().getFirst().executableOwner();
+        if (hashOwner.isEmpty()) return Optional.empty();
+        return Optional.of(new MethodRef(hashOwner, "hashCode", "()I"));
+    }
+
     private static void insertReferenceTarget(
         final List<ReferenceTarget> targets,
         final ReferenceTarget target
