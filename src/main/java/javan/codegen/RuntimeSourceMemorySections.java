@@ -3018,6 +3018,7 @@ final class RuntimeSourceMemorySections {
         static void javan_map_ensure_capacity(javan_object_map* map, int required);
         static void javan_map_remove_at_index(javan_object_map* map, int index);
         static int javan_map_has_custom_key(void* key);
+        void javan_hashmap_new_into(void** result);
         void* javan_hashmap_new(void);
         void* javan_map_remove(void* value, void* key);
         int javan_map_remove_entry(void* value, void* key, void* expected_value);
@@ -7510,7 +7511,7 @@ final class RuntimeSourceMemorySections {
                 (void**) &map_value
             };
             javan_root_frame_push(javan_thread_local_storage_roots, 2);
-            map_value = javan_hashmap_new();
+            javan_hashmap_new_into(&map_value);
             ((javan_thread*) thread_root)->thread_locals = map_value;
             javan_root_frame_pop(javan_thread_local_storage_roots);
             return javan_map_checked(map_value);
@@ -15194,11 +15195,11 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
-        static javan_object_map* javan_map_new_with_capacity(int capacity, int immutable) {
+        static javan_object_map* javan_map_new_with_capacity_into(int capacity, int immutable, void** result) {
             if (capacity < 0) {
                 javan_panic("negative map capacity");
             }
-            javan_object_map* map = (javan_object_map*) javan_alloc(sizeof(javan_object_map));
+            javan_object_map* map = (javan_object_map*) javan_alloc_rooted(sizeof(javan_object_map), result);
             map->magic = JAVAN_OBJECT_MAP_MAGIC;
             map->length = 0;
             map->capacity = capacity;
@@ -15245,6 +15246,15 @@ final class RuntimeSourceMemorySections {
                 map->indexed_length = 0;
                 javan_root_frame_pop(javan_map_owner_roots);
             }
+            return map;
+        }
+
+        static javan_object_map* javan_map_new_with_capacity(int capacity, int immutable) {
+            javan_object_map* map = NULL;
+            void** roots[] = {(void**) &map};
+            javan_root_frame_push(roots, 1);
+            javan_map_new_with_capacity_into(capacity, immutable, (void**) &map);
+            javan_root_frame_pop(roots);
             return map;
         }
 
@@ -15551,6 +15561,20 @@ final class RuntimeSourceMemorySections {
         """;
 
     private static final String SOURCE_COLLECTIONS_TAIL = """
+        void javan_hashmap_new_into(void** result) {
+            (void) javan_map_new_with_capacity_into(0, 0, result);
+        }
+
+        void javan_treemap_new_into(void** result) {
+            javan_object_map* map = javan_map_new_with_capacity_into(0, 0, result);
+            map->view_flags |= JAVAN_MAP_SORTED;
+        }
+
+        void javan_concurrent_hashmap_new_into(void** result) {
+            javan_object_map* map = javan_map_new_with_capacity_into(0, 0, result);
+            map->concurrent = 1;
+        }
+
         void* javan_hashmap_new(void) {
             return javan_map_new_with_capacity(0, 0);
         }

@@ -604,6 +604,9 @@ final class RuntimeHeaderFile {
         """;
 
     private static final String CONTENT_SUFFIX = """
+        void javan_hashmap_new_into(void** result);
+        void javan_treemap_new_into(void** result);
+        void javan_concurrent_hashmap_new_into(void** result);
         void* javan_hashmap_new(void);
         void* javan_treemap_new(void);
         void* javan_concurrent_hashmap_new(void);

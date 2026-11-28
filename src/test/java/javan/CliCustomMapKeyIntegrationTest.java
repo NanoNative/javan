@@ -710,4 +710,82 @@ final class CliCustomMapKeyIntegrationTest extends CliIntegrationSupport {
         assertThat(result.stdout()).isEqualTo(expected).isEqualTo("value\nvalue\n0\n");
     }
 
+    @Test
+    void newlyAllocatedMapsRemainAliveDuringConcurrentGc() throws Exception {
+        final Path project = project("map-allocation-concurrent-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger successes = new AtomicInteger();
+                static final class Key {
+                    final int number;
+                    Key(int number) { this.number = number; }
+                    public int hashCode() { return number; }
+                    public boolean equals(Object other) { return other instanceof Key key && number == key.number; }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 300; i++) {
+                            var map = new HashMap<Key, Integer>();
+                            map.put(new Key(i), i);
+                            if (map.get(new Key(i)) == i) successes.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(successes.get());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-allocation-concurrent-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("600\n");
+    }
+
+    @Test
+    void treeAndConcurrentMapConstructorsSurviveConcurrentGc() throws Exception {
+        final Path project = project("map-types-allocation-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Map;
+            import java.util.TreeMap;
+            import java.util.concurrent.ConcurrentHashMap;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger successes = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 300; i++) {
+                            Map<Integer, String> map;
+                            if ((i & 1) == 0) map = new TreeMap<>();
+                            else map = new ConcurrentHashMap<>();
+                            map.put(i, "value");
+                            if (map.get(i).equals("value")) successes.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(successes.get());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-types-allocation-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("600\n");
+    }
+
 }

@@ -23742,7 +23742,7 @@ final class BytecodeToIRTest {
             new IrLocal(IrType.OBJECT, "object2")
         );
         assertThat(function.instructions()).containsSubsequence(
-            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashmap_new", List.of())),
+            IrInstruction.callStaticVoid("javan_hashmap_new_into", List.of(IrExpression.objectLocalAddress("object0"))),
             IrInstruction.assignObject("object1", IrExpression.objectCall(
                 "javan_map_put_java_into",
                 List.of(
@@ -24023,7 +24023,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(function.instructions()).containsSubsequence(
-            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashmap_new", List.of())),
+            IrInstruction.callStaticVoid("javan_hashmap_new_into", List.of(IrExpression.objectLocalAddress("object0"))),
             IrInstruction.callStaticVoid(
                 "javan_map_put_all_java",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg0"))
@@ -24049,7 +24049,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(function.instructions()).containsSubsequence(
-            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashmap_new", List.of())),
+            IrInstruction.callStaticVoid("javan_hashmap_new_into", List.of(IrExpression.objectLocalAddress("object0"))),
             IrInstruction.callStaticVoid(
                 "javan_map_put_all_java",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg0"))
@@ -24075,7 +24075,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(function.instructions()).containsSubsequence(
-            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_concurrent_hashmap_new", List.of())),
+            IrInstruction.callStaticVoid("javan_concurrent_hashmap_new_into", List.of(IrExpression.objectLocalAddress("object0"))),
             IrInstruction.callStaticVoid(
                 "javan_map_put_all_java",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg0"))
@@ -24101,7 +24101,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashmap_new", List.of())),
+            IrInstruction.callStaticVoid("javan_hashmap_new_into", List.of(IrExpression.objectLocalAddress("object0"))),
             IrInstruction.callStaticVoid(
                 "javan_map_initialize_capacity",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"))
@@ -24127,7 +24127,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashmap_new", List.of())),
+            IrInstruction.callStaticVoid("javan_hashmap_new_into", List.of(IrExpression.objectLocalAddress("object0"))),
             IrInstruction.callStaticVoid(
                 "javan_map_initialize_capacity",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"))
@@ -24153,7 +24153,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_concurrent_hashmap_new", List.of())),
+            IrInstruction.callStaticVoid("javan_concurrent_hashmap_new_into", List.of(IrExpression.objectLocalAddress("object0"))),
             IrInstruction.callStaticVoid(
                 "javan_map_initialize_capacity",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"))
@@ -24180,7 +24180,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashmap_new", List.of())),
+            IrInstruction.callStaticVoid("javan_hashmap_new_into", List.of(IrExpression.objectLocalAddress("object0"))),
             IrInstruction.callStaticVoid(
                 "javan_map_initialize_capacity_with_load_factor",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"), IrExpression.floatLocal("arg1"))
@@ -24207,7 +24207,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashmap_new", List.of())),
+            IrInstruction.callStaticVoid("javan_hashmap_new_into", List.of(IrExpression.objectLocalAddress("object0"))),
             IrInstruction.callStaticVoid(
                 "javan_map_initialize_capacity_with_load_factor",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"), IrExpression.floatLocal("arg1"))
@@ -24234,7 +24234,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_concurrent_hashmap_new", List.of())),
+            IrInstruction.callStaticVoid("javan_concurrent_hashmap_new_into", List.of(IrExpression.objectLocalAddress("object0"))),
             IrInstruction.callStaticVoid(
                 "javan_map_initialize_capacity_with_load_factor",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"), IrExpression.floatLocal("arg1"))
@@ -24262,7 +24262,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_concurrent_hashmap_new", List.of())),
+            IrInstruction.callStaticVoid("javan_concurrent_hashmap_new_into", List.of(IrExpression.objectLocalAddress("object0"))),
             IrInstruction.callStaticVoid(
                 "javan_map_initialize_capacity_with_load_factor_and_concurrency",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"), IrExpression.floatLocal("arg1"), IrExpression.intLocal("arg2"))
