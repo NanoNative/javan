@@ -5079,11 +5079,12 @@ final class RuntimeSourceMemorySections {
             return left_length == right_length && strncmp(left, right, left_length) == 0 ? 1 : 0;
         }
 
-        int javan_method_can_access(
+        static int javan_method_can_access_impl(
             void* value,
             void* target,
             void* caller_name_value,
-            void* caller_nest_name_value
+            void* caller_nest_name_value,
+            int validate_target
         ) {
             const char* caller_name = (const char*) caller_name_value;
             const char* caller_nest_name = (const char*) caller_nest_name_value;
@@ -5106,9 +5107,9 @@ final class RuntimeSourceMemorySections {
             const int constructor = strcmp(metadata->name, "<init>") == 0;
             const int static_method = (metadata->modifiers & 0x0008) != 0 || constructor;
             declaring_class = javan_runtime_class_from_binary_name(metadata->declaring_name);
-            if ((static_method && target_root != NULL)
+            if (validate_target && ((static_method && target_root != NULL)
                 || (!static_method && (target_root == NULL
-                    || javan_class_is_instance(declaring_class, target_root) == 0))) {
+                    || javan_class_is_instance(declaring_class, target_root) == 0)))) {
                 javan_root_frame_pop(roots);
                 return -1;
             }
@@ -5138,6 +5139,14 @@ final class RuntimeSourceMemorySections {
             }
             javan_root_frame_pop(roots);
             return accessible;
+        }
+
+        int javan_method_can_access(void* value, void* target, void* caller_name, void* caller_nest_name) {
+            return javan_method_can_access_impl(value, target, caller_name, caller_nest_name, 1);
+        }
+
+        int javan_field_caller_can_access(void* value, void* target, void* caller_name, void* caller_nest_name) {
+            return javan_method_can_access_impl(value, target, caller_name, caller_nest_name, 0);
         }
 
         void* javan_method_get_name(void* value) {

@@ -209,6 +209,9 @@ public final class CCodegen {
         if (features.declaredFieldMetadata()) {
             emitFieldLookupHelper(program, c);
         }
+        if (features.fieldGetInt()) {
+            emitFieldGetIntHelper(program, c);
+        }
         if (features.declaredMethodMetadata()) {
             emitMethodLookupHelper(program, c, true);
         }
@@ -389,6 +392,9 @@ public final class CCodegen {
         if (features.declaredFieldMetadata()) {
             header.append("int javan_generated_class_get_declared_field(void** result, void* class_value, void* name_value);\n");
         }
+        if (features.fieldGetInt()) {
+            header.append("int javan_generated_field_get_int(void* field, void* target, void* caller, void* caller_nest);\n");
+        }
         if (features.declaredMethodMetadata()) {
             header.append("void* javan_generated_class_get_declared_method(void* class_value, void* name_value, void* parameter_types);\n");
         }
@@ -463,6 +469,9 @@ public final class CCodegen {
         }
         if (features.declaredFieldMetadata()) {
             emitFieldLookupHelper(program, core);
+        }
+        if (features.fieldGetInt()) {
+            emitFieldGetIntHelper(program, core);
         }
         if (features.declaredMethodMetadata()) {
             emitMethodLookupHelper(program, core, true);
@@ -690,6 +699,9 @@ public final class CCodegen {
         }
         if (features.declaredFieldMetadata()) {
             emitFieldLookupHelper(program, c);
+        }
+        if (features.fieldGetInt()) {
+            emitFieldGetIntHelper(program, c);
         }
         if (features.declaredMethodMetadata()) {
             emitMethodLookupHelper(program, c, true);
@@ -1777,6 +1789,33 @@ public final class CCodegen {
             .append(System.lineSeparator());
         c.append("    return -1;").append(System.lineSeparator()).append("}")
             .append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static void emitFieldGetIntHelper(final IrProgram program, final StringBuilder c) {
+        c.append("JAVAN_PROGRAM_LINKAGE int javan_generated_field_get_int(void* field, void* target, void* caller, void* caller_nest) {\n")
+            .append("    const JavanMethodMetadata* metadata = javan_method_metadata(field);\n");
+        for (final IrReflectedClass owner : program.reflectedClasses()) {
+            for (final IrFieldMetadata field : owner.declaredFields()) {
+                if (!"I".equals(field.descriptor()) || (field.modifiers() & (0x0008 | 0x0040)) != 0) continue;
+                IrClass layout = null;
+                for (final IrClass candidate : program.classes()) {
+                    if (candidate.jvmName().equals(field.declaringJvmName())) layout = candidate;
+                }
+                if (layout == null) continue;
+                c.append("    if (javan_string_equals(metadata->declaring_name, ")
+                    .append(emitCStringLiteral(displayClassName(field.declaringJvmName())))
+                    .append(") && javan_string_equals(metadata->name, ")
+                    .append(emitCStringLiteral(field.name())).append(")) {\n")
+                    .append("        if (target == NULL) { javan_pending_throw(\"java/lang/NullPointerException\", NULL, NULL, NULL, NULL, -1, -1, NULL); return 0; }\n")
+                    .append("        int access = javan_method_can_access(field, target, caller, caller_nest);\n")
+                    .append("        if (access < 0 && !javan_field_caller_can_access(field, target, caller, caller_nest)) access = 0;\n")
+                    .append("        if (access < 0) { javan_pending_throw(\"java/lang/IllegalArgumentException\", NULL, NULL, NULL, NULL, -1, -1, NULL); return 0; }\n")
+                    .append("        if (access == 0) { javan_pending_throw(\"java/lang/IllegalAccessException\", NULL, NULL, NULL, NULL, -1, -1, NULL); return 0; }\n")
+                    .append("        return ((struct ").append(layout.symbol()).append("*) target)->")
+                    .append(fieldSymbol(field.name())).append(";\n    }\n");
+            }
+        }
+        c.append("    javan_pending_throw(\"java/lang/UnsupportedOperationException\", NULL, NULL, NULL, NULL, -1, -1, NULL); return 0;\n}\n\n");
     }
 
     private static void emitMethodLookupHelper(
@@ -6104,6 +6143,10 @@ public final class CCodegen {
             return calls("javan_generated_class_for_name");
         }
 
+        private boolean fieldGetInt() {
+            return calls("javan_generated_field_get_int");
+        }
+
         private boolean declaredFieldMetadata() {
             return calls("javan_generated_class_get_declared_field");
         }
@@ -6133,7 +6176,7 @@ public final class CCodegen {
         }
 
         private boolean classAssignability() {
-            return methodInvocation() || constructorInvocation() || calls("javan_class_is_instance") || calls("javan_class_is_assignable_from")
+            return methodInvocation() || constructorInvocation() || fieldGetInt() || calls("javan_class_is_instance") || calls("javan_class_is_assignable_from")
                 || calls("javan_class_cast") || calls("javan_method_can_access") || calls("javan_record_shape_validate");
         }
     }

@@ -1049,6 +1049,7 @@ final class RuntimeHeaderFile {
             void* caller_name_value,
             void* caller_nest_name_value
         );
+        int javan_field_caller_can_access(void* value, void* target, void* caller_name, void* caller_nest_name);
         int javan_reflection_argument_count(void* arguments);
         void* javan_reflection_object_argument(void* arguments, int index, const char* expected_name);
         int javan_reflection_int_argument(void* arguments, int index, int expected_kind);

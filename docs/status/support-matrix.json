@@ -11,8 +11,8 @@
     "rule": "a broad JDK-compatibility release requires zero unknown leftovers; the first native release is scenario-bounded and requires declared reachable behavior to be supported or rejected"
   },
   "counts": {
-    "rows": 362,
-    "pass": 360,
+    "rows": 363,
+    "pass": 361,
     "scoped": 2,
     "target": 0,
     "rejected": 0
@@ -56,6 +56,7 @@
     {"feature": "closed-world-application-method-invocation", "jdk25": "pass"},
     {"feature": "closed-world-reflective-method-literal-signature", "jdk25": "pass"},
     {"feature": "closed-world-declared-field-metadata", "jdk25": "pass"},
+    {"feature": "closed-world-instance-int-field-read", "jdk25": "pass"},
     {"feature": "closed-world-declared-constructor-invocation", "jdk25": "pass"},
     {"feature": "closed-world-public-constructor-lookup", "jdk25": "pass"},
     {"feature": "closed-world-constructor-metadata-accessors", "jdk25": "pass"},

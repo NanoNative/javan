@@ -473,6 +473,7 @@ public final class CompatibilityReports {
             pass("closed-world-application-method-invocation"),
             pass("closed-world-reflective-method-literal-signature"),
             pass("closed-world-declared-field-metadata"),
+            pass("closed-world-instance-int-field-read"),
             pass("closed-world-declared-constructor-invocation"),
             pass("closed-world-public-constructor-lookup"),
             pass("closed-world-constructor-metadata-accessors"),

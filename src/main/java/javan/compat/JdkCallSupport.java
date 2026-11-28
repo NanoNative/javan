@@ -168,6 +168,7 @@ public final class JdkCallSupport {
         runtime("Class.getComponentType", "java/lang/Class", "getComponentType", "()Ljava/lang/Class;"),
         runtime("Class.getDeclaredField", "java/lang/Class", "getDeclaredField", "(Ljava/lang/String;)Ljava/lang/reflect/Field;"),
         runtime("Field.getName", "java/lang/reflect/Field", "getName", "()Ljava/lang/String;"),
+        runtime("Field.getInt", "java/lang/reflect/Field", "getInt", "(Ljava/lang/Object;)I"),
         runtime("Field.getDeclaringClass", "java/lang/reflect/Field", "getDeclaringClass", "()Ljava/lang/Class;"),
         runtime("Field.getType", "java/lang/reflect/Field", "getType", "()Ljava/lang/Class;"),
         runtime("Field.getModifiers", "java/lang/reflect/Field", "getModifiers", "()I"),
@@ -2971,6 +2972,11 @@ public final class JdkCallSupport {
                 "java/lang/IllegalArgumentException", "java/lang/InstantiationException",
                 "java/lang/reflect/InvocationTargetException", "java/lang/UnsupportedOperationException",
                 "java/lang/ExceptionInInitializerError", "java/lang/NoClassDefFoundError", "java/lang/Error");
+        }
+        if ("java/lang/reflect/Field".equals(methodRef.owner()) && "getInt".equals(methodRef.name())
+            && "(Ljava/lang/Object;)I".equals(methodRef.descriptor())) {
+            return List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException",
+                "java/lang/IllegalAccessException", "java/lang/UnsupportedOperationException");
         }
         if ("java/lang/reflect/Field".equals(methodRef.owner()) && "getType".equals(methodRef.name())
             && "()Ljava/lang/Class;".equals(methodRef.descriptor())) {

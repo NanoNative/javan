@@ -135,8 +135,12 @@ The Field `getName`,
 where the Java API permits. Reachable `getType` calls retain the selected field types and their
 required hierarchies without initializing them. Field types outside the supported class metadata
 model raise `UnsupportedOperationException` instead of returning incomplete class information.
-Runtime names do not reveal unselected fields and produce `NoSuchFieldException`. Public inherited-field lookup, reflective field reads and writes,
-access override and generic `instanceof` on reflection interfaces remain outside this slice.
+Runtime names do not reveal unselected fields and produce `NoSuchFieldException`.
+`Field.getInt` reads selected, non-static, non-volatile application fields whose declared type is
+`int`, with caller access checks and target validation. Other field types, static fields and
+volatile fields raise `UnsupportedOperationException` for this accessor until implemented.
+Public inherited-field lookup, other reflective field reads, field writes, access override and
+generic `instanceof` on reflection interfaces remain outside this slice.
 Other dynamic constructor targets require a declared constructor, including when no declaration exists.
 Platform constructor
 lookup fails explicitly with `UnsupportedOperationException` until implemented. Other

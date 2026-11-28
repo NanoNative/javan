@@ -513,4 +513,199 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
         assertThat(result.stdout()).isEqualTo("value\n");
     }
 
+    @Test
+    void readsADeclaredPublicIntFieldFromAnInstance() throws Exception {
+        final Path project = project("reflection-field-read-int");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.*;
+            public final class Main {
+                public static final class Model { public int value = 42; }
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] { Model.class.getDeclaredField("value") };
+                }
+                public static void main(String[] args) throws Exception {
+                    Field field = Model.class.getDeclaredField(args[0]);
+                    System.out.println(field.getInt(new Model()));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-read-int").toString(), "value"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("42\n");
+    }
+
+    @Test
+    void preservesIntFieldReadFailuresAndAccessChecks() throws Exception {
+        final Path project = project("reflection-field-read-failures");
+        writeJava(project, "other.Model", """
+            package other;
+            public final class Model { public int value = 42; private int secret = 9; }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.*;
+            import other.Model;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    Field value = Model.class.getDeclaredField("value");
+                    Field secret = Model.class.getDeclaredField("secret");
+                    Model model = new Model(); Object wrong = new Object(); Field absent = null;
+                    try { value.getInt(null); } catch (NullPointerException e) { System.out.println("null target"); }
+                    try { value.getInt(wrong); } catch (IllegalArgumentException e) { System.out.println("wrong target"); }
+                    try { secret.getInt(model); } catch (IllegalAccessException e) { System.out.println("inaccessible"); }
+                    try { secret.getInt(wrong); }
+                    catch (IllegalAccessException e) { System.out.println("access before wrong target"); }
+                    catch (IllegalArgumentException e) { System.out.println("wrong target before access"); }
+                    try { secret.getInt(null); } catch (NullPointerException e) { System.out.println("private null target"); }
+                    try { absent.getInt(model); } catch (NullPointerException e) { System.out.println("null field"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-read-failures").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void readsTheDeclaringFieldWhenASubclassHidesItsName() throws Exception {
+        final Path project = project("reflection-field-read-hidden");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.*;
+            public final class Main {
+                public static class Base { public int value = 11; }
+                public static final class Derived extends Base { public int value = 22; }
+                public static void main(String[] args) throws Exception {
+                    Derived target = new Derived();
+                    System.out.println(Base.class.getDeclaredField("value").getInt(target));
+                    System.out.println(Derived.class.getDeclaredField("value").getInt(target));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-read-hidden").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("11\n22\n");
+    }
+
+    @Test
+    void rejectsUnsupportedStaticAndVolatileIntReads() throws Exception {
+        final Path project = project("reflection-field-read-bounds");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.*;
+            public final class Main {
+                public static final class Model { public static int shared = 1; public volatile int value = 2; public long wide = 3; }
+                public static void main(String[] args) throws Exception {
+                    Field shared = Model.class.getDeclaredField("shared");
+                    Field value = Model.class.getDeclaredField("value");
+                    Field wide = Model.class.getDeclaredField("wide");
+                    Model model = new Model();
+                    try { shared.getInt(null); } catch (UnsupportedOperationException e) { System.out.println("static"); }
+                    try { value.getInt(model); } catch (UnsupportedOperationException e) { System.out.println("volatile"); }
+                    try { wide.getInt(model); } catch (UnsupportedOperationException e) { System.out.println("type"); }
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-read-bounds").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("static\nvolatile\ntype\n");
+    }
+
+    @Test
+    void readsIntFieldsDuringConcurrentGc() throws Exception {
+        final Path project = project("reflection-field-read-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger signal = new AtomicInteger(), finished = new AtomicInteger();
+                public static final class Model { public int value = 42; }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        while (signal.get() == 0) Thread.yield();
+                        for (int i = 0; i < 1000; i++) { byte[] value = new byte[64]; value[0] = 1; }
+                        finished.set(1);
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Field field = Model.class.getDeclaredField("value"); Model target = new Model();
+                    Thread worker = new Thread(new Worker()); worker.start(); signal.set(1);
+                    while (finished.get() == 0) { if (field.getInt(target) != 42) throw new AssertionError(); }
+                    worker.join(); System.out.println(field.getInt(target));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-read-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("42\n");
+    }
+
+    @Test
+    void checksProtectedFieldAccessAgainstTheActualTarget() throws Exception {
+        final Path project = project("reflection-field-read-protected");
+        writeJava(project, "other.Base", """
+            package other;
+            public class Base { protected int value = 13; }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            import other.Base;
+            public final class Main {
+                public static final class Derived extends Base {
+                    static void check() throws Exception {
+                        Field field = Base.class.getDeclaredField("value");
+                        Object allowed = new Derived(); Object denied = new Base(); Object wrong = new Object();
+                        System.out.println(field.getInt(allowed));
+                        try { field.getInt(denied); } catch (IllegalAccessException e) { System.out.println("base denied"); }
+                        try { field.getInt(wrong); } catch (IllegalAccessException e) { System.out.println("wrong denied"); }
+                    }
+                }
+                public static void main(String[] args) throws Exception { Derived.check(); }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-read-protected").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("13\nbase denied\nwrong denied\n");
+    }
+
+    @Test
+    void readsPrivateIntFieldsFromTheSameNest() throws Exception {
+        final Path project = project("reflection-field-read-nest");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model { private int value = 23; }
+                public static void main(String[] args) throws Exception {
+                    System.out.println(Model.class.getDeclaredField("value").getInt(new Model()));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-read-nest").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("23\n");
+    }
+
 }
