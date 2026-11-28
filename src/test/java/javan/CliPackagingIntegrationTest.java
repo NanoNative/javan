@@ -294,6 +294,30 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
 
 
     @Test
+    void nativeBuiltJavanExcludesUnrelatedReflectiveMethodOwners() throws Exception {
+        final Path project = project("selfhost-reflection-proven-owner");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Target { public String run(String v) { return "selected:" + v; } }
+                public static final class Unrelated {
+                    public String id() { return "unrelated"; }
+                    public String run(String v) { System.setProperty("unused", "never"); return "unused"; }
+                }
+                public static void main(String[] args) throws Exception {
+                    System.out.println(new Unrelated().id());
+                    System.out.println(Target.class.getDeclaredMethod("run", String.class).invoke(new Target(), "value"));
+                }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()), Duration.ofSeconds(60));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-reflection-proven-owner").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("unrelated\nselected:value\n");
+    }
+
+    @Test
     void nativeBuiltJavanRetainsOnlyProvenReflectiveOverloads() throws Exception {
         final Path project = project("selfhost-reflection-proven-overload");
         writeJava(project, "com.acme.Main", """

@@ -32,6 +32,86 @@ final class CliReflectionOverloadReachabilityIntegrationTest extends CliIntegrat
         assertThat(result.stdout()).isEqualTo(expected).isEqualTo("selected:value\n");
     }
     @Test
+    void excludesTheSameSignatureOnAnUnrelatedRetainedClass() throws Exception {
+        final Path project = project("reflection-proven-owner");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Target {
+                    public String run(String value) { return "selected:" + value; }
+                }
+                public static final class Unrelated {
+                    public String id() { return "unrelated"; }
+                    public String run(String value) { System.setProperty("unused", "never"); return "unused"; }
+                }
+                public static void main(String[] args) throws Exception {
+                    System.out.println(new Unrelated().id());
+                    var method = Target.class.getDeclaredMethod("run", String.class);
+                    System.out.println(method.invoke(new Target(), "value"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-proven-owner").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("unrelated\nselected:value\n");
+    }
+
+    @Test
+    void retainsMethodsForBothPossibleDynamicReceiverClasses() throws Exception {
+        final Path project = project("reflection-dynamic-owner");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class First { public static String run(String value) { return "first:" + value; } }
+                public static final class Second { public static String run(String value) { return "second:" + value; } }
+                public static void main(String[] args) throws Exception {
+                    Class<?> target = args.length == 0 ? First.class : Second.class;
+                    var method = target.getDeclaredMethod("run", String.class);
+                    System.out.println(method.invoke(null, "value"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path binary = project.resolve(".javan/bin/reflection-dynamic-owner");
+        final ProcessResult first = process(project, List.of(binary.toString()));
+        assertThat(first.exitCode()).as(first.stderr()).isZero();
+        assertThat(first.stdout()).isEqualTo(expected).isEqualTo("first:value\n");
+        final ProcessResult second = process(project, List.of(binary.toString(), "second"));
+        final ProcessResult secondJvm = process(project, List.of(CliTestHarness.currentJavaCommand(), "-cp",
+            project.resolve("jvm-classes").toString(), "com.acme.Main", "second"));
+        assertThat(second.exitCode()).as(second.stderr()).isZero();
+        assertThat(secondJvm.exitCode()).as(secondJvm.stderr()).isZero();
+        assertThat(second.stdout()).isEqualTo(secondJvm.stdout()).isEqualTo("second:value\n");
+    }
+
+    @Test
+    void retainsMethodsForEachReferencedReceiverClass() throws Exception {
+        final Path project = project("reflection-two-proven-owners");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class First { public static String run(String value) { return "first:" + value; } }
+                public static final class Second { public static String run(String value) { return "second:" + value; } }
+                public static void main(String[] args) throws Exception {
+                    System.out.println(First.class.getDeclaredMethod("run", String.class).invoke(null, "value"));
+                    System.out.println(Second.class.getDeclaredMethod("run", String.class).invoke(null, "value"));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-two-proven-owners").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("first:value\nsecond:value\n");
+    }
+
+    @Test
     void retainsTheProvenPrimitiveParameterOverload() throws Exception {
         final Path project = project("reflection-proven-primitive-overload");
         writeJava(project, "com.acme.Main", """

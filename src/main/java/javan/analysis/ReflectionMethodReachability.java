@@ -102,8 +102,27 @@ public final class ReflectionMethodReachability {
                     cursor -= 2;
                 }
                 if (cursor >= 0) {
+                    String targetOwner = "";
+                    if ("getDeclaredMethod".equals(target.name()) && cursor > 0) {
+                        final Instruction receiver = instructions.get(cursor - 1);
+                        if ((receiver.opcode() == 18 || receiver.opcode() == 19)
+                            && receiver.className().isPresent() && classes.containsKey(receiver.className().orElseThrow())) {
+                            if (controlFlowEntries == null) controlFlowEntries = controlFlowEntryCounts(code, method.orElseThrow());
+                            if (inlineLookupIsIsolated(controlFlowEntries, cursor - 1, index)) {
+                                targetOwner = receiver.className().orElseThrow();
+                            }
+                        }
+                    }
                     for (final String name : ReflectionLiteralFlow.literals(method.orElseThrow(), cursor)) {
-                        lookups.add(lookupKey(name, parameterPrefix));
+                        if (targetOwner.isEmpty()) {
+                            lookups.add(lookupKey("", name, parameterPrefix));
+                        } else {
+                            for (final String candidate : classes.keySet()) {
+                                if (ReachabilityAnalyzer.isAssignableTo(classes, candidate, targetOwner)) {
+                                    lookups.add(lookupKey(candidate, name, parameterPrefix));
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -111,9 +130,9 @@ public final class ReflectionMethodReachability {
         return Set.copyOf(lookups);
     }
 
-    // Length-prefix the name so arbitrary method names cannot collide with a signature.
-    private static String lookupKey(final String name, final String parameterPrefix) {
-        return name.length() + ":" + name + parameterPrefix;
+    // Length-prefix both names so arbitrary JVM names cannot collide.
+    private static String lookupKey(final String owner, final String name, final String parameterPrefix) {
+        return owner.length() + ":" + owner + name.length() + ":" + name + parameterPrefix;
     }
 
     private static int[] controlFlowEntryCounts(final CodeAttribute code, final MethodInfo method) {
@@ -162,8 +181,11 @@ public final class ReflectionMethodReachability {
         final String descriptor
     ) {
         final int candidateParameterEnd = descriptor.indexOf(')');
-        if (literalLookups.contains(lookupKey(name, ""))
-            || candidateParameterEnd >= 0 && literalLookups.contains(lookupKey(name, descriptor.substring(0, candidateParameterEnd + 1)))) {
+        final String candidatePrefix = candidateParameterEnd < 0 ? "" : descriptor.substring(0, candidateParameterEnd + 1);
+        if (literalLookups.contains(lookupKey("", name, ""))
+            || literalLookups.contains(lookupKey("", name, candidatePrefix))
+            || literalLookups.contains(lookupKey(owner, name, ""))
+            || literalLookups.contains(lookupKey(owner, name, candidatePrefix))) {
             return true;
         }
         if (declaration.methods().contains(new EntryPoint(owner, name, descriptor))) return true;

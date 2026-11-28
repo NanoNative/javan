@@ -103,9 +103,10 @@ Supported platform classes remain available. Other application names produce
 identities and literal arguments traced through local assignments and control flow to reachable
 `getDeclaredMethod` or `getMethod` calls. Inline literal parameter arrays and a literal null array
 select the matching parameter signature. Other parameter arrays conservatively retain all
-same-name overloads. Matching is currently shared across retained classes, so an unrelated class
-with the same name and parameter signature can still be retained. Names that cannot yet be proven
-require an explicit declaration. Other dynamic application method names produce
+same-name overloads. A directly referenced class in `getDeclaredMethod` limits retained methods to
+that class and possible overrides. Other receiver expressions and `getMethod` still conservatively
+match across retained classes. Names that cannot yet be proven require an explicit declaration.
+Other dynamic application method names produce
 `NoSuchMethodException`.
 Supported platform method metadata remains available. Automatically proven targets remain
 available without the declaration.
