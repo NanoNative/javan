@@ -3279,4 +3279,118 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
         assertThat(result.stdout()).isEqualTo(expected).isEqualTo("-7\n-300\n65535\n");
     }
 
+    @Test
+    void writesBooleanFieldsAndInitializesStaticOwners() throws Exception {
+        final Path project = project("reflection-field-set-boolean");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model {
+                    static { System.out.println("initialized"); }
+                    public boolean value = true; public static boolean shared = false;
+                }
+                public static void main(String[] args) throws Exception {
+                    var shared = Model.class.getDeclaredField("shared"); System.out.println("before");
+                    shared.setBoolean(null, true); System.out.println(Model.shared);
+                    Model model = new Model(); var value = Model.class.getDeclaredField("value");
+                    value.setBoolean(model, false); System.out.println(model.value);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-set-boolean").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("before\ninitialized\ntrue\nfalse\n");
+    }
+
+
+    @Test
+    void checksBooleanFieldWriteReceiverAndAccess() throws Exception {
+        final Path project = project("reflection-field-set-boolean-access");
+        writeJava(project, "com.other.Model", """
+            package com.other;
+            public class Model { public boolean value; private boolean secret; }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import com.other.Model;
+            import java.lang.reflect.Field;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    Field value = Model.class.getDeclaredField("value"), secret = Model.class.getDeclaredField("secret");
+                    Object wrong = new Object(); Model model = new Model();
+                    try { value.setBoolean(null, true); } catch (NullPointerException e) { System.out.println("null"); }
+                    try { value.setBoolean(wrong, true); } catch (IllegalArgumentException e) { System.out.println("wrong"); }
+                    try { secret.setBoolean(model, true); } catch (IllegalAccessException e) { System.out.println("denied"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-set-boolean-access").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("null\nwrong\ndenied\n");
+    }
+
+    @Test
+    void writesBooleanFieldsDuringConcurrentGc() throws Exception {
+        final Path project = project("reflection-field-set-boolean-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger signal = new AtomicInteger(), finished = new AtomicInteger();
+                public static final class Model { public boolean value; }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        while (signal.get() == 0) Thread.yield();
+                        for (int i = 0; i < 1000; i++) { byte[] value = new byte[64]; value[0] = 1; }
+                        finished.set(1);
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Field field = Model.class.getDeclaredField("value"); Model model = new Model();
+                    Thread worker = new Thread(new Worker()); worker.start(); signal.set(1);
+                    while (finished.get() == 0) field.setBoolean(model, true);
+                    worker.join(); field.setBoolean(model, true); System.out.println(model.value);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-set-boolean-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("true\n");
+    }
+
+    @Test
+    void rejectsUnsupportedBooleanFieldWritesExplicitly() throws Exception {
+        final Path project = project("reflection-field-set-boolean-unsupported");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model { public int number; public volatile boolean changing; public final boolean fixed = true; }
+                public static void main(String[] args) throws Exception {
+                    Model model = new Model(); var number = Model.class.getDeclaredField("number");
+                    var changing = Model.class.getDeclaredField("changing"); var fixed = Model.class.getDeclaredField("fixed");
+                    try { number.setBoolean(model, true); } catch (UnsupportedOperationException e) { System.out.println("type unsupported"); }
+                    try { changing.setBoolean(model, true); } catch (UnsupportedOperationException e) { System.out.println("volatile unsupported"); }
+                    try { fixed.setBoolean(model, false); } catch (UnsupportedOperationException e) { System.out.println("final unsupported"); }
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-set-boolean-unsupported").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("type unsupported\nvolatile unsupported\nfinal unsupported\n");
+    }
+
+
 }

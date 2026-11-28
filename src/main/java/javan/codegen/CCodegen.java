@@ -239,6 +239,9 @@ public final class CCodegen {
         if (features.fieldSetInt()) {
             emitFieldPrimitiveAccessHelper(program, c, "set_int");
         }
+        if (features.fieldSetBoolean()) {
+            emitFieldPrimitiveAccessHelper(program, c, "set_boolean");
+        }
         if (features.fieldSetLong()) {
             emitFieldPrimitiveAccessHelper(program, c, "set_long");
         }
@@ -458,6 +461,9 @@ public final class CCodegen {
         if (features.fieldSetInt()) {
             header.append("int javan_generated_field_set_int(void* field, void* target, void* caller, void* caller_nest, int new_value);\n");
         }
+        if (features.fieldSetBoolean()) {
+            header.append("int javan_generated_field_set_boolean(void* field, void* target, void* caller, void* caller_nest, int new_value);\n");
+        }
         if (features.fieldSetLong()) {
             header.append("int javan_generated_field_set_long(void* field, void* target, void* caller, void* caller_nest, long long new_value);\n");
         }
@@ -571,6 +577,9 @@ public final class CCodegen {
         }
         if (features.fieldSetInt()) {
             emitFieldPrimitiveAccessHelper(program, core, "set_int");
+        }
+        if (features.fieldSetBoolean()) {
+            emitFieldPrimitiveAccessHelper(program, core, "set_boolean");
         }
         if (features.fieldSetLong()) {
             emitFieldPrimitiveAccessHelper(program, core, "set_long");
@@ -837,6 +846,9 @@ public final class CCodegen {
         }
         if (features.fieldSetInt()) {
             emitFieldPrimitiveAccessHelper(program, c, "set_int");
+        }
+        if (features.fieldSetBoolean()) {
+            emitFieldPrimitiveAccessHelper(program, c, "set_boolean");
         }
         if (features.fieldSetLong()) {
             emitFieldPrimitiveAccessHelper(program, c, "set_long");
@@ -2012,7 +2024,8 @@ public final class CCodegen {
             .append("    const JavanMethodMetadata* metadata = javan_method_metadata(field);\n");
         for (final IrReflectedClass owner : program.reflectedClasses()) {
             for (final IrFieldMetadata field : owner.declaredFields()) {
-                if (!(write ? doubleValue ? "D".equals(field.descriptor())
+                if (!(write ? booleanValue ? "Z".equals(field.descriptor())
+                    : doubleValue ? "D".equals(field.descriptor())
                     : floatValue ? List.of("F", "D").contains(field.descriptor())
                     : wide ? List.of("J", "F", "D").contains(field.descriptor())
                     : List.of("I", "J", "F", "D").contains(field.descriptor())
@@ -2054,7 +2067,7 @@ public final class CCodegen {
                     default -> value;
                 };
                 if (write) {
-                    c.append("        ").append(value).append(" = new_value; return 0;\n    }\n");
+                    c.append("        ").append(value).append(booleanValue ? " = (new_value & 1); return 0;\n    }\n" : " = new_value; return 0;\n    }\n");
                 } else {
                     c.append("        return ").append(converted).append(";\n    }\n");
                 }
@@ -6392,6 +6405,10 @@ public final class CCodegen {
             return calls("javan_generated_field_set_int");
         }
 
+        private boolean fieldSetBoolean() {
+            return calls("javan_generated_field_set_boolean");
+        }
+
         private boolean fieldSetLong() {
             return calls("javan_generated_field_set_long");
         }
@@ -6469,7 +6486,7 @@ public final class CCodegen {
         }
 
         private boolean classAssignability() {
-            return methodInvocation() || constructorInvocation() || fieldGetInt() || fieldGetBoolean() || fieldGetByte() || fieldGetShort() || fieldGetChar() || fieldGetLong() || fieldGetDouble() || fieldGetFloat() || fieldSetInt() || fieldSetLong() || fieldSetDouble() || fieldSetFloat() || calls("javan_class_is_instance") || calls("javan_class_is_assignable_from")
+            return methodInvocation() || constructorInvocation() || fieldGetInt() || fieldGetBoolean() || fieldGetByte() || fieldGetShort() || fieldGetChar() || fieldGetLong() || fieldGetDouble() || fieldGetFloat() || fieldSetInt() || fieldSetBoolean() || fieldSetLong() || fieldSetDouble() || fieldSetFloat() || calls("javan_class_is_instance") || calls("javan_class_is_assignable_from")
                 || calls("javan_class_cast") || calls("javan_method_can_access") || calls("javan_record_shape_validate");
         }
     }

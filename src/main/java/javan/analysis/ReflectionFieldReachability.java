@@ -233,6 +233,7 @@ public final class ReflectionFieldReachability {
         boolean readsDouble = false;
         boolean readsFloat = false;
         boolean writesInt = false;
+        boolean writesBoolean = false;
         boolean writesLong = false;
         boolean writesDouble = false;
         boolean writesFloat = false;
@@ -261,6 +262,8 @@ public final class ReflectionFieldReachability {
                     && "(Ljava/lang/Object;)F".equals(target.orElseThrow().descriptor())) readsFloat = true;
                 if ("setInt".equals(target.orElseThrow().name())
                     && "(Ljava/lang/Object;I)V".equals(target.orElseThrow().descriptor())) writesInt = true;
+                if ("setBoolean".equals(target.orElseThrow().name())
+                    && "(Ljava/lang/Object;Z)V".equals(target.orElseThrow().descriptor())) writesBoolean = true;
                 if ("setLong".equals(target.orElseThrow().name())
                     && "(Ljava/lang/Object;J)V".equals(target.orElseThrow().descriptor())) writesLong = true;
                 if ("setDouble".equals(target.orElseThrow().name())
@@ -269,7 +272,7 @@ public final class ReflectionFieldReachability {
                     && "(Ljava/lang/Object;F)V".equals(target.orElseThrow().descriptor())) writesFloat = true;
             }
         }
-        if (!readsInt && !readsBoolean && !readsByte && !readsShort && !readsChar && !readsLong && !readsDouble && !readsFloat && !writesInt && !writesLong && !writesDouble && !writesFloat) return Set.of();
+        if (!readsInt && !readsBoolean && !readsByte && !readsShort && !readsChar && !readsLong && !readsDouble && !readsFloat && !writesInt && !writesBoolean && !writesLong && !writesDouble && !writesFloat) return Set.of();
         final Set<FieldRef> fields = new HashSet<>(literalLookups(classes, reachable));
         fields.addAll(ReflectionDeclaration.analyze(classes).fields());
         for (final String name : enumeratedOwners(classes, reachable)) {
@@ -293,6 +296,8 @@ public final class ReflectionFieldReachability {
                         || readsLong && List.of("B", "S", "C", "I", "J").contains(candidate.descriptor())
                         || readsDouble && List.of("B", "S", "C", "I", "J", "F", "D").contains(candidate.descriptor())
                         || readsFloat && List.of("B", "S", "C", "I", "J", "F").contains(candidate.descriptor())
+                        || writesBoolean && "Z".equals(candidate.descriptor())
+                            && (candidate.accessFlags() & 0x0010) == 0
                         || writesInt && List.of("I", "J", "F", "D").contains(candidate.descriptor())
                             && (candidate.accessFlags() & 0x0010) == 0
                         || writesLong && List.of("J", "F", "D").contains(candidate.descriptor())

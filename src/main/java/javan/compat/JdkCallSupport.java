@@ -178,6 +178,7 @@ public final class JdkCallSupport {
         runtime("Field.getDouble", "java/lang/reflect/Field", "getDouble", "(Ljava/lang/Object;)D"),
         runtime("Field.getFloat", "java/lang/reflect/Field", "getFloat", "(Ljava/lang/Object;)F"),
         runtime("Field.setInt", "java/lang/reflect/Field", "setInt", "(Ljava/lang/Object;I)V"),
+        runtime("Field.setBoolean", "java/lang/reflect/Field", "setBoolean", "(Ljava/lang/Object;Z)V"),
         runtime("Field.setLong", "java/lang/reflect/Field", "setLong", "(Ljava/lang/Object;J)V"),
         runtime("Field.setDouble", "java/lang/reflect/Field", "setDouble", "(Ljava/lang/Object;D)V"),
         runtime("Field.setFloat", "java/lang/reflect/Field", "setFloat", "(Ljava/lang/Object;F)V"),
@@ -3032,6 +3033,7 @@ public final class JdkCallSupport {
                 || "getDouble".equals(methodRef.name()) && "(Ljava/lang/Object;)D".equals(methodRef.descriptor())
                 || "getFloat".equals(methodRef.name()) && "(Ljava/lang/Object;)F".equals(methodRef.descriptor())
                 || "setInt".equals(methodRef.name()) && "(Ljava/lang/Object;I)V".equals(methodRef.descriptor())
+                || "setBoolean".equals(methodRef.name()) && "(Ljava/lang/Object;Z)V".equals(methodRef.descriptor())
                 || "setLong".equals(methodRef.name()) && "(Ljava/lang/Object;J)V".equals(methodRef.descriptor())
                 || "setDouble".equals(methodRef.name()) && "(Ljava/lang/Object;D)V".equals(methodRef.descriptor())
                 || "setFloat".equals(methodRef.name()) && "(Ljava/lang/Object;F)V".equals(methodRef.descriptor()))) {
