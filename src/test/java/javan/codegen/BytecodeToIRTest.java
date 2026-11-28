@@ -13152,7 +13152,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall("javan_map_key_set", List.of(IrExpression.objectLocal("arg0"))))
+            IrInstruction.returnObject(IrExpression.objectCall("javan_map_key_set_into", List.of(IrExpression.objectLocal("arg0"))))
         );
     }
 
@@ -13170,7 +13170,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall("javan_map_key_set", List.of(IrExpression.objectLocal("arg0"))))
+            IrInstruction.returnObject(IrExpression.objectCall("javan_map_key_set_into", List.of(IrExpression.objectLocal("arg0"))))
         );
     }
 
@@ -13188,7 +13188,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall("javan_map_entry_set", List.of(IrExpression.objectLocal("arg0"))))
+            IrInstruction.returnObject(IrExpression.objectCall("javan_map_entry_set_into", List.of(IrExpression.objectLocal("arg0"))))
         );
     }
 
@@ -24434,7 +24434,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_list_iterator",
+                "javan_list_iterator_into",
                 List.of(IrExpression.objectLocal("arg0"))
             ))
         );
@@ -25533,7 +25533,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal("arg0"))))
+            IrInstruction.returnObject(IrExpression.objectCall("javan_list_iterator_into", List.of(IrExpression.objectLocal("arg0"))))
         );
     }
 
@@ -25551,7 +25551,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal("arg0"))))
+            IrInstruction.returnObject(IrExpression.objectCall("javan_list_iterator_into", List.of(IrExpression.objectLocal("arg0"))))
         );
     }
 
@@ -25733,7 +25733,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal("arg0"))))
+            IrInstruction.returnObject(IrExpression.objectCall("javan_list_iterator_into", List.of(IrExpression.objectLocal("arg0"))))
         );
     }
 
@@ -25751,7 +25751,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal("arg0"))))
+            IrInstruction.returnObject(IrExpression.objectCall("javan_list_iterator_into", List.of(IrExpression.objectLocal("arg0"))))
         );
     }
 
@@ -25771,7 +25771,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_list_iterator_at",
+                "javan_list_iterator_at_into",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))
             ))
         );
@@ -26529,7 +26529,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal("arg0"))))
+            IrInstruction.returnObject(IrExpression.objectCall("javan_list_iterator_into", List.of(IrExpression.objectLocal("arg0"))))
         );
     }
 
@@ -26547,7 +26547,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal("arg0"))))
+            IrInstruction.returnObject(IrExpression.objectCall("javan_list_iterator_into", List.of(IrExpression.objectLocal("arg0"))))
         );
     }
 
@@ -26567,7 +26567,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_list_iterator_at",
+                "javan_list_iterator_at_into",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))
             ))
         );
@@ -26795,7 +26795,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall("javan_map_values", List.of(IrExpression.objectLocal("arg0"))))
+            IrInstruction.returnObject(IrExpression.objectCall("javan_map_values_into", List.of(IrExpression.objectLocal("arg0"))))
         );
     }
 
@@ -26813,7 +26813,7 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall("javan_map_values", List.of(IrExpression.objectLocal("arg0"))))
+            IrInstruction.returnObject(IrExpression.objectCall("javan_map_values_into", List.of(IrExpression.objectLocal("arg0"))))
         );
     }
 

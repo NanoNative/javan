@@ -813,6 +813,11 @@ public final class CCodegen {
         result.add("javan_map_nonuple_java_into");
         result.add("javan_map_decuple_java_into");
         result.add("javan_map_remove_java_into");
+        result.add("javan_map_key_set_into");
+        result.add("javan_map_entry_set_into");
+        result.add("javan_map_values_into");
+        result.add("javan_list_iterator_into");
+        result.add("javan_list_iterator_at_into");
         result.add(EXACT_CATCH_NULL_APPLY_SYMBOL);
         if (!program.materializedLambdaTargets().isEmpty()) {
             result.add(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL);

@@ -567,6 +567,8 @@ final class RuntimeHeaderFile {
         void* javan_list_get_last(void* list);
         void* javan_list_iterator(void* list);
         void* javan_list_iterator_at(void* list, int index);
+        void javan_list_iterator_into(void** result, void* list);
+        void javan_list_iterator_at_into(void** result, void* list, int index);
         int javan_iterator_has_next(void* iterator);
         void* javan_iterator_next(void* iterator);
         void javan_iterator_next_into(void** result, void* iterator);
@@ -661,11 +663,14 @@ final class RuntimeHeaderFile {
         void javan_map_decuple_java_into(void** result, void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value, void* sixth_key, void* sixth_value, void* seventh_key, void* seventh_value, void* eighth_key, void* eighth_value, void* ninth_key, void* ninth_value, void* tenth_key, void* tenth_value);
         void javan_map_of_entries_java_into(void** result, void* entries);
         void* javan_map_key_set(void* map);
+        void javan_map_key_set_into(void** result, void* map);
         void* javan_map_entry_set(void* map);
+        void javan_map_entry_set_into(void** result, void* map);
         void* javan_map_entry_get_key(void* value);
         void* javan_map_entry_get_value(void* value);
         void javan_map_entry_set_value_into(void** result, void* value, void* replacement);
         void* javan_map_values(void* map);
+        void javan_map_values_into(void** result, void* map);
         int javan_object_equals(void* left, void* right);
         int javan_object_virtual_equals(void* left, void* right);
         void javan_register_record_object_method_resolvers(

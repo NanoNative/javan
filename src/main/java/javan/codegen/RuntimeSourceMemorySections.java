@@ -14635,7 +14635,7 @@ final class RuntimeSourceMemorySections {
             return javan_list_get_endpoint(value, 1);
         }
 
-        void* javan_list_iterator_at(void* value, int index) {
+        void javan_list_iterator_at_into(void** result, void* value, int index) {
             javan_object_list* list = javan_list_checked(value);
             int map_view = (javan_list_storage_owner(list)->view_flags & JAVAN_LIST_VIEW_MAP) != 0;
             if (map_view) javan_runtime_lock_enter();
@@ -14644,7 +14644,7 @@ final class RuntimeSourceMemorySections {
                 (void**) &list
             };
             javan_root_frame_push(javan_list_iterator_roots, 1);
-            javan_object_iterator* iterator = (javan_object_iterator*) javan_alloc(sizeof(javan_object_iterator));
+            javan_object_iterator* iterator = (javan_object_iterator*) javan_alloc_rooted(sizeof(javan_object_iterator), result);
             iterator->magic = JAVAN_OBJECT_ITERATOR_MAGIC;
             iterator->index = index;
             iterator->expected_mod_count = javan_list_observed_mod_count(list);
@@ -14663,7 +14663,19 @@ final class RuntimeSourceMemorySections {
             javan_update_runtime_allocation_kind((void*) iterator, JAVAN_RUNTIME_KIND_OBJECT_ITERATOR);
             javan_root_frame_pop(javan_list_iterator_roots);
             if (map_view) javan_runtime_lock_leave();
-            return iterator;
+        }
+
+        void javan_list_iterator_into(void** result, void* value) {
+            javan_list_iterator_at_into(result, value, 0);
+        }
+
+        void* javan_list_iterator_at(void* value, int index) {
+            void* result = NULL;
+            void** roots[] = { &result };
+            javan_root_frame_push(roots, 1);
+            javan_list_iterator_at_into(&result, value, index);
+            javan_root_frame_pop(roots);
+            return result;
         }
 
         void* javan_list_iterator(void* value) {
@@ -16878,6 +16890,12 @@ final class RuntimeSourceMemorySections {
             return view;
         }
 
+        void javan_map_key_set_into(void** result, void* value) {
+            javan_runtime_lock_enter();
+            *result = javan_map_view_unlocked(value, JAVAN_LIST_VIEW_SET | JAVAN_LIST_VIEW_MAP_KEYS);
+            javan_runtime_lock_leave();
+        }
+
         void* javan_map_key_set(void* value) {
             javan_runtime_lock_enter();
             void* result = javan_map_view_unlocked(value, JAVAN_LIST_VIEW_SET | JAVAN_LIST_VIEW_MAP_KEYS);
@@ -16910,6 +16928,12 @@ final class RuntimeSourceMemorySections {
             }
             javan_root_frame_pop(roots);
             return list_value;
+        }
+
+        void javan_map_entry_set_into(void** result, void* value) {
+            javan_runtime_lock_enter();
+            *result = javan_map_entry_set_unlocked(value);
+            javan_runtime_lock_leave();
         }
 
         void* javan_map_entry_set(void* value) {
@@ -16946,6 +16970,12 @@ final class RuntimeSourceMemorySections {
                     entry->value = replacement;
                 }
             }
+            javan_runtime_lock_leave();
+        }
+
+        void javan_map_values_into(void** result, void* value) {
+            javan_runtime_lock_enter();
+            *result = javan_map_view_unlocked(value, JAVAN_LIST_VIEW_MAP_VALUES);
             javan_runtime_lock_leave();
         }
 

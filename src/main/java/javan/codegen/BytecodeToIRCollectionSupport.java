@@ -1009,11 +1009,11 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("listIterator()Ljava/util/ListIterator;".equals(signature)) {
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator", List.of(receiver))));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator_into", List.of(receiver))));
                 return true;
             }
             if ("listIterator(I)Ljava/util/ListIterator;".equals(signature)) {
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator_at", List.of(receiver, arguments.getFirst()))));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator_at_into", List.of(receiver, arguments.getFirst()))));
                 return true;
             }
         }
@@ -1031,15 +1031,15 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("iterator()Ljava/util/Iterator;".equals(signature)) {
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator", List.of(receiver))));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator_into", List.of(receiver))));
                 return true;
             }
             if ("listIterator()Ljava/util/ListIterator;".equals(signature)) {
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator", List.of(receiver))));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator_into", List.of(receiver))));
                 return true;
             }
             if ("listIterator(I)Ljava/util/ListIterator;".equals(signature)) {
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator_at", List.of(receiver, arguments.getFirst()))));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator_at_into", List.of(receiver, arguments.getFirst()))));
                 return true;
             }
             if ("size()I".equals(signature)) {
@@ -1102,15 +1102,15 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("iterator()Ljava/util/Iterator;".equals(signature)) {
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator", List.of(receiver))));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator_into", List.of(receiver))));
                 return true;
             }
             if ("listIterator()Ljava/util/ListIterator;".equals(signature)) {
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator", List.of(receiver))));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator_into", List.of(receiver))));
                 return true;
             }
             if ("listIterator(I)Ljava/util/ListIterator;".equals(signature)) {
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator_at", List.of(receiver, arguments.getFirst()))));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator_at_into", List.of(receiver, arguments.getFirst()))));
                 return true;
             }
             if ("toArray()[Ljava/lang/Object;".equals(signature)) {
@@ -1169,7 +1169,7 @@ final class BytecodeToIRCollectionSupport {
                 return true;
             }
             if ("iterator()Ljava/util/Iterator;".equals(signature)) {
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator", List.of(receiver))));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator_into", List.of(receiver))));
                 return true;
             }
             if ("toArray()[Ljava/lang/Object;".equals(signature)) {
@@ -1474,15 +1474,15 @@ final class BytecodeToIRCollectionSupport {
             }
             if ("keySet()Ljava/util/Set;".equals(signature)
                 || "keySet()Ljava/util/concurrent/ConcurrentHashMap$KeySetView;".equals(signature)) {
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_key_set", List.of(receiver))));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_key_set_into", List.of(receiver))));
                 return true;
             }
             if ("entrySet()Ljava/util/Set;".equals(signature)) {
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_entry_set", List.of(receiver))));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_entry_set_into", List.of(receiver))));
                 return true;
             }
             if ("values()Ljava/util/Collection;".equals(signature)) {
-                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_values", List.of(receiver))));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_values_into", List.of(receiver))));
                 return true;
             }
         }
