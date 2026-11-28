@@ -1813,7 +1813,7 @@ public final class CCodegen {
         for (final IrReflectedClass owner : program.reflectedClasses()) {
             for (final IrFieldMetadata field : owner.declaredFields()) {
                 if (!(write ? "I".equals(field.descriptor()) : List.of("B", "S", "C", "I").contains(field.descriptor()))
-                    || (field.modifiers() & (0x0040 | (write ? 0x0018 : 0))) != 0) continue;
+                    || (field.modifiers() & (0x0040 | (write ? 0x0010 : 0))) != 0) continue;
                 IrClass layout = null;
                 for (final IrClass candidate : program.classes()) {
                     if (candidate.jvmName().equals(field.declaringJvmName())) layout = candidate;

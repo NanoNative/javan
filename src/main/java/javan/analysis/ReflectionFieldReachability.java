@@ -52,7 +52,7 @@ public final class ReflectionFieldReachability {
         return Set.copyOf(result);
     }
     /**
-     * Returns owners of selected static fields when reflective integer reads are reachable.
+     * Returns owners of selected static fields when reflective integer reads or writes are reachable.
      *
      * @param classes parsed closed-world classes
      * @param reachable reachable methods
@@ -60,18 +60,21 @@ public final class ReflectionFieldReachability {
      */
     public static Set<String> staticIntOwners(final Map<String, ClassFile> classes, final List<EntryPoint> reachable) {
         boolean readsInt = false;
+        boolean writesInt = false;
         for (final EntryPoint entry : reachable) {
             final ClassFile owner = classes.get(entry.className());
             final Optional<MethodInfo> method = owner == null ? Optional.empty() : owner.method(entry.methodName(), entry.descriptor());
             if (method.isEmpty() || method.orElseThrow().code().isEmpty()) continue;
             for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
                 final Optional<MethodRef> target = instruction.methodRef();
-                if (target.isPresent() && "java/lang/reflect/Field".equals(target.orElseThrow().owner())
-                    && "getInt".equals(target.orElseThrow().name())
+                if (target.isEmpty() || !"java/lang/reflect/Field".equals(target.orElseThrow().owner())) continue;
+                if ("getInt".equals(target.orElseThrow().name())
                     && "(Ljava/lang/Object;)I".equals(target.orElseThrow().descriptor())) readsInt = true;
+                if ("setInt".equals(target.orElseThrow().name())
+                    && "(Ljava/lang/Object;I)V".equals(target.orElseThrow().descriptor())) writesInt = true;
             }
         }
-        if (!readsInt) return Set.of();
+        if (!readsInt && !writesInt) return Set.of();
         final Set<FieldRef> fields = new HashSet<>(literalLookups(classes, reachable));
         fields.addAll(ReflectionDeclaration.analyze(classes).fields());
         final Set<String> owners = new HashSet<>();
@@ -81,7 +84,8 @@ public final class ReflectionFieldReachability {
             for (final FieldInfo candidate : owner.fields()) {
                 if (candidate.name().equals(field.name()) && candidate.descriptor().equals(field.descriptor())
                     && candidate.isStatic() && (candidate.accessFlags() & 0x0040) == 0
-                    && List.of("B", "S", "C", "I").contains(candidate.descriptor())) owners.add(field.owner());
+                    && (readsInt && List.of("B", "S", "C", "I").contains(candidate.descriptor())
+                        || writesInt && "I".equals(candidate.descriptor()) && (candidate.accessFlags() & 0x0010) == 0)) owners.add(field.owner());
             }
         }
         return Set.copyOf(owners);

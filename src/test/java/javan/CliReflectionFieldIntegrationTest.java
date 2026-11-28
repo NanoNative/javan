@@ -908,17 +908,17 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void rejectsUnsupportedStaticVolatileAndFinalIntWrites() throws Exception {
+    void rejectsUnsupportedVolatileAndFinalIntWrites() throws Exception {
         final Path project = project("reflection-field-write-bounds");
         writeJava(project, "com.acme.Main", """
             package com.acme;
             import java.lang.reflect.Field;
             public final class Main {
-                public static final class Model { public static int shared; public volatile int value; public final int fixed = 1; }
+                public static final class Model { public static volatile int shared; public volatile int value; public final int fixed = 1; }
                 public static void main(String[] args) throws Exception {
                     Field shared = Model.class.getDeclaredField("shared"); Field value = Model.class.getDeclaredField("value");
                     Field fixed = Model.class.getDeclaredField("fixed"); Model target = new Model();
-                    try { shared.setInt(null, 7); } catch (UnsupportedOperationException e) { System.out.println("static"); }
+                    try { shared.setInt(null, 7); } catch (UnsupportedOperationException e) { System.out.println("static volatile"); }
                     try { value.setInt(target, 7); } catch (UnsupportedOperationException e) { System.out.println("volatile"); }
                     try { fixed.setInt(target, 7); } catch (UnsupportedOperationException e) { System.out.println("final"); }
                 }
@@ -928,7 +928,7 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-write-bounds").toString()));
         assertThat(result.exitCode()).as(result.stderr()).isZero();
-        assertThat(result.stdout()).isEqualTo("static\nvolatile\nfinal\n");
+        assertThat(result.stdout()).isEqualTo("static volatile\nvolatile\nfinal\n");
     }
 
     @Test
@@ -1291,5 +1291,143 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
         assertThat(result.exitCode()).as(result.stderr()).isZero();
         assertThat(result.stdout()).isEqualTo(expected).isEqualTo("42\n");
     }
+
+    @Test
+    void initializesAndWritesADeclaredStaticIntField() throws Exception {
+        final Path project = project("reflection-static-int-write");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            public final class Main {
+                public static final class Model {
+                    static { System.out.println("initialized"); }
+                    public static int value = 3;
+                }
+                public static void main(String[] args) throws Exception {
+                    Field field = Model.class.getDeclaredField("value");
+                    System.out.println("before"); field.setInt(null, 42);
+                    System.out.println(field.getInt(new Object()));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-static-int-write").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("before\ninitialized\n42\n");
+    }
+
+    @Test
+    void initializesAStaticIntFieldWhenOnlyAReflectiveWriteIsReachable() throws Exception {
+        final Path project = project("reflection-static-int-write-only");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static final class Model {
+                    static { System.out.println("initialized"); }
+                    public static int value = 3;
+                }
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] { Model.class.getDeclaredField("value") };
+                }
+                public static void main(String[] args) throws Exception {
+                    var field = Model.class.getDeclaredField(args[0]);
+                    System.out.println("before"); field.setInt(null, 42); System.out.println("done");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-static-int-write-only").toString(), "value"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("before\ninitialized\ndone\n");
+    }
+
+    @Test
+    void transportsFailedStaticFieldWriteInitializationAndRepeatAccess() throws Exception {
+        final Path project = project("reflection-static-int-write-initializer-failure");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model {
+                    public static int value = fail();
+                    static int fail() { throw new IllegalStateException(); }
+                }
+                public static void main(String[] args) throws Exception {
+                    var field = Model.class.getDeclaredField("value");
+                    try { field.setInt(null, 42); } catch (ExceptionInInitializerError e) { System.out.println("first"); }
+                    try { field.setInt(null, 42); } catch (NoClassDefFoundError e) { System.out.println("second"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-static-int-write-initializer-failure").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("first\nsecond\n");
+    }
+
+    @Test
+    void rejectsInaccessibleStaticFieldWriteBeforeInitializingItsClass() throws Exception {
+        final Path project = project("reflection-static-int-write-access");
+        writeJava(project, "com.other.Model", """
+            package com.other;
+            public class Model { static { System.out.println("initialized"); } private static int value = 7; }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import com.other.Model;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    var field = Model.class.getDeclaredField("value"); Object target = new Object();
+                    try { field.setInt(target, 42); } catch (IllegalAccessException e) { System.out.println("denied"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-static-int-write-access").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("denied\n");
+    }
+
+    @Test
+    void writesStaticIntFieldsDuringConcurrentGc() throws Exception {
+        final Path project = project("reflection-static-field-write-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger signal = new AtomicInteger(), finished = new AtomicInteger();
+                public static final class Model { public static int value; }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        while (signal.get() == 0) Thread.yield();
+                        for (int i = 0; i < 1000; i++) { byte[] value = new byte[64]; value[0] = 1; }
+                        finished.set(1);
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Field field = Model.class.getDeclaredField("value");
+                    Thread worker = new Thread(new Worker()); worker.start(); signal.set(1);
+                    while (finished.get() == 0) { field.setInt(null, 42); if (Model.value != 42) throw new AssertionError(); }
+                    worker.join(); field.setInt(null, 73); System.out.println(Model.value);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-static-field-write-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("73\n");
+    }
+
 
 }
