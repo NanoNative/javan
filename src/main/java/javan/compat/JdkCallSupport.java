@@ -485,6 +485,8 @@ public final class JdkCallSupport {
         runtime("Float.toString.instance", "java/lang/Float", "toString", "()Ljava/lang/String;"),
         runtime("Float.valueOf", "java/lang/Float", "valueOf", "(F)Ljava/lang/Float;"),
         runtime("Float.floatValue", "java/lang/Float", "floatValue", "()F"),
+        runtime("Float.isNaN.instance", "java/lang/Float", "isNaN", "()Z"),
+        runtime("Float.isInfinite.instance", "java/lang/Float", "isInfinite", "()Z"),
         runtime(
             "Float.describeConstable",
             "java/lang/Float",
@@ -512,6 +514,8 @@ public final class JdkCallSupport {
         runtime("Double.toString.instance", "java/lang/Double", "toString", "()Ljava/lang/String;"),
         runtime("Double.valueOf", "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;"),
         runtime("Double.doubleValue", "java/lang/Double", "doubleValue", "()D"),
+        runtime("Double.isNaN.instance", "java/lang/Double", "isNaN", "()Z"),
+        runtime("Double.isInfinite.instance", "java/lang/Double", "isInfinite", "()Z"),
         runtime(
             "Double.describeConstable",
             "java/lang/Double",
@@ -2104,6 +2108,18 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies boxed floating-point classification calls.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the call classifies the receiver as NaN or infinite
+     */
+    public static boolean isBoxedFloatingClassification(final MethodRef methodRef) {
+        return ("java/lang/Float".equals(methodRef.owner()) || "java/lang/Double".equals(methodRef.owner()))
+            && ("isNaN".equals(methodRef.name()) || "isInfinite".equals(methodRef.name()))
+            && "()Z".equals(methodRef.descriptor());
+    }
+
+    /**
      * Identifies supported no-argument collection size queries.
      *
      * @param methodRef referenced JDK method
@@ -2708,7 +2724,7 @@ public final class JdkCallSupport {
             return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
         }
         if (isCollectionObjectSearch(methodRef) || isCollectionSizeQuery(methodRef)
-            || isConcurrentKeyViewReceiver(methodRef)) {
+            || isConcurrentKeyViewReceiver(methodRef) || isBoxedFloatingClassification(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
         if ("java/lang/Object".equals(methodRef.owner()) && "equals".equals(methodRef.name())

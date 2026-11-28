@@ -9487,4 +9487,39 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
     }
 
+    @Test
+    void nativeBuiltJavanClassifiesBoxedFloatingValues() throws Exception {
+        final Path project = tempDir.resolve("selfhost-boxed-float-classification");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    Float f = Float.valueOf(Float.NaN);
+                    Double d = Double.valueOf(Double.POSITIVE_INFINITY);
+                    System.out.println(f.isNaN()); System.out.println(f.isInfinite());
+                    System.out.println(d.isNaN()); System.out.println(d.isInfinite());
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-boxed-float-classification"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-boxed-float-classification").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+
 }

@@ -196,7 +196,7 @@ final class BytecodeToIRInvokeSupport {
             || JdkCallSupport.isMapRemove(target) || JdkCallSupport.isMapReplace(target) || JdkCallSupport.isMapPutAll(target);
         final boolean guardedCollectionOrMapReceiver = guardedObjectArguments || JdkCallSupport.isCollectionSizeQuery(target)
             || JdkCallSupport.isCollectionClear(target) || JdkCallSupport.isMapClear(target)
-            || JdkCallSupport.isConcurrentKeyViewReceiver(target);
+            || JdkCallSupport.isConcurrentKeyViewReceiver(target) || JdkCallSupport.isBoxedFloatingClassification(target);
         if (!guardedCollectionOrMapReceiver && !guardedOptionalReceiver(target)
             && !(classes.containsKey(target.owner())
                 && classes.get(target.owner()).application()
@@ -2494,6 +2494,17 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef methodRef,
         final List<StackValue> stack
     ) {
+        if (JdkCallSupport.isBoxedFloatingClassification(methodRef)) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            final boolean isFloat = "java/lang/Float".equals(methodRef.owner());
+            final IrExpression value = isFloat
+                ? IrExpression.floatCall("javan_float_float_value", List.of(receiver))
+                : IrExpression.doubleCall("javan_double_double_value", List.of(receiver));
+            final String function = (isFloat ? "javan_float_" : "javan_double_")
+                + ("isNaN".equals(methodRef.name()) ? "is_nan" : "is_infinite");
+            stack.add(StackValue.intExpression(IrExpression.intCall(function, List.of(value))));
+            return true;
+        }
         if ("java/lang/Integer".equals(methodRef.owner()) && "intValue".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_integer_int_value", List.of(popObject(classFile, method, stack)))));
             return true;

@@ -450,6 +450,7 @@ public final class CompatibilityReports {
             pass("floating-bit-conversions"),
             pass("floating-point-remainder"),
             pass("floating-point-classification"),
+            pass("boxed-floating-point-classification"),
             pass("boxed-primitive-gc"),
             pass("boolean-basic"),
             pass("static-fields"),
