@@ -213,16 +213,19 @@ public final class CCodegen {
             emitFieldEnumerationHelper(program, c);
         }
         if (features.fieldGetInt()) {
-            emitFieldPrimitiveAccessHelper(program, c, false, false);
+            emitFieldPrimitiveAccessHelper(program, c, "get_int");
         }
         if (features.fieldGetLong()) {
-            emitFieldPrimitiveAccessHelper(program, c, false, true);
+            emitFieldPrimitiveAccessHelper(program, c, "get_long");
         }
         if (features.fieldSetInt()) {
-            emitFieldPrimitiveAccessHelper(program, c, true, false);
+            emitFieldPrimitiveAccessHelper(program, c, "set_int");
         }
         if (features.fieldSetLong()) {
-            emitFieldPrimitiveAccessHelper(program, c, true, true);
+            emitFieldPrimitiveAccessHelper(program, c, "set_long");
+        }
+        if (features.fieldSetDouble()) {
+            emitFieldPrimitiveAccessHelper(program, c, "set_double");
         }
         if (features.declaredMethodMetadata()) {
             emitMethodLookupHelper(program, c, true);
@@ -419,6 +422,9 @@ public final class CCodegen {
         if (features.fieldSetLong()) {
             header.append("int javan_generated_field_set_long(void* field, void* target, void* caller, void* caller_nest, long long new_value);\n");
         }
+        if (features.fieldSetDouble()) {
+            header.append("int javan_generated_field_set_double(void* field, void* target, void* caller, void* caller_nest, double new_value);\n");
+        }
         if (features.declaredMethodMetadata()) {
             header.append("void* javan_generated_class_get_declared_method(void* class_value, void* name_value, void* parameter_types);\n");
         }
@@ -498,16 +504,19 @@ public final class CCodegen {
             emitFieldEnumerationHelper(program, core);
         }
         if (features.fieldGetInt()) {
-            emitFieldPrimitiveAccessHelper(program, core, false, false);
+            emitFieldPrimitiveAccessHelper(program, core, "get_int");
         }
         if (features.fieldGetLong()) {
-            emitFieldPrimitiveAccessHelper(program, core, false, true);
+            emitFieldPrimitiveAccessHelper(program, core, "get_long");
         }
         if (features.fieldSetInt()) {
-            emitFieldPrimitiveAccessHelper(program, core, true, false);
+            emitFieldPrimitiveAccessHelper(program, core, "set_int");
         }
         if (features.fieldSetLong()) {
-            emitFieldPrimitiveAccessHelper(program, core, true, true);
+            emitFieldPrimitiveAccessHelper(program, core, "set_long");
+        }
+        if (features.fieldSetDouble()) {
+            emitFieldPrimitiveAccessHelper(program, core, "set_double");
         }
         if (features.declaredMethodMetadata()) {
             emitMethodLookupHelper(program, core, true);
@@ -740,16 +749,19 @@ public final class CCodegen {
             emitFieldEnumerationHelper(program, c);
         }
         if (features.fieldGetInt()) {
-            emitFieldPrimitiveAccessHelper(program, c, false, false);
+            emitFieldPrimitiveAccessHelper(program, c, "get_int");
         }
         if (features.fieldGetLong()) {
-            emitFieldPrimitiveAccessHelper(program, c, false, true);
+            emitFieldPrimitiveAccessHelper(program, c, "get_long");
         }
         if (features.fieldSetInt()) {
-            emitFieldPrimitiveAccessHelper(program, c, true, false);
+            emitFieldPrimitiveAccessHelper(program, c, "set_int");
         }
         if (features.fieldSetLong()) {
-            emitFieldPrimitiveAccessHelper(program, c, true, true);
+            emitFieldPrimitiveAccessHelper(program, c, "set_long");
+        }
+        if (features.fieldSetDouble()) {
+            emitFieldPrimitiveAccessHelper(program, c, "set_double");
         }
         if (features.declaredMethodMetadata()) {
             emitMethodLookupHelper(program, c, true);
@@ -1871,14 +1883,18 @@ public final class CCodegen {
         c.append("    return -1;\n}\n\n");
     }
 
-    private static void emitFieldPrimitiveAccessHelper(final IrProgram program, final StringBuilder c, final boolean write, final boolean wide) {
+    private static void emitFieldPrimitiveAccessHelper(final IrProgram program, final StringBuilder c, final String operation) {
+        final boolean write = operation.startsWith("set_");
+        final boolean wide = operation.endsWith("_long");
+        final boolean doubleValue = operation.endsWith("_double");
         c.append(wide && !write ? "JAVAN_PROGRAM_LINKAGE long long javan_generated_field_" : "JAVAN_PROGRAM_LINKAGE int javan_generated_field_")
-            .append(write ? "set" : "get").append(wide ? "_long(void* field, void* target, void* caller, void* caller_nest" : "_int(void* field, void* target, void* caller, void* caller_nest")
-            .append(write ? wide ? ", long long new_value) {\n" : ", int new_value) {\n" : ") {\n")
+            .append(operation).append("(void* field, void* target, void* caller, void* caller_nest")
+            .append(write ? doubleValue ? ", double new_value) {\n" : wide ? ", long long new_value) {\n" : ", int new_value) {\n" : ") {\n")
             .append("    const JavanMethodMetadata* metadata = javan_method_metadata(field);\n");
         for (final IrReflectedClass owner : program.reflectedClasses()) {
             for (final IrFieldMetadata field : owner.declaredFields()) {
-                if (!(write ? wide ? List.of("J", "F", "D").contains(field.descriptor())
+                if (!(write ? doubleValue ? "D".equals(field.descriptor())
+                    : wide ? List.of("J", "F", "D").contains(field.descriptor())
                     : List.of("I", "J", "F", "D").contains(field.descriptor())
                     : wide ? List.of("B", "S", "C", "I", "J").contains(field.descriptor())
                     : List.of("B", "S", "C", "I").contains(field.descriptor()))
@@ -6253,6 +6269,10 @@ public final class CCodegen {
             return calls("javan_generated_field_set_long");
         }
 
+        private boolean fieldSetDouble() {
+            return calls("javan_generated_field_set_double");
+        }
+
         private boolean fieldGetInt() {
             return calls("javan_generated_field_get_int");
         }
@@ -6294,7 +6314,7 @@ public final class CCodegen {
         }
 
         private boolean classAssignability() {
-            return methodInvocation() || constructorInvocation() || fieldGetInt() || fieldGetLong() || fieldSetInt() || fieldSetLong() || calls("javan_class_is_instance") || calls("javan_class_is_assignable_from")
+            return methodInvocation() || constructorInvocation() || fieldGetInt() || fieldGetLong() || fieldSetInt() || fieldSetLong() || fieldSetDouble() || calls("javan_class_is_instance") || calls("javan_class_is_assignable_from")
                 || calls("javan_class_cast") || calls("javan_method_can_access") || calls("javan_record_shape_validate");
         }
     }

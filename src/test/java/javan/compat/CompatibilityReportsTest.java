@@ -142,6 +142,7 @@ final class CompatibilityReportsTest {
             "| `closed-world-field-set-int-static` | pass |",
             "| `closed-world-setint-widening` | pass |",
             "| `closed-world-setlong-widening` | pass |",
+            "| `closed-world-setdouble` | pass |",
             "| `closed-world-declared-field-enumeration` | pass |",
             "| `closed-world-field-enumeration-static-helper-flow` | pass |",
             "| `closed-world-field-enumeration-trailing-class-flow` | pass |",
@@ -688,10 +689,10 @@ final class CompatibilityReportsTest {
             "A broad JDK-compatibility release must report:",
             "The first native release is scenario-bounded.",
             "not a release-completion percentage.",
-            "| support rows | 384 |",
-            "| pass rows | 382 |",
+            "| support rows | 385 |",
+            "| pass rows | 383 |",
             "| scoped rows | 2 |",
-            "| accounted rows | 382 |",
+            "| accounted rows | 383 |",
             "| unaccounted rows | 2 |"
         );
         assertThat(matrix).contains(

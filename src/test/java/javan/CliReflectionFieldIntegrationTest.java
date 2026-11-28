@@ -2431,4 +2431,135 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
         assertThat(result.stdout()).isEqualTo(expected).isEqualTo("5000000000\n");
     }
 
+    @Test
+    void writesDoubleFieldsWithTheirExactBits() throws Exception {
+        final Path project = project("reflection-field-set-double");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model { public double value; }
+                public static void main(String[] args) throws Exception {
+                    Model model = new Model(); var field = Model.class.getDeclaredField("value");
+                    field.setDouble(model, 3.25); System.out.println(model.value);
+                    field.setDouble(model, -0.0); System.out.println(Double.doubleToRawLongBits(model.value));
+                    field.setDouble(model, Double.longBitsToDouble(0x7ff8000000000001L));
+                    System.out.println(Double.doubleToRawLongBits(model.value));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-set-double").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("3.25\n-9223372036854775808\n9221120237041090561\n");
+    }
+
+    @Test
+    void initializesStaticDoubleFieldBeforeReflectiveWrite() throws Exception {
+        final Path project = project("reflection-static-double-write");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model { static { System.out.println("initialized"); } public static double value = 2.5; }
+                public static void main(String[] args) throws Exception {
+                    var field = Model.class.getDeclaredField("value"); System.out.println("before");
+                    field.setDouble(null, 7.25); System.out.println(Model.value);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-static-double-write").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("before\ninitialized\n7.25\n");
+    }
+
+    @Test
+    void checksDoubleFieldWriteReceiverAndAccess() throws Exception {
+        final Path project = project("reflection-field-set-double-access");
+        writeJava(project, "com.other.Model", """
+            package com.other;
+            public class Model { public double value; private double secret; }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import com.other.Model;
+            import java.lang.reflect.Field;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    Field value = Model.class.getDeclaredField("value"), secret = Model.class.getDeclaredField("secret");
+                    Object wrong = new Object(); Model model = new Model();
+                    try { value.setDouble(null, 1.0); } catch (NullPointerException e) { System.out.println("null"); }
+                    try { value.setDouble(wrong, 1.0); } catch (IllegalArgumentException e) { System.out.println("wrong"); }
+                    try { secret.setDouble(model, 1.0); } catch (IllegalAccessException e) { System.out.println("denied"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-set-double-access").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("null\nwrong\ndenied\n");
+    }
+
+    @Test
+    void rejectsUnsupportedDoubleFieldWritesExplicitly() throws Exception {
+        final Path project = project("reflection-field-set-double-unsupported");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model { public float narrow; public volatile double changing; public final double fixed = 3.0; }
+                public static void main(String[] args) throws Exception {
+                    Model model = new Model(); var narrow = Model.class.getDeclaredField("narrow");
+                    var changing = Model.class.getDeclaredField("changing"); var fixed = Model.class.getDeclaredField("fixed");
+                    try { narrow.setDouble(model, 4.0); } catch (UnsupportedOperationException e) { System.out.println("type unsupported"); }
+                    try { changing.setDouble(model, 4.0); } catch (UnsupportedOperationException e) { System.out.println("volatile unsupported"); }
+                    try { fixed.setDouble(model, 4.0); } catch (UnsupportedOperationException e) { System.out.println("final unsupported"); }
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-set-double-unsupported").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("type unsupported\nvolatile unsupported\nfinal unsupported\n");
+    }
+
+    @Test
+    void writesDoubleFieldsDuringConcurrentGc() throws Exception {
+        final Path project = project("reflection-field-set-double-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger signal = new AtomicInteger(), finished = new AtomicInteger();
+                public static final class Model { public double value; }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        while (signal.get() == 0) Thread.yield();
+                        for (int i = 0; i < 1000; i++) { byte[] value = new byte[64]; value[0] = 1; }
+                        finished.set(1);
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Field field = Model.class.getDeclaredField("value"); Model model = new Model();
+                    Thread worker = new Thread(new Worker()); worker.start(); signal.set(1);
+                    while (finished.get() == 0) field.setDouble(model, 7.25);
+                    worker.join(); field.setDouble(model, 7.25); System.out.println(model.value);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-set-double-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("7.25\n");
+    }
+
 }

@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 384 |
-| pass | 382 |
+| rows | 385 |
+| pass | 383 |
 | scoped | 2 |
 | target | 0 |
 | rejected | 0 |
@@ -69,6 +69,7 @@ Status mapping:
 | `closed-world-field-set-int-static` | pass |
 | `closed-world-setint-widening` | pass |
 | `closed-world-setlong-widening` | pass |
+| `closed-world-setdouble` | pass |
 | `closed-world-declared-field-enumeration` | pass |
 | `closed-world-field-enumeration-static-helper-flow` | pass |
 | `closed-world-field-enumeration-trailing-class-flow` | pass |
