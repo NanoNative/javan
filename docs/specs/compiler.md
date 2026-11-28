@@ -189,8 +189,10 @@ key comparisons in these views are not yet supported and raise `UnsupportedOpera
 bulk operations modify the map. Supported `Map.values()` views also remain connected to their map.
 Their iterators remove their returned entry, including when values repeat. Concurrent map iterators
 retain and safely return a value even when its mapping is removed during garbage collection.
-Application-defined value comparisons are not yet supported and raise `UnsupportedOperationException`
-before bulk operations modify the map. `HashMap` and `LinkedHashMap` provide backed `entrySet()`
+`values().contains` uses a statically reachable application-defined query `equals` method outside
+the runtime lock, retains compared values during concurrent collection, and preserves identity matches
+and transported exceptions. Other application-defined value comparisons remain unsupported and raise
+`UnsupportedOperationException` before bulk operations modify the map. `HashMap` and `LinkedHashMap` provide backed `entrySet()`
 views, including through unmodifiable map wrappers. Reads reflect current mappings. Supported
 removals compare the key and value, and iterator removal uses the returned entry's key. Entries
 returned by mutable map iterators accept `Map.Entry.setValue`, including null values, and return

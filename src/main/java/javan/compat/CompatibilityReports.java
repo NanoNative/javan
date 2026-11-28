@@ -662,6 +662,7 @@ public final class CompatibilityReports {
             pass("map-size"),
             pass("map-values"),
             pass("map-values-backed-view"),
+            pass("map-values-custom-contains"),
             pass("concurrent-map-values-iterator-gc"),
             pass("map-remove"),
             pass("map-remove-key-value"),

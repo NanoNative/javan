@@ -13903,7 +13903,7 @@ final class RuntimeSourceMemorySections {
         }
 
         static int javan_list_custom_index_of(
-            void* value, void* element, javan_collection_equals_fn equals, int reverse
+            void* value, void* element, javan_collection_equals_fn equals, int reverse, int identity_first
         ) {
             void* list_root = value;
             void* element_root = element;
@@ -13928,7 +13928,7 @@ final class RuntimeSourceMemorySections {
                 index += reverse != 0 ? -1 : 1;
                 current = javan_list_get_unchecked(list, current_index);
                 javan_runtime_lock_leave();
-                int equal = equals(element_root, current);
+                int equal = identity_first != 0 && element_root == current ? 1 : equals(element_root, current);
                 if (javan_pending_has()) break;
                 if (equal != 0) { result = current_index; break; }
             }
@@ -13943,6 +13943,13 @@ final class RuntimeSourceMemorySections {
             }
             javan_object_list* owner = javan_list_storage_owner(javan_list_checked(value));
             if ((owner->view_flags & JAVAN_LIST_VIEW_MAP) != 0) {
+                if ((owner->view_flags & JAVAN_LIST_VIEW_MAP_VALUES) != 0 && element != NULL) {
+                    javan_collection_equals_resolver_fn resolver = atomic_load_explicit(
+                        &javan_collection_equals_resolver, memory_order_acquire
+                    );
+                    javan_collection_equals_fn equals = resolver == NULL ? NULL : resolver(element);
+                    if (equals != NULL) return javan_list_custom_index_of(value, element, equals, 0, 1) >= 0;
+                }
                 return javan_list_contains(value, element);
             }
             if (element == NULL) {
@@ -13962,7 +13969,7 @@ final class RuntimeSourceMemorySections {
             if (equals == NULL) {
                 return javan_list_contains(value, element);
             }
-            return javan_list_custom_index_of(value, element, equals, 0) >= 0;
+            return javan_list_custom_index_of(value, element, equals, 0, 0) >= 0;
         }
 
         static int javan_list_index_of_with_equality(void* value, void* element, int reverse) {
@@ -13987,7 +13994,7 @@ final class RuntimeSourceMemorySections {
             if (equals == NULL) {
                 return reverse != 0 ? javan_list_last_index_of(value, element) : javan_list_index_of(value, element);
             }
-            return javan_list_custom_index_of(value, element, equals, reverse);
+            return javan_list_custom_index_of(value, element, equals, reverse, 0);
         }
 
         int javan_list_index_of_java(void* value, void* element) {
@@ -14116,7 +14123,7 @@ final class RuntimeSourceMemorySections {
             void** roots[] = { &list_root, &element_root };
             javan_root_frame_push(roots, 2);
             javan_runtime_lock_leave();
-            int index = javan_list_custom_index_of(list_root, element_root, equals, 0);
+            int index = javan_list_custom_index_of(list_root, element_root, equals, 0, 0);
             javan_runtime_lock_enter();
             list = javan_list_checked(list_root);
             int result = 0;
@@ -14168,7 +14175,7 @@ final class RuntimeSourceMemorySections {
                         ? resolver(element) : NULL;
                     if (equals != NULL) {
                         javan_runtime_lock_leave();
-                        contains = javan_list_custom_index_of(probe, element, equals, 0) >= 0;
+                        contains = javan_list_custom_index_of(probe, element, equals, 0, 0) >= 0;
                         javan_runtime_lock_enter();
                         if (javan_list_observed_mod_count(list) != expected_mod_count) {
                             if (!javan_pending_has()) {
@@ -14366,7 +14373,7 @@ final class RuntimeSourceMemorySections {
                 int contains;
                 if (equals != NULL) {
                     javan_runtime_lock_leave();
-                    contains = javan_list_custom_index_of(list, element, equals, 0) >= 0;
+                    contains = javan_list_custom_index_of(list, element, equals, 0, 0) >= 0;
                     javan_runtime_lock_enter();
                 } else {
                     contains = javan_list_contains(list, element);

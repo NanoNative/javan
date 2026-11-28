@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 350 |
-| pass | 348 |
+| rows | 351 |
+| pass | 349 |
 | scoped | 2 |
 | target | 0 |
 | rejected | 0 |
@@ -253,6 +253,7 @@ Status mapping:
 | `map-size` | pass |
 | `map-values` | pass |
 | `map-values-backed-view` | pass |
+| `map-values-custom-contains` | pass |
 | `concurrent-map-values-iterator-gc` | pass |
 | `map-remove` | pass |
 | `map-remove-key-value` | pass |
