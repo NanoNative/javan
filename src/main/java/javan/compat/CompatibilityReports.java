@@ -491,6 +491,7 @@ public final class CompatibilityReports {
             pass("closed-world-constructor-metadata-accessors"),
             pass("closed-world-class-for-name-loader"),
             pass("string-intrinsics"),
+            pass("string-region-matches"),
             pass("non-ascii-string-semantic-rejection"),
             pass("operand-object-compare-temporary-root"),
             pass("operand-field-load-temporary-root"),

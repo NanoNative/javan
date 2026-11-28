@@ -398,6 +398,8 @@ Unicode literals.
 The supported integer and String overloads of `String.indexOf` and `lastIndexOf` accept Unicode
 literals and transport null-receiver and null-argument exceptions within supported handler shapes.
 The bounded `String.indexOf` overloads also transport invalid-range exceptions.
+The case-sensitive `String.regionMatches(int, String, int, int)` compares UTF-16 code units.
+It preserves Java's range results and null-check order, including zero and negative lengths.
 `String.substring` and `String.subSequence` preserve UTF-16 code units and transport null-receiver
 and invalid-range exceptions within supported handler shapes.
 `String.replace(char, char)` preserves UTF-16 code units, returns its receiver if the old character

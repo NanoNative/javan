@@ -724,6 +724,17 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_ends_with_java", List.of(receiver, argument))));
             return;
         }
+        if ("java/lang/String".equals(methodRef.owner()) && "regionMatches".equals(methodRef.name())
+            && "(ILjava/lang/String;II)Z".equals(methodRef.descriptor())) {
+            final IrExpression length = popInt(classFile, method, stack);
+            final IrExpression otherOffset = popInt(classFile, method, stack);
+            final IrExpression other = popObject(classFile, method, stack);
+            final IrExpression offset = popInt(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            pushIntCall(instructions, stack, localDeclarations, "javan_string_region_matches_java",
+                List.of(receiver, offset, other, otherOffset, length));
+            return;
+        }
         if ("java/lang/String".equals(methodRef.owner())
             && "replace".equals(methodRef.name())
             && "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;".equals(methodRef.descriptor())) {

@@ -40,6 +40,17 @@ final class CliUtf16StringIntegrationTest extends CliIntegrationSupport {
             new Comparison("suffix", "value.endsWith(\"b\\ud83d\\ude00\")", "true"),
             new Comparison("suffix-low-half", "value.endsWith(\"\\ude00\")", "true"),
             new Comparison("suffix-high-half", "value.endsWith(\"\\ud83d\")", "false"),
+            new Comparison("region-match", "value.regionMatches(1, \"x\\u20ac\\ud83d\\ude00y\", 1, 3)", "true"),
+            new Comparison("region-case-mismatch", "value.regionMatches(0, \"A\", 0, 1)", "false"),
+            new Comparison("region-low-half", "value.regionMatches(3, \"x\\ude00b\", 1, 2)", "true"),
+            new Comparison("region-high-half-mismatch", "value.regionMatches(2, \"\\ud83e\", 0, 1)", "false"),
+            new Comparison("region-embedded-nul", "new String(new char[]{'a', 0, 'b'}).regionMatches(1, \"x\\0b\", 1, 2)", "true"),
+            new Comparison("region-zero-at-end", "value.regionMatches(7, \"\", 0, 0)", "true"),
+            new Comparison("region-zero-past-end", "value.regionMatches(8, \"\", 0, 0)", "false"),
+            new Comparison("region-right-past-end", "value.regionMatches(0, \"a\", 1, 1)", "false"),
+            new Comparison("region-negative-length", "value.regionMatches(8, \"\", 1, -1)", "true"),
+            new Comparison("region-minimum-length", "value.regionMatches(Integer.MAX_VALUE, \"\", Integer.MAX_VALUE, Integer.MIN_VALUE)", "true"),
+            new Comparison("region-maximum-length", "value.regionMatches(1, \"\", 1, Integer.MAX_VALUE)", "false"),
             new Comparison("find-low-half", "value.indexOf(new String(new char[]{'\\ude00', 'b'}))", "3"),
             new Comparison("find-last-pair", "value.lastIndexOf(new String(new char[]{'\\ud83d', '\\ude00'}))", "5"),
             new Comparison("find-last-low-half", "value.lastIndexOf(String.valueOf('\\ude00'), 4)", "3"),
@@ -95,6 +106,87 @@ final class CliUtf16StringIntegrationTest extends CliIntegrationSupport {
     }
 
     record Comparison(String scenario, String expression, String expected) {
+    }
+
+    @Test
+    void regionMatchesPreservesRangeAndNullCheckOrder() throws Exception {
+        final Path project = project("utf16-region-matches-nulls");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static int mark(int value) { System.out.println(value); return value; }
+                static String other() { System.out.println("other"); return null; }
+                static int compare(String value, int left, String other, int right, int length) {
+                    boolean result;
+                    try { result = value.regionMatches(left, other, right, length); }
+                    catch (NullPointerException expected) { return -1; }
+                    return result ? 1 : 0;
+                }
+                static boolean unchecked(String value) { return value.regionMatches(0, null, 0, 1); }
+                static void checkTransport(String value) {
+                    try { unchecked(value); }
+                    catch (NullPointerException expected) { System.out.println("null argument"); }
+                }
+                static void checkArguments(String value) {
+                    try { value.regionMatches(mark(0), other(), mark(1), mark(2)); }
+                    catch (NullPointerException expected) { System.out.println("null receiver"); }
+                }
+                public static void main(String[] args) {
+                    System.out.println(compare("a", -1, null, 0, 1));
+                    System.out.println(compare("a", 0, null, -1, 1));
+                    System.out.println(compare("a", 2, null, 0, 1));
+                    System.out.println(compare("a", 0, null, Integer.MAX_VALUE, 1));
+                    System.out.println(compare(null, -1, null, -1, 1));
+                    checkArguments(null);
+                    checkTransport("a");
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("0\n0\n0\n-1\n-1\n0\nother\n1\n2\nnull receiver\nnull argument\n");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/utf16-region-matches-nulls").toString()),
+            defaultProcessTimeout(), Map.of("JAVAN_GC_STRESS", "1", "JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void regionMatchesKeepsBothStringsAliveWhileLaterArgumentsAllocate() throws Exception {
+        final Path project = project("utf16-region-matches-argument-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static String receiver() {
+                    System.out.println("receiver");
+                    return new String(new char[]{'a', '\\ud83d', '\\ude00', 'b'});
+                }
+                static String other() {
+                    System.out.println("other");
+                    return new String(new char[]{'x', '\\ud83d', '\\ude00', 'y'});
+                }
+                static int argument(String marker, int size) {
+                    System.out.println(marker);
+                    char[] chars = new char[size];
+                    return new String(chars).length();
+                }
+                public static void main(String[] args) {
+                    System.out.println(receiver().regionMatches(
+                        argument("offset", 1), other(), argument("other offset", 1), argument("length", 2)));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("receiver\noffset\nother\nother offset\nlength\ntrue\n");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/utf16-region-matches-argument-gc").toString()),
+            defaultProcessTimeout(), Map.of("JAVAN_GC_STRESS", "1", "JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
+        assertThat(result.stdout()).isEqualTo(expected);
     }
 
     @Test

@@ -11647,6 +11647,24 @@ final class RuntimeSourceMemorySections {
             return javan_string_ends_with(left, suffix);
         }
 
+        int javan_string_region_matches_java(const char* left, int left_offset, const char* right, int right_offset, int count) {
+            if (left == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            if (left_offset < 0 || right_offset < 0 || left_offset > (long long) javan_string_length(left) - count) {
+                return 0;
+            }
+            if (right == NULL) {
+                javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return 0;
+            }
+            if (right_offset > (long long) javan_string_length(right) - count) {
+                return 0;
+            }
+            return count <= 0 || javan_string_region_matches(left, left_offset, right, right_offset, count);
+        }
+
         int javan_string_starts_with(const char* left, const char* prefix) {
             if (left == NULL || prefix == NULL) {
                 javan_panic("null string");

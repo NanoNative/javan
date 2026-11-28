@@ -867,6 +867,9 @@ public final class BytecodeToIR {
         result.put("javan_string_ends_with_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "endsWith", "(Ljava/lang/String;)Z"
         )));
+        result.put("javan_string_region_matches_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
+            "java/lang/String", "regionMatches", "(ILjava/lang/String;II)Z"
+        )));
         result.put("javan_string_equals_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/lang/String", "equals", "(Ljava/lang/Object;)Z"
         )));
