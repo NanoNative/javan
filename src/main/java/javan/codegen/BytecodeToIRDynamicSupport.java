@@ -459,7 +459,10 @@ final class BytecodeToIRDynamicSupport {
                     final javan.classfile.FieldInfo field = component.field();
                     parts.add(IrExpression.stringLiteral((index++ == 0 ? "" : ", ") + field.name() + "="));
                     final IrExpression value;
-                    if (RecordObjectMethodsCall.stringReferencePlan(classes, component.shape()).isPresent()) {
+                    if (field.descriptor().startsWith("[")) {
+                        value = IrExpression.objectCall("javan_printable_object_string",
+                            List.of(IrExpression.objectField(classFile.name(), field.name(), receiver)));
+                    } else if (RecordObjectMethodsCall.stringReferencePlan(classes, component.shape()).isPresent()) {
                         final String converted = newObjectLocal(localDeclarations);
                         instructions.add(IrInstruction.assignObject(converted, IrExpression.objectCall(BytecodeToIR.OBJECT_STRING_DISPATCH,
                             List.of(IrExpression.objectField(classFile.name(), field.name(), receiver)))));

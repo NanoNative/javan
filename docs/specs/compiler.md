@@ -364,7 +364,7 @@ name and virtual `hashCode`, including identity hashing when no override exists.
 types do not cause unrelated overrides to be retained and may still fail at runtime when no implementation was retained.
 Array values converted to strings use their runtime array class name and identity hash, including
 cloned and copied arrays.
-Generated record `toString` supports primitive, boxed primitive and `String` components, plus
+Generated record `toString` supports primitive, boxed primitive, `String` and array components, plus
 application reference components with a proven final receiver and supported string conversion.
 Null values, conversion failures and component evaluation order are preserved. Record component
 names and source-level class names come from class-file metadata. Other component shapes remain
