@@ -4692,6 +4692,46 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanRemovesMapValuesWithCustomEquality() throws Exception {
+        final Path project = tempDir.resolve("selfhost-map-values-custom-remove");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.LinkedHashMap;
+            public final class Main {
+                static final class Value {
+                    final int number;
+                    Value(int number) { this.number = number; }
+                    public boolean equals(Object other) { return other instanceof Value value && number == value.number; }
+                }
+                public static void main(String[] args) {
+                    var map = new LinkedHashMap<String, Value>();
+                    map.put("a", new Value(1)); map.put("b", new Value(1));
+                    System.out.println(map.values().remove(new Value(1)));
+                    System.out.println(map.containsKey("a")); System.out.println(map.containsKey("b"));
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-map-values-custom-remove"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-map-values-custom-remove").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanSearchesMapValuesWithCustomEquality() throws Exception {
         final Path project = tempDir.resolve("selfhost-map-values-custom-contains");
         final Path classes = project.resolve("classes");

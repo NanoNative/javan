@@ -184,15 +184,17 @@ native map entries and does not yet support application-defined `Map.Entry` impl
 `containsKey`, `containsValue`, `get` and `getOrDefault` reject null queries on maps created by
 `Map.of`, `Map.ofEntries` and `Map.copyOf`, including unmodifiable views.
 Supported `Map.keySet()` views remain connected to their map. Reads and supported removals reflect
-changes in either direction, and concurrent map iterators remove the key they returned. Application-defined
-key comparisons in these views are not yet supported and raise `UnsupportedOperationException` before
+changes in either direction, and concurrent map iterators remove the key they returned, including
+a subsequently reinserted equal supported key. Application-defined key comparisons in these views are not yet supported and raise `UnsupportedOperationException` before
 bulk operations modify the map. Supported `Map.values()` views also remain connected to their map.
 Their iterators remove their returned entry, including when values repeat. Concurrent map iterators
 retain and safely return a value even when its mapping is removed during garbage collection.
-`values().contains` uses a statically reachable application-defined query `equals` method outside
-the runtime lock, retains compared values during concurrent collection, and preserves identity matches
-and transported exceptions. Other application-defined value comparisons remain unsupported and raise
-`UnsupportedOperationException` before bulk operations modify the map. `HashMap` and `LinkedHashMap` provide backed `entrySet()`
+`values().contains` and `values().remove` use a statically reachable application-defined query
+`equals` method outside the runtime lock and retain compared values during concurrent collection.
+Contains preserves identity matches. Remove uses the view iterator, including its exception,
+mutation and concurrency behavior. Concurrent-map iterator removal still rejects application-defined
+keys. Application-defined value comparisons in bulk operations remain unsupported and raise
+`UnsupportedOperationException` before the map is modified. `HashMap` and `LinkedHashMap` provide backed `entrySet()`
 views, including through unmodifiable map wrappers. Reads reflect current mappings. Supported
 removals compare the key and value, and iterator removal uses the returned entry's key. Entries
 returned by mutable map iterators accept `Map.Entry.setValue`, including null values, and return

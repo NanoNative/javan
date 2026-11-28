@@ -14107,11 +14107,42 @@ final class RuntimeSourceMemorySections {
             if ((owner->view_flags & JAVAN_LIST_VIEW_MAP) != 0) {
                 javan_object_map* map = (javan_object_map*) owner->backing;
                 int result = 0;
+                javan_collection_equals_fn custom_equals = NULL;
+                if ((owner->view_flags & JAVAN_LIST_VIEW_MAP_VALUES) != 0 && element != NULL) {
+                    javan_collection_equals_resolver_fn resolver = atomic_load_explicit(
+                        &javan_collection_equals_resolver, memory_order_acquire
+                    );
+                    custom_equals = resolver == NULL ? NULL : resolver(element);
+                }
                 if (list->immutable != 0 || (map->view_flags & JAVAN_MAP_VIEW_UNMODIFIABLE) != 0) {
                     javan_pending_throw("java/lang/UnsupportedOperationException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 } else if (element == NULL && javan_map_has_concurrent_backing(map) != 0
                     && (owner->view_flags & JAVAN_LIST_VIEW_MAP_VALUES) == 0) {
                     javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                } else if (custom_equals != NULL) {
+                    void* list_root = value;
+                    void* element_root = element;
+                    void* iterator_root = NULL;
+                    void* current = NULL;
+                    void** roots[] = { &list_root, &element_root, &iterator_root, &current };
+                    javan_root_frame_push(roots, 4);
+                    iterator_root = javan_list_iterator(list_root);
+                    javan_runtime_lock_leave();
+                    int has_next = javan_iterator_has_next(iterator_root);
+                    while (has_next) {
+                        javan_iterator_next_into(&current, iterator_root);
+                        if (javan_pending_has()) break;
+                        has_next = javan_iterator_has_next(iterator_root);
+                        int equal = custom_equals(element_root, current);
+                        if (javan_pending_has()) break;
+                        if (equal != 0) {
+                            javan_list_iterator_remove(iterator_root);
+                            result = javan_pending_has() == 0;
+                            break;
+                        }
+                    }
+                    javan_root_frame_pop(roots);
+                    return result;
                 } else if (!javan_map_view_check_query(owner->view_flags, element)) {
                     javan_runtime_lock_leave();
                     return 0;
@@ -14731,7 +14762,9 @@ final class RuntimeSourceMemorySections {
                         javan_string_from("application-defined map key queries are not supported in key views"),
                         NULL, NULL, NULL, -1, -1, NULL);
                 } else {
-                    int removed = javan_map_find_identity(map, iterator->last_value);
+                    int removed = javan_map_has_concurrent_backing(map) != 0
+                        ? javan_map_find(map, iterator->last_value)
+                        : javan_map_find_identity(map, iterator->last_value);
                     if (removed >= 0) {
                         javan_map_remove_at_index(map, removed);
                         if (javan_pending_has() == 0 && removed < iterator->index) iterator->index--;

@@ -2666,7 +2666,7 @@ public final class JdkCallSupport {
         }
         if (isCollectionObjectRemoval(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException",
-                "java/lang/ArrayIndexOutOfBoundsException");
+                "java/lang/ArrayIndexOutOfBoundsException", "java/util/ConcurrentModificationException");
         }
         if (isCollectionObjectAddition(methodRef) || isListEndpointAdd(methodRef)
             || isCollectionClear(methodRef) || isMapClear(methodRef)

@@ -4534,13 +4534,13 @@ final class JdkCallSupportTest {
     }
 
     @Test
-    void collectionRemoveObjectTransportsNullImmutableAndBoundsFailures() {
+    void collectionRemoveObjectTransportsNullImmutableBoundsAndConcurrentModificationFailures() {
         for (final String owner : List.of("java/util/List", "java/util/ArrayList", "java/util/Collection",
             "java/util/Set", "java/util/HashSet", "java/util/LinkedHashSet")) {
             assertThat(JdkCallSupport.transportedPlatformThrowableTypes(new javan.classfile.MethodRef(
                 owner, "remove", "(Ljava/lang/Object;)Z"
             ))).containsExactly("java/lang/NullPointerException", "java/lang/UnsupportedOperationException",
-                "java/lang/ArrayIndexOutOfBoundsException");
+                "java/lang/ArrayIndexOutOfBoundsException", "java/util/ConcurrentModificationException");
         }
     }
 
