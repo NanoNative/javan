@@ -2274,6 +2274,17 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies the object-to-string conversion used by string concatenation.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the method converts an object to a string
+     */
+    public static boolean isStringValueOfObject(final MethodRef methodRef) {
+        return "java/lang/String".equals(methodRef.owner()) && "valueOf".equals(methodRef.name())
+            && "(Ljava/lang/Object;)Ljava/lang/String;".equals(methodRef.descriptor());
+    }
+
+    /**
      * Identifies bulk containment checks on supported collections.
      *
      * @param methodRef referenced JDK method

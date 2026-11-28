@@ -54,6 +54,7 @@ import java.util.Set;
  * Lowers the initial supported bytecode subset to javan IR.
  */
 public final class BytecodeToIR {
+    static final String OBJECT_STRING_DISPATCH = "javan_dispatch_string_value_of_object";
     static final String COLLECTION_EQUALS_DISPATCH = "javan_dispatch_collection_equals";
     static final String UNAVAILABLE_COLLECTION_EQUALS = "javan_unavailable_collection_equals";
     static final String UNAVAILABLE_MAP_EQUALS = "javan_unavailable_map_equals";
@@ -271,6 +272,18 @@ public final class BytecodeToIR {
                 )
             );
         }
+        if (usesStringValueOfObject(classes, reachableMethods)) {
+            final MethodRef toString = new MethodRef("java/lang/Object", "toString", "()Ljava/lang/String;");
+            final Set<String> reachable = new LinkedHashSet<>();
+            for (final EntryPoint reachableMethod : reachableMethods) reachable.add(reachableMethod.display());
+            final List<EntryPoint> targets = new ArrayList<>();
+            for (final EntryPoint receiver : virtualTargets(classes, toString, callGraph.instantiatedTypes())) {
+                final Optional<EntryPoint> implementation = lowerableResolvedVirtualTarget(classes, receiver.className(), toString);
+                if (implementation.isPresent() && reachable.contains(implementation.orElseThrow().display())) targets.add(receiver);
+            }
+            dispatches.putIfAbsent(OBJECT_STRING_DISPATCH, BytecodeToIRDynamicSupport.dispatch(
+                classes, OBJECT_STRING_DISPATCH, MethodDescriptor.parse(toString.descriptor()), targets));
+        }
         if (usesCollectionEqualitySearch(classes, reachableMethods)) {
             final MethodRef equals = new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z");
             final Set<String> reachable = new LinkedHashSet<>();
@@ -456,6 +469,18 @@ public final class BytecodeToIR {
                 );
             }
         }
+    }
+
+    private static boolean usesStringValueOfObject(final Map<String, ClassFile> classes, final List<EntryPoint> reachableMethods) {
+        for (final EntryPoint entry : reachableMethods) {
+            final ClassFile owner = classes.get(entry.className());
+            final Optional<MethodInfo> method = owner == null ? Optional.empty() : owner.method(entry.methodName(), entry.descriptor());
+            if (method.isEmpty() || method.orElseThrow().code().isEmpty()) continue;
+            for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
+                if (instruction.methodRef().isPresent() && JdkCallSupport.isStringValueOfObject(instruction.methodRef().orElseThrow())) return true;
+            }
+        }
+        return false;
     }
 
     private static boolean usesCollectionEqualitySearch(

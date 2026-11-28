@@ -341,6 +341,31 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanCallsTheProvenObjectToString() throws Exception {
+        final Path project = project("selfhost-object-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static final class Value { public String toString() { return "selected"; } }
+                static final class Unrelated {
+                    String id() { return "unrelated"; }
+                    public String toString() { System.setProperty("unused", "never"); return "unused"; }
+                }
+                public static void main(String[] args) {
+                    System.out.println(new Unrelated().id());
+                    Object value = new Value();
+                    System.out.println("value:" + value);
+                }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()), Duration.ofSeconds(60));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-object-string").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("unrelated\nvalue:selected\n");
+    }
+
+    @Test
     void nativeBuiltJavanConvertsBoxedValuesDuringStringConcatenation() throws Exception {
         final Path project = project("selfhost-boxed-string-concat");
         writeJava(project, "com.acme.Main", """

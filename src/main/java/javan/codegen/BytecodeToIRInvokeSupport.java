@@ -3149,10 +3149,8 @@ final class BytecodeToIRInvokeSupport {
         if ("java/lang/String".equals(methodRef.owner())
             && "valueOf".equals(methodRef.name())
             && "(Ljava/lang/Object;)Ljava/lang/String;".equals(methodRef.descriptor())) {
-            stack.add(StackValue.objectExpression(IrExpression.objectCall(
-                "javan_printable_object_string",
-                List.of(popPrintableObject(classFile, method, instruction, stack))
-            )));
+            pushObjectCall(instructions, stack, localDeclarations, BytecodeToIR.OBJECT_STRING_DISPATCH,
+                List.of(popPrintableObject(classFile, method, instruction, stack)));
             return true;
         }
         if ("java/lang/String".equals(methodRef.owner())

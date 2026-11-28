@@ -21824,7 +21824,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersStringValueOfObjectToPrintableRuntimeCall() {
+    void lowersStringValueOfObjectToRootedObjectDispatch() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -21837,10 +21837,9 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_printable_object_string",
-                List.of(IrExpression.objectLocal("arg0"))
-            ))
+            IrInstruction.assignObject("object0", IrExpression.objectCall(
+                "javan_dispatch_string_value_of_object", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 

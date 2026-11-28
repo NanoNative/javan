@@ -117,7 +117,7 @@ public final class ReachabilityAnalyzer {
         List<EntryPoint> serviceRoots = List.of();
         List<String> serviceTypes = List.of();
         boolean serviceRootsResolved = false;
-        Map<String, FunctionValueFlow.CollectionQuery> collectionQueries = Map.of();
+        Map<String, FunctionValueFlow.ObjectUse> objectUses = Map.of();
         final FunctionValueFlow.MethodFlowCache methodFlows = new FunctionValueFlow.MethodFlowCache();
         final ReflectionDeclaration.Result declaration = ReflectionDeclaration.analyze(classes);
         final List<EntryPoint> reflectionRoots = new ArrayList<>();
@@ -133,7 +133,7 @@ public final class ReachabilityAnalyzer {
             final List<EntryPoint> roots = new ArrayList<>(entries);
             roots.addAll(reflectionRoots);
             roots.addAll(serviceRoots);
-            graph = analyzePass(classes, roots, declaredExternalLeaves, instantiatedTypes, collectionQueries,
+            graph = analyzePass(classes, roots, declaredExternalLeaves, instantiatedTypes, objectUses,
                 methodFlows, declaration, reflectionClasses, reflectionMethodLookups, false);
             if (!serviceProviders.isEmpty()
                 && !serviceRootsResolved
@@ -168,18 +168,18 @@ public final class ReachabilityAnalyzer {
                     continue;
                 }
             }
-            final Map<String, FunctionValueFlow.CollectionQuery> next = new HashMap<>(collectionQueries);
-            final Map<String, FunctionValueFlow.CollectionQuery> discoveredQueries =
-                FunctionValueFlow.analyzeCollectionQueries(classes, graph, declaredExternalLeaves, roots, methodFlows);
+            final Map<String, FunctionValueFlow.ObjectUse> next = new HashMap<>(objectUses);
+            final Map<String, FunctionValueFlow.ObjectUse> discoveredQueries =
+                FunctionValueFlow.analyzeObjectUses(classes, graph, declaredExternalLeaves, roots, methodFlows);
             boolean queriesChanged = false;
-            for (final Map.Entry<String, FunctionValueFlow.CollectionQuery> query : discoveredQueries.entrySet()) {
-                final FunctionValueFlow.CollectionQuery previous = next.get(query.getKey());
-                final FunctionValueFlow.CollectionQuery current = query.getValue();
+            for (final Map.Entry<String, FunctionValueFlow.ObjectUse> query : discoveredQueries.entrySet()) {
+                final FunctionValueFlow.ObjectUse previous = next.get(query.getKey());
+                final FunctionValueFlow.ObjectUse current = query.getValue();
                 if (previous == null) {
                     next.put(query.getKey(), current);
                     queriesChanged = true;
                 } else if (!previous.unknown() && current.unknown()) {
-                    next.put(query.getKey(), FunctionValueFlow.CollectionQuery.unavailable());
+                    next.put(query.getKey(), FunctionValueFlow.ObjectUse.unavailable());
                     queriesChanged = true;
                 } else if (!previous.unknown()) {
                     final List<String> types = new ArrayList<>(previous.types());
@@ -191,17 +191,17 @@ public final class ReachabilityAnalyzer {
                         }
                     }
                     if (typesChanged || (!previous.bounded() && current.bounded())) {
-                        next.put(query.getKey(), new FunctionValueFlow.CollectionQuery(
+                        next.put(query.getKey(), new FunctionValueFlow.ObjectUse(
                             types, previous.bounded() || current.bounded(), false));
                         queriesChanged = true;
                     }
                 }
             }
             if (!queriesChanged) {
-                return analyzePass(classes, roots, declaredExternalLeaves, instantiatedTypes, collectionQueries,
+                return analyzePass(classes, roots, declaredExternalLeaves, instantiatedTypes, objectUses,
                     methodFlows, declaration, reflectionClasses, reflectionMethodLookups, true);
             }
-            collectionQueries = Map.copyOf(next);
+            objectUses = Map.copyOf(next);
         }
     }
 
@@ -380,7 +380,7 @@ public final class ReachabilityAnalyzer {
         final List<EntryPoint> entries,
         final List<EntryPoint> declaredExternalLeaves,
         final InstantiatedTypeAnalysis.Result instantiatedTypes,
-        final Map<String, FunctionValueFlow.CollectionQuery> collectionQueries,
+        final Map<String, FunctionValueFlow.ObjectUse> objectUses,
         final FunctionValueFlow.MethodFlowCache methodFlows,
         final ReflectionDeclaration.Result declaration,
         final Set<String> reflectionClasses,
@@ -389,7 +389,7 @@ public final class ReachabilityAnalyzer {
     ) {
         final MethodRefFactsCache methodRefFacts = new MethodRefFactsCache(classes);
         final EntryPointPool entryPoints = new EntryPointPool();
-        final DispatchTargetsCache dispatchTargets = new DispatchTargetsCache(classes, entryPoints, instantiatedTypes, collectionQueries);
+        final DispatchTargetsCache dispatchTargets = new DispatchTargetsCache(classes, entryPoints, instantiatedTypes, objectUses);
         final List<EntryPoint> roots = new ArrayList<>(entries.size());
         for (final EntryPoint entry : entries) {
             roots.add(entryPoints.entry(entry.className(), entry.methodName(), entry.descriptor()));
@@ -828,7 +828,7 @@ public final class ReachabilityAnalyzer {
         private final Map<String, ClassFile> classes;
         private final EntryPointPool entryPoints;
         private final InstantiatedTypeAnalysis.Result instantiatedTypes;
-        private final Map<String, FunctionValueFlow.CollectionQuery> collectionQueries;
+        private final Map<String, FunctionValueFlow.ObjectUse> objectUses;
         private final Map<String, List<EntryPoint>> interfaceTargets = new HashMap<>();
         private final Map<String, List<EntryPoint>> virtualTargets = new HashMap<>();
         private final Map<String, Boolean> instantiatedReceivers = new HashMap<>();
@@ -837,12 +837,12 @@ public final class ReachabilityAnalyzer {
             final Map<String, ClassFile> classes,
             final EntryPointPool entryPoints,
             final InstantiatedTypeAnalysis.Result instantiatedTypes,
-            final Map<String, FunctionValueFlow.CollectionQuery> collectionQueries
+            final Map<String, FunctionValueFlow.ObjectUse> objectUses
         ) {
             this.classes = classes;
             this.entryPoints = entryPoints;
             this.instantiatedTypes = instantiatedTypes;
-            this.collectionQueries = collectionQueries;
+            this.objectUses = objectUses;
         }
 
         private List<EntryPoint> interfaceTargets(final MethodRef target) {
@@ -878,12 +878,12 @@ public final class ReachabilityAnalyzer {
         }
 
         private boolean hasKnownCollectionSite(final String site) {
-            final FunctionValueFlow.CollectionQuery query = collectionQueries.get(site);
+            final FunctionValueFlow.ObjectUse query = objectUses.get(site);
             return query != null && !query.unknown();
         }
 
         private boolean hasCollectionSite(final String site) {
-            return collectionQueries.containsKey(site);
+            return objectUses.containsKey(site);
         }
 
         private List<EntryPoint> collectionTargets(final EntryPoint current, final Instruction instruction) {
@@ -891,11 +891,11 @@ public final class ReachabilityAnalyzer {
         }
 
         private List<EntryPoint> collectionTargets(final EntryPoint current, final Instruction instruction, final MethodRef member) {
-            return collectionTargets(instruction, member, FunctionValueFlow.collectionSiteKey(current, instruction));
+            return collectionTargets(instruction, member, FunctionValueFlow.objectUseSiteKey(current, instruction));
         }
 
         private List<EntryPoint> collectionTargets(final Instruction instruction, final MethodRef member, final String site) {
-            final FunctionValueFlow.CollectionQuery provenance = collectionQueries.get(site);
+            final FunctionValueFlow.ObjectUse provenance = objectUses.get(site);
             if (provenance == null) {
                 return List.of();
             }
@@ -904,7 +904,8 @@ public final class ReachabilityAnalyzer {
                     && (JdkCallSupport.isCollectionObjectAddition(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isMapKeyOperation(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isMapMultiEntryFactory(instruction.methodRef().orElseThrow())
-                        || JdkCallSupport.isMapEntryArrayFactory(instruction.methodRef().orElseThrow()))) {
+                        || JdkCallSupport.isMapEntryArrayFactory(instruction.methodRef().orElseThrow())
+                        || JdkCallSupport.isStringValueOfObject(instruction.methodRef().orElseThrow()))) {
                     return List.of();
                 }
                 return virtualTargets(member);
@@ -1469,6 +1470,13 @@ public final class ReachabilityAnalyzer {
             addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             return;
         }
+        if (instruction.opcode() == 184 && JdkCallSupport.isStringValueOfObject(target)) {
+            final MethodRef toString = new MethodRef("java/lang/Object", "toString", "()Ljava/lang/String;");
+            final List<EntryPoint> targetMethods = dispatchTargets.collectionTargets(current, instruction, toString);
+            enqueueAll(work, workSet, targetMethods);
+            addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            return;
+        }
         if (instruction.opcode() == 182 && "java/lang/Object".equals(target.owner()) && "equals".equals(target.name())
             && "(Ljava/lang/Object;)Z".equals(target.descriptor())) {
             final List<EntryPoint> targetMethods = dispatchTargets.virtualTargets(target);
@@ -1505,7 +1513,7 @@ public final class ReachabilityAnalyzer {
                     customHash.addAll(dispatchTargets.collectionTargets(instruction, hash, site));
                 }
             } else if (JdkCallSupport.isMapEntryArrayFactory(target)) {
-                final String arraySite = FunctionValueFlow.collectionSiteKey(current, instruction);
+                final String arraySite = FunctionValueFlow.objectUseSiteKey(current, instruction);
                 if (dispatchTargets.hasKnownCollectionSite(arraySite)) {
                     int key = 0;
                     String site = FunctionValueFlow.mapKeySiteKey(current, instruction, key);

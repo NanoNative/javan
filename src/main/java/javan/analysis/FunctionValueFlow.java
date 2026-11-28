@@ -343,19 +343,19 @@ public final class FunctionValueFlow {
         );
     }
 
-    record CollectionQuery(List<String> types, boolean bounded, boolean unknown) {
-        CollectionQuery {
+    record ObjectUse(List<String> types, boolean bounded, boolean unknown) {
+        ObjectUse {
             final Provenance normalized = new Provenance(types, unknown);
             types = normalized.types();
             unknown = normalized.unknown();
         }
 
-        static CollectionQuery unavailable() {
-            return new CollectionQuery(List.of(), false, true);
+        static ObjectUse unavailable() {
+            return new ObjectUse(List.of(), false, true);
         }
     }
 
-    static Map<String, CollectionQuery> analyzeCollectionQueries(
+    static Map<String, ObjectUse> analyzeObjectUses(
         final Map<String, ClassFile> classes,
         final CallGraph graph,
         final List<EntryPoint> declaredExternalLeaves,
@@ -363,12 +363,12 @@ public final class FunctionValueFlow {
         final MethodFlowCache methodFlows
     ) {
         final List<EntryPoint> reachableMethods = graph.reachableMethods();
-        if (!containsTrackedUse(classes, reachableMethods, CallbackKind.COLLECTION_QUERY)) {
+        if (!containsTrackedUse(classes, reachableMethods, CallbackKind.OBJECT_USE)) {
             return Map.of();
         }
-        final Map<String, CollectionQuery> result = new LinkedHashMap<>(
+        final Map<String, ObjectUse> result = new LinkedHashMap<>(
             new Engine(classes, reachableMethods, declaredExternalLeaves, roots, graph.callEdges(),
-                CallbackKind.COLLECTION_QUERY, methodFlows).analyzeQueries()
+                CallbackKind.OBJECT_USE, methodFlows).analyzeObjectUses()
         );
         for (final EntryPoint entry : reachableMethods) {
             final ClassFile owner = classes.get(entry.className());
@@ -384,14 +384,15 @@ public final class FunctionValueFlow {
                         || JdkCallSupport.isMapMultiEntryFactory(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isMapEntryArrayFactory(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isCollectionContainsAll(instruction.methodRef().orElseThrow())
-                        || JdkCallSupport.isCollectionFilterAll(instruction.methodRef().orElseThrow()))) {
+                        || JdkCallSupport.isCollectionFilterAll(instruction.methodRef().orElseThrow())
+                        || JdkCallSupport.isStringValueOfObject(instruction.methodRef().orElseThrow()))) {
                     if (JdkCallSupport.isMapMultiEntryFactory(instruction.methodRef().orElseThrow())) {
                         final int count = JdkCallSupport.mapFixedEntryCount(instruction.methodRef().orElseThrow());
                         for (int key = 0; key < count; key++) {
-                            result.putIfAbsent(mapKeySiteKey(entry, instruction, key), CollectionQuery.unavailable());
+                            result.putIfAbsent(mapKeySiteKey(entry, instruction, key), ObjectUse.unavailable());
                         }
                     } else {
-                        result.putIfAbsent(collectionSiteKey(entry, instruction), CollectionQuery.unavailable());
+                        result.putIfAbsent(objectUseSiteKey(entry, instruction), ObjectUse.unavailable());
                     }
                 }
             }
@@ -531,7 +532,7 @@ public final class FunctionValueFlow {
         private final Set<FieldRef> finalCallbackFields = new LinkedHashSet<>();
         private final Map<FieldRef, Fact> fieldFacts = new LinkedHashMap<>();
         private final Map<Site, Fact> callbackFacts = new LinkedHashMap<>();
-        private final Map<String, Fact> collectionFacts = new LinkedHashMap<>();
+        private final Map<String, Fact> objectUseFacts = new LinkedHashMap<>();
         private final Map<String, List<EntryPoint>> unknownDynamicTargets = new HashMap<>();
         private final Map<String, List<EntryPoint>> dynamicCallEdges = new HashMap<>();
         private final Map<String, Boolean> callbackTypeCache = new HashMap<>();
@@ -576,12 +577,12 @@ public final class FunctionValueFlow {
             return new FlowResult(Map.copyOf(kinds), Map.copyOf(provenance));
         }
 
-        private Map<String, CollectionQuery> analyzeQueries() {
+        private Map<String, ObjectUse> analyzeObjectUses() {
             runAnalysis();
-            final Map<String, CollectionQuery> result = new LinkedHashMap<>();
-            for (final Map.Entry<String, Fact> entry : collectionFacts.entrySet()) {
+            final Map<String, ObjectUse> result = new LinkedHashMap<>();
+            for (final Map.Entry<String, Fact> entry : objectUseFacts.entrySet()) {
                 final Fact fact = entry.getValue();
-                result.put(entry.getKey(), new CollectionQuery(fact.types(),
+                result.put(entry.getKey(), new ObjectUse(fact.types(),
                     (fact.kinds() & BOUNDED) != 0, fact.unknown() || fact.kinds() == 0));
             }
             return Map.copyOf(result);
@@ -609,7 +610,7 @@ public final class FunctionValueFlow {
                 final Fact[] locals = facts(method.code().orElseThrow().maxLocals());
                 if (!method.isStatic() && locals.length > 0) {
                     locals[0] = Fact.unsafe();
-                    if (callbackKind != CallbackKind.COLLECTION_QUERY
+                    if (callbackKind != CallbackKind.OBJECT_USE
                         && isClosedWorldConcreteCallbackClass(entryPoint.className())) {
                         locals[0] = Fact.concrete(entryPoint.className());
                     }
@@ -620,7 +621,7 @@ public final class FunctionValueFlow {
                 parameterFacts.put(entryPoint.display(), locals);
                 returnFacts.put(entryPoint.display(), Fact.none());
             }
-            if (callbackKind == CallbackKind.COLLECTION_QUERY) {
+            if (callbackKind == CallbackKind.OBJECT_USE) {
                 return;
             }
             for (final ClassFile classFile : classes.values()) {
@@ -722,7 +723,7 @@ public final class FunctionValueFlow {
             }
             final Fact[] initial = java.util.Arrays.copyOf(source, maxLocals);
             final Optional<MethodInfo> entryMethod = method(entryPoint);
-            if (callbackKind == CallbackKind.COLLECTION_QUERY && entryMethod.isPresent()) {
+            if (callbackKind == CallbackKind.OBJECT_USE && entryMethod.isPresent()) {
                 final MethodInfo entry = entryMethod.orElseThrow();
                 final String descriptor = entry.descriptor();
                 int index = 1;
@@ -765,7 +766,7 @@ public final class FunctionValueFlow {
             final int opcode = instruction.opcode();
             // Only track fresh arrays through straight-line locals and operand stacks.
             // Escapes, opaque operations and divergent array facts lose the proof.
-            if (callbackKind == CallbackKind.COLLECTION_QUERY
+            if (callbackKind == CallbackKind.OBJECT_USE
                 && (opcode >= 90 && opcode <= 95 || opcode >= 168 && opcode <= 177
                     || opcode == 179 || opcode == 181 || opcode == 186 || opcode >= 191 && opcode <= 197
                     || opcode >= 200 && opcode <= 201)) {
@@ -775,11 +776,11 @@ public final class FunctionValueFlow {
                 return next(index, bytecode);
             }
             if (opcode >= 1 && opcode <= 20) {
-                final boolean platformValue = callbackKind == CallbackKind.COLLECTION_QUERY
+                final boolean platformValue = callbackKind == CallbackKind.OBJECT_USE
                     && (opcode == 1 || instruction.stringValue().isPresent());
                 state.stack().add(new Slot(platformValue ? Fact.platform() : Fact.unsafe(), opcode == 9 || opcode == 10 || opcode == 14
                     || opcode == 15 || opcode == 20 ? 2 : 1,
-                    callbackKind == CallbackKind.COLLECTION_QUERY ? inlineArrayLength(instruction) : -1));
+                    callbackKind == CallbackKind.OBJECT_USE ? inlineArrayLength(instruction) : -1));
                 return next(index, bytecode);
             }
             if (opcode >= 21 && opcode <= 45) {
@@ -797,17 +798,17 @@ public final class FunctionValueFlow {
                 return next(index, bytecode);
             }
             if (opcode >= 79 && opcode <= 86) {
-                if (callbackKind == CallbackKind.COLLECTION_QUERY) state.clearFreshEmptySets();
+                if (callbackKind == CallbackKind.OBJECT_USE) state.clearFreshEmptySets();
                 final Slot value = pop(state);
                 final Slot arrayIndex = pop(state);
                 final Slot array = pop(state);
-                if (callbackKind == CallbackKind.COLLECTION_QUERY && opcode == 83
+                if (callbackKind == CallbackKind.OBJECT_USE && opcode == 83
                     && (array.fact().kinds() & INLINE_ENTRY_ARRAY) != 0
                     && (value.fact().kinds() & INLINE_ENTRY_ARRAY) == 0) {
                     final Fact key = (value.fact().kinds() & ENTRY_VALUE) != 0
                         && value.fact().elements() != null ? value.fact().elements() : Fact.unsafe();
                     state.updateInlineEntryArray(array.fact(), key, arrayIndex.literal());
-                } else if (callbackKind == CallbackKind.COLLECTION_QUERY) {
+                } else if (callbackKind == CallbackKind.OBJECT_USE) {
                     state.clearInlineEntryArrays();
                 }
                 return next(index, bytecode);
@@ -882,7 +883,7 @@ public final class FunctionValueFlow {
                 return next(index, bytecode);
             }
             if (opcode == 186) {
-                if (callbackKind == CallbackKind.COLLECTION_QUERY) state.clearFreshEmptySets();
+                if (callbackKind == CallbackKind.OBJECT_USE) state.clearFreshEmptySets();
                 dynamic(entryPoint, method, instruction, state);
                 return next(index, bytecode);
             }
@@ -901,7 +902,7 @@ public final class FunctionValueFlow {
                     platform = Fact.platform();
                 }
                 state.stack().add(new Slot(
-                    callbackKind == CallbackKind.COLLECTION_QUERY && className.startsWith("java/")
+                    callbackKind == CallbackKind.OBJECT_USE && className.startsWith("java/")
                         ? platform
                         : isClosedWorldConcreteCallbackClass(className)
                         ? Fact.concrete(className)
@@ -912,14 +913,14 @@ public final class FunctionValueFlow {
             }
             if (opcode == 188 || opcode == 189) {
                 pop(state);
-                final boolean multiEntryArray = callbackKind == CallbackKind.COLLECTION_QUERY && opcode == 189
+                final boolean multiEntryArray = callbackKind == CallbackKind.OBJECT_USE && opcode == 189
                     && instruction.className().isPresent()
                     && "java/util/Map$Entry".equals(instruction.className().orElseThrow())
                     && index > 0 && inlineArrayLength(bytecode.get(index - 1)) > 1;
                 if (multiEntryArray) state.inlineEntryArrays = true;
                 state.stack().add(new Slot(multiEntryArray
                     ? new Fact(PLATFORM | INLINE_ENTRY_ARRAY, List.of(), false, null)
-                    : callbackKind == CallbackKind.COLLECTION_QUERY ? Fact.platform() : Fact.unsafe(), 1));
+                    : callbackKind == CallbackKind.OBJECT_USE ? Fact.platform() : Fact.unsafe(), 1));
                 return next(index, bytecode);
             }
             if (opcode == 190) {
@@ -955,7 +956,7 @@ public final class FunctionValueFlow {
                 for (int count = 0; count < dimensions; count++) {
                     pop(state);
                 }
-                state.stack().add(new Slot(callbackKind == CallbackKind.COLLECTION_QUERY
+                state.stack().add(new Slot(callbackKind == CallbackKind.OBJECT_USE
                     ? Fact.platform() : Fact.unsafe(), 1));
                 return next(index, bytecode);
             }
@@ -988,7 +989,7 @@ public final class FunctionValueFlow {
                 return;
             }
             if (instruction.opcode() == 179) {
-                if (callbackKind == CallbackKind.COLLECTION_QUERY) state.clearFreshEmptySets();
+                if (callbackKind == CallbackKind.OBJECT_USE) state.clearFreshEmptySets();
                 final Slot value = pop(state);
                 addFieldFact(field, value.fact());
                 return;
@@ -998,14 +999,14 @@ public final class FunctionValueFlow {
                 state.stack().add(fieldValue(entryPoint, field, type));
                 return;
             }
-            if (callbackKind == CallbackKind.COLLECTION_QUERY) state.clearFreshEmptySets();
+            if (callbackKind == CallbackKind.OBJECT_USE) state.clearFreshEmptySets();
             final Slot value = pop(state);
             pop(state);
             addFieldFact(field, value.fact());
         }
 
         private Slot fieldValue(final EntryPoint reader, final FieldRef field, final ValueType type) {
-            if (callbackKind == CallbackKind.COLLECTION_QUERY) {
+            if (callbackKind == CallbackKind.OBJECT_USE) {
                 return new Slot(type.reference() && platformValue(field.descriptor())
                     ? Fact.platform() : Fact.unsafe(), type.width());
             }
@@ -1017,7 +1018,7 @@ public final class FunctionValueFlow {
         }
 
         private void addFieldFact(final FieldRef field, final Fact fact) {
-            if (callbackKind == CallbackKind.COLLECTION_QUERY || !finalCallbackFields.contains(field)) {
+            if (callbackKind == CallbackKind.OBJECT_USE || !finalCallbackFields.contains(field)) {
                 return;
             }
             final Fact current = fieldFacts.getOrDefault(field, Fact.none());
@@ -1046,7 +1047,7 @@ public final class FunctionValueFlow {
             final Descriptor descriptor = resolvedDescriptor.orElseThrow();
             final List<Slot> arguments = popArguments(state, descriptor.parameters().size());
             Slot receiver = instruction.opcode() == 184 ? new Slot(Fact.unsafe(), 1) : pop(state);
-            if (callbackKind == CallbackKind.COLLECTION_QUERY && !JdkCallSupport.isMapEntryArrayFactory(methodRef)) {
+            if (callbackKind == CallbackKind.OBJECT_USE && !JdkCallSupport.isMapEntryArrayFactory(methodRef)) {
                 boolean arrayEscapes = (receiver.fact().kinds() & INLINE_ENTRY_ARRAY) != 0;
                 for (final Slot argument : arguments) arrayEscapes |= (argument.fact().kinds() & INLINE_ENTRY_ARRAY) != 0;
                 if (arrayEscapes) {
@@ -1068,7 +1069,7 @@ public final class FunctionValueFlow {
                 && "()V".equals(methodRef.descriptor()) && ("java/util/HashSet".equals(methodRef.owner())
                     || "java/util/LinkedHashSet".equals(methodRef.owner()));
             freshSetEscapes |= (receiver.fact().kinds() & FRESH_EMPTY_SET) != 0 && !emptySetConstructor;
-            if (callbackKind == CallbackKind.COLLECTION_QUERY && freshSetEscapes) {
+            if (callbackKind == CallbackKind.OBJECT_USE && freshSetEscapes) {
                 state.clearFreshEmptySets();
                 for (int index = 0; index < arguments.size(); index++) {
                     final Slot argument = arguments.get(index);
@@ -1076,25 +1077,25 @@ public final class FunctionValueFlow {
                     if (cleared != argument.fact()) arguments.set(index, new Slot(cleared, argument.width()));
                 }
             }
-            if (callbackKind != CallbackKind.COLLECTION_QUERY
+            if (callbackKind != CallbackKind.OBJECT_USE
                 && instruction.opcode() == 185 && directUse(callbackKind).equals(methodRef)) {
                 addCallbackFact(site(caller, instruction), receiver.fact());
                 pushReturn(state, descriptor.result(), Fact.unsafe());
                 return;
             }
             if (isIndirectUse(callbackKind, methodRef) && !arguments.isEmpty()) {
-                if (callbackKind == CallbackKind.COLLECTION_QUERY) {
+                if (callbackKind == CallbackKind.OBJECT_USE) {
                     if (JdkCallSupport.isMapEntryArrayFactory(methodRef)) {
                         final Fact array = arguments.getFirst().fact();
                         final boolean trackedArray = (array.kinds() & INLINE_ENTRY_ARRAY) != 0;
-                        addCollectionFact(collectionSiteKey(caller, instruction), trackedArray ? Fact.platform() : Fact.unsafe());
+                        addObjectUseFact(objectUseSiteKey(caller, instruction), trackedArray ? Fact.platform() : Fact.unsafe());
                         if (trackedArray) {
                             Fact key = array.elements();
                             final Set<Integer> assignedIndices = new HashSet<>();
                             int index = 0;
                             while (key != null) {
                                 if (key.entryIndex() < 0 || assignedIndices.add(Integer.valueOf(key.entryIndex()))) {
-                                    addCollectionFact(mapKeySiteKey(caller, instruction, index), key.withElements(null));
+                                    addObjectUseFact(mapKeySiteKey(caller, instruction, index), key.withElements(null));
                                     index++;
                                 }
                                 key = key.elements();
@@ -1102,7 +1103,7 @@ public final class FunctionValueFlow {
                         }
                     } else if (JdkCallSupport.isMapMultiEntryFactory(methodRef)) {
                         for (int key = 0; key < arguments.size() / 2; key++) {
-                            addCollectionFact(mapKeySiteKey(caller, instruction, key), arguments.get(key * 2).fact());
+                            addObjectUseFact(mapKeySiteKey(caller, instruction, key), arguments.get(key * 2).fact());
                         }
                     } else {
                         final Fact argument = JdkCallSupport.isMapKeyOperation(methodRef)
@@ -1118,19 +1119,19 @@ public final class FunctionValueFlow {
                             && (receiver.fact().kinds() & ALWAYS_EMPTY) != 0)
                             || (JdkCallSupport.isCollectionObjectAddition(methodRef)
                             && (receiver.fact().kinds() & (LIST_ADDITION_NO_EQUALITY | REMOVAL_REJECTING | FRESH_EMPTY_SET)) != 0);
-                        addCollectionFact(collectionSiteKey(caller, instruction), noEquality ? Fact.platform() : query);
+                        addObjectUseFact(objectUseSiteKey(caller, instruction), noEquality ? Fact.platform() : query);
                     }
                 } else {
                     addCallbackFact(site(caller, instruction), arguments.getLast().fact());
                 }
             }
-            if (callbackKind == CallbackKind.COLLECTION_QUERY && instruction.opcode() == 184
+            if (callbackKind == CallbackKind.OBJECT_USE && instruction.opcode() == 184
                 && JdkCallSupport.isMapSingleEntryFactory(methodRef) && "entry".equals(methodRef.name())) {
                 pushReturn(state, descriptor.result(), new Fact(PLATFORM | ENTRY_VALUE, List.of(), false,
                     arguments.getFirst().fact().withElements(null)));
                 return;
             }
-            if (callbackKind == CallbackKind.COLLECTION_QUERY && instruction.opcode() == 184) {
+            if (callbackKind == CallbackKind.OBJECT_USE && instruction.opcode() == 184) {
                 final String owner = methodRef.owner();
                 final String name = methodRef.name();
                 final String descriptorText = methodRef.descriptor();
@@ -1179,7 +1180,7 @@ public final class FunctionValueFlow {
                 pushReturn(state, descriptor.result(), returned);
                 return;
             }
-            if (callbackKind == CallbackKind.COLLECTION_QUERY) {
+            if (callbackKind == CallbackKind.OBJECT_USE) {
                 final String key = instruction.opcode() + ":" + methodRef.display();
                 List<EntryPoint> possibleTargets = unknownDynamicTargets.get(key);
                 if (possibleTargets == null) {
@@ -1214,14 +1215,14 @@ public final class FunctionValueFlow {
             final List<Slot> captures = popArguments(state, descriptor.parameters().size());
             final Optional<LambdaMetafactoryCall> lambda = LambdaMetafactoryCall.resolve(dynamicRef);
             if (lambda.isEmpty()) {
-                pushReturn(state, descriptor.result(), callbackKind == CallbackKind.COLLECTION_QUERY
+                pushReturn(state, descriptor.result(), callbackKind == CallbackKind.OBJECT_USE
                     && platformValue(dynamicRef.descriptor().substring(dynamicRef.descriptor().indexOf(')') + 1))
                     ? Fact.platform() : Fact.unsafe());
                 return;
             }
             final LambdaMetafactoryCall resolved = lambda.orElseThrow();
             contributeLambdaInvocation(resolved, captures, state);
-            final boolean materialized = callbackKind != CallbackKind.COLLECTION_QUERY
+            final boolean materialized = callbackKind != CallbackKind.OBJECT_USE
                 && isMaterializedCallback(resolved, method, instruction);
             pushReturn(
                 state,
@@ -1432,11 +1433,11 @@ public final class FunctionValueFlow {
             }
         }
 
-        private void addCollectionFact(final String site, final Fact fact) {
-            final Fact current = collectionFacts.getOrDefault(site, Fact.none());
+        private void addObjectUseFact(final String site, final Fact fact) {
+            final Fact current = objectUseFacts.getOrDefault(site, Fact.none());
             final Fact merged = current.merge(fact);
             if (merged != current) {
-                collectionFacts.put(site, merged);
+                objectUseFacts.put(site, merged);
             }
         }
 
@@ -1489,8 +1490,8 @@ public final class FunctionValueFlow {
                 }
                 if (instruction.methodRef().isPresent()
                     && isTrackedUse(callbackKind, instruction.methodRef().orElseThrow())) {
-                    if (callbackKind == CallbackKind.COLLECTION_QUERY) {
-                        addCollectionFact(collectionSiteKey(entryPoint, instruction), Fact.unsafe());
+                    if (callbackKind == CallbackKind.OBJECT_USE) {
+                        addObjectUseFact(objectUseSiteKey(entryPoint, instruction), Fact.unsafe());
                     } else {
                         addCallbackFact(site(entryPoint, instruction), Fact.unsafe());
                     }
@@ -1500,7 +1501,7 @@ public final class FunctionValueFlow {
                     for (final EntryPoint target : unsafeCallTargets(instruction, called)) {
                         markParametersUnsafe(target);
                     }
-                    if (callbackKind == CallbackKind.COLLECTION_QUERY) {
+                    if (callbackKind == CallbackKind.OBJECT_USE) {
                         markDynamicCallEdgesUnsafe(entryPoint, called);
                     }
                 }
@@ -1622,7 +1623,7 @@ public final class FunctionValueFlow {
         }
 
         private Fact narrow(final Fact fact, final String target) {
-            if (callbackKind == CallbackKind.COLLECTION_QUERY) {
+            if (callbackKind == CallbackKind.OBJECT_USE) {
                 final String descriptor = target.startsWith("[") ? target : "L" + target + ";";
                 if (platformValue(descriptor)) {
                     return Fact.platform();
@@ -1665,7 +1666,7 @@ public final class FunctionValueFlow {
         }
 
         private Fact resultFact(final MethodRef methodRef, final Fact fallback) {
-            if (callbackKind != CallbackKind.COLLECTION_QUERY) {
+            if (callbackKind != CallbackKind.OBJECT_USE) {
                 return fallback;
             }
             final String result = methodRef.descriptor().substring(methodRef.descriptor().indexOf(')') + 1);
@@ -1679,7 +1680,7 @@ public final class FunctionValueFlow {
         }
 
         private boolean isCallbackValueDescriptor(final String descriptor) {
-            if (callbackKind == CallbackKind.COLLECTION_QUERY) {
+            if (callbackKind == CallbackKind.OBJECT_USE) {
                 return descriptor.startsWith("L") || descriptor.startsWith("[");
             }
             if (callbackDescriptor(callbackKind).equals(descriptor)) {
@@ -1695,7 +1696,7 @@ public final class FunctionValueFlow {
             return classFile != null
                 && !classFile.isInterface()
                 && !className.startsWith("java/")
-                && (callbackKind == CallbackKind.COLLECTION_QUERY || isAssignableToCallback(className));
+                && (callbackKind == CallbackKind.OBJECT_USE || isAssignableToCallback(className));
         }
 
         private boolean isAssignableToCallback(final String candidate) {
@@ -1958,10 +1959,11 @@ public final class FunctionValueFlow {
         final CallbackKind callbackKind,
         final MethodRef methodRef
     ) {
-        return callbackKind == CallbackKind.COLLECTION_QUERY ? (JdkCallSupport.isCollectionEqualitySearch(methodRef)
+        return callbackKind == CallbackKind.OBJECT_USE ? (JdkCallSupport.isCollectionEqualitySearch(methodRef)
             || JdkCallSupport.isMapKeyOperation(methodRef)
             || JdkCallSupport.isMapMultiEntryFactory(methodRef) || JdkCallSupport.isMapEntryArrayFactory(methodRef)
-            || JdkCallSupport.isCollectionContainsAll(methodRef) || JdkCallSupport.isCollectionFilterAll(methodRef))
+            || JdkCallSupport.isCollectionContainsAll(methodRef) || JdkCallSupport.isCollectionFilterAll(methodRef)
+            || JdkCallSupport.isStringValueOfObject(methodRef))
             : directUse(callbackKind).equals(methodRef) || isIndirectUse(callbackKind, methodRef);
     }
 
@@ -1981,10 +1983,11 @@ public final class FunctionValueFlow {
         final CallbackKind callbackKind,
         final MethodRef methodRef
     ) {
-        if (callbackKind == CallbackKind.COLLECTION_QUERY) {
+        if (callbackKind == CallbackKind.OBJECT_USE) {
             return JdkCallSupport.isCollectionEqualitySearch(methodRef) || JdkCallSupport.isCollectionContainsAll(methodRef)
                 || JdkCallSupport.isCollectionFilterAll(methodRef) || JdkCallSupport.isMapKeyOperation(methodRef)
-                || JdkCallSupport.isMapMultiEntryFactory(methodRef) || JdkCallSupport.isMapEntryArrayFactory(methodRef);
+                || JdkCallSupport.isMapMultiEntryFactory(methodRef) || JdkCallSupport.isMapEntryArrayFactory(methodRef)
+                || JdkCallSupport.isStringValueOfObject(methodRef);
         }
         return callbackKind == CallbackKind.FUNCTION
             ? isIndirectFunctionUse(methodRef)
@@ -2021,12 +2024,12 @@ public final class FunctionValueFlow {
         return SUPPLIER_GET.equals(methodRef) || isIndirectSupplierUse(methodRef);
     }
 
-    static String collectionSiteKey(final EntryPoint entryPoint, final Instruction instruction) {
+    static String objectUseSiteKey(final EntryPoint entryPoint, final Instruction instruction) {
         return entryPoint.display() + "#" + instruction.offset();
     }
 
     static String mapKeySiteKey(final EntryPoint entryPoint, final Instruction instruction, final int key) {
-        return collectionSiteKey(entryPoint, instruction) + ":" + key;
+        return objectUseSiteKey(entryPoint, instruction) + ":" + key;
     }
 
     private static Site site(final EntryPoint entryPoint, final Instruction instruction) {
@@ -2324,7 +2327,7 @@ public final class FunctionValueFlow {
     private enum CallbackKind {
         FUNCTION,
         SUPPLIER,
-        COLLECTION_QUERY
+        OBJECT_USE
     }
 
     private static final class FlowStatus {

@@ -3355,6 +3355,7 @@ public final class StaticVerifier {
             return false;
         }
         final MethodRef target = instruction.methodRef().orElseThrow();
+        if (instruction.opcode() == 184 && JdkCallSupport.isStringValueOfObject(target)) return true;
         final ClassFile targetClass = classes.get(target.owner());
         if (targetClass == null) {
             return supportedLambdaThrowableCall(classes, target);

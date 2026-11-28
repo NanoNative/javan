@@ -2158,6 +2158,19 @@ public final class CCodegen {
         }
         emitDispatchSignature(dispatch, c, isStatic);
         c.append(" {").append(System.lineSeparator());
+        if (BytecodeToIR.OBJECT_STRING_DISPATCH.equals(dispatch.symbol())) {
+            c.append("    switch (javan_object_registered_type_id(self)) {\n");
+            for (final IrDispatchTarget target : dispatch.targets()) {
+                c.append("        case ").append(typeIds.get(target.owner()).intValue())
+                    .append(": ").append(target.functionSymbol()).append("(")
+                    .append(dispatchResultArguments(dispatch)).append("); return;\n");
+            }
+            c.append("        default: break;\n    }\n")
+                .append("    javan_runtime_lock_enter();\n")
+                .append("    *result = javan_printable_object_string(self);\n")
+                .append("    javan_runtime_lock_leave();\n    return;\n}\n\n");
+            return;
+        }
         c.append("    if (self == 0) {").append(System.lineSeparator());
         c.append("        javan_panic(\"null dispatch\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
