@@ -1752,7 +1752,15 @@ public final class BytecodeToIR {
             }
             if (JdkCallSupport.isObjectStringConversion(reference)) {
                 addTransportedThrowableTypes(DEFAULT_OBJECT_HASH_DISPATCH, dispatches, transportedThrowableTypes, possibleTypes);
-                if ("java/io/PrintStream".equals(reference.owner())) possibleTypes.add("java/lang/NullPointerException");
+            }
+            if (JdkCallSupport.isPrintStreamPrint(reference)) {
+                for (int index = instructionStart; index < instructions.size(); index++) {
+                    final IrInstruction generated = instructions.get(index);
+                    if (generated.op() == IrInstruction.Op.SET_PENDING
+                        && "java/lang/NullPointerException".equals(generated.value().orElse(""))) {
+                        possibleTypes.add("java/lang/NullPointerException");
+                    }
+                }
             }
             if (JdkCallSupport.isMapKeyOperation(reference) || JdkCallSupport.isMapMultiEntryFactory(reference)
                 || JdkCallSupport.isMapCopyOf(reference) || JdkCallSupport.isMapEntryArrayFactory(reference)

@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 348 |
-| pass | 346 |
+| rows | 349 |
+| pass | 347 |
 | scoped | 2 |
 | target | 0 |
 | rejected | 0 |
@@ -28,6 +28,7 @@ Status mapping:
 | --- | --- |
 | `println-string` | pass |
 | `printstream-bounded-object` | pass |
+| `printstream-null-receiver` | pass |
 | `println-int` | pass |
 | `println-boolean` | pass |
 | `println-long` | pass |

@@ -11,8 +11,8 @@
     "rule": "a broad JDK-compatibility release requires zero unknown leftovers; the first native release is scenario-bounded and requires declared reachable behavior to be supported or rejected"
   },
   "counts": {
-    "rows": 348,
-    "pass": 346,
+    "rows": 349,
+    "pass": 347,
     "scoped": 2,
     "target": 0,
     "rejected": 0
@@ -20,6 +20,7 @@
   "features": [
     {"feature": "println-string", "jdk25": "pass"},
     {"feature": "printstream-bounded-object", "jdk25": "pass"},
+    {"feature": "printstream-null-receiver", "jdk25": "pass"},
     {"feature": "println-int", "jdk25": "pass"},
     {"feature": "println-boolean", "jdk25": "pass"},
     {"feature": "println-long", "jdk25": "pass"},

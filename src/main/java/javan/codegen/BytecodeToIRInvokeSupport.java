@@ -1979,6 +1979,32 @@ final class BytecodeToIRInvokeSupport {
         final Map<Integer, IrLocal> localDeclarations,
         final SourceLineIndex sourceLines
     ) {
+        if (!JdkCallSupport.isPrintStreamPrint(methodRef)) return false;
+        int receiverIndex = stack.size() - 2;
+        if ("()V".equals(methodRef.descriptor())) receiverIndex = stack.size() - 1;
+        if (receiverIndex >= 0 && stack.get(receiverIndex).kind() == StackKind.OBJECT) {
+            final String done = "label_print_stream_done_" + instruction.offset();
+            guardPrintStreamReceiver(classFile, method, instruction, instructions, stack, receiverIndex,
+                localDeclarations, sourceLines, done);
+            final boolean lowered = lowerPrintStreamCallUnchecked(classFile, method, instruction, methodRef,
+                instructions, stack, localDeclarations, sourceLines);
+            instructions.add(IrInstruction.label(done));
+            return lowered;
+        }
+        return lowerPrintStreamCallUnchecked(classFile, method, instruction, methodRef,
+            instructions, stack, localDeclarations, sourceLines);
+    }
+
+    static boolean lowerPrintStreamCallUnchecked(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final SourceLineIndex sourceLines
+    ) {
         if (!"java/io/PrintStream".equals(methodRef.owner())) {
             return false;
         }
@@ -1990,7 +2016,6 @@ final class BytecodeToIRInvokeSupport {
         if ("print".equals(methodRef.name()) && "(Ljava/lang/Object;)V".equals(methodRef.descriptor())) {
             final IrExpression argument = popPrintableObject(classFile, method, instruction, stack);
             final String done = "label_print_object_done_" + instruction.offset();
-            guardPrintStreamReceiver(classFile, method, instruction, instructions, stack, localDeclarations, sourceLines, done);
             final String converted = BytecodeToIRDynamicSupport.newObjectLocal(localDeclarations);
             instructions.add(IrInstruction.assignObject(converted,
                 IrExpression.objectCall(BytecodeToIR.OBJECT_STRING_DISPATCH, List.of(argument))));
@@ -2063,7 +2088,6 @@ final class BytecodeToIRInvokeSupport {
         if ("println".equals(methodRef.name()) && "(Ljava/lang/Object;)V".equals(methodRef.descriptor())) {
             final IrExpression argument = popPrintableObject(classFile, method, instruction, stack);
             final String done = "label_print_object_done_" + instruction.offset();
-            guardPrintStreamReceiver(classFile, method, instruction, instructions, stack, localDeclarations, sourceLines, done);
             final String converted = BytecodeToIRDynamicSupport.newObjectLocal(localDeclarations);
             instructions.add(IrInstruction.assignObject(converted,
                 IrExpression.objectCall(BytecodeToIR.OBJECT_STRING_DISPATCH, List.of(argument))));
@@ -2126,18 +2150,22 @@ final class BytecodeToIRInvokeSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
+        final int receiverIndex,
         final Map<Integer, IrLocal> localDeclarations,
         final SourceLineIndex sourceLines,
         final String done
     ) {
-        if (stack.isEmpty() || stack.getLast().kind() != StackKind.OBJECT) return;
-        final StackValue receiver = popPrintStream(classFile, method, instruction, stack);
-        final String local = BytecodeToIRDynamicSupport.newObjectLocal(localDeclarations);
-        instructions.add(IrInstruction.assignObject(local, receiver.expression().orElseThrow()));
-        stack.add(StackValue.objectExpression(IrExpression.objectLocal(local)));
+        final StackValue receiver = stack.get(receiverIndex);
+        IrExpression value = receiver.expression().orElseThrow();
+        if (value.kind() != IrExpression.Kind.LOCAL && value.kind() != IrExpression.Kind.OBJECT_NULL) {
+            final String local = BytecodeToIRDynamicSupport.newObjectLocal(localDeclarations);
+            instructions.add(IrInstruction.assignObject(local, value));
+            value = IrExpression.objectLocal(local);
+            stack.set(receiverIndex, StackValue.objectExpression(value));
+        }
         final String present = "label_print_receiver_non_null_" + instruction.offset();
         instructions.add(IrInstruction.branchIf(present,
-            IrExpression.objectComparison("!=", IrExpression.objectLocal(local), IrExpression.objectNull())));
+            IrExpression.objectComparison("!=", value, IrExpression.objectNull())));
         instructions.add(IrInstruction.setPending("java/lang/NullPointerException", IrExpression.objectNull(),
             BytecodeToIRControlFlowSupport.sourceLocation(classFile, method, instruction, sourceLines)));
         instructions.add(IrInstruction.jump(done));

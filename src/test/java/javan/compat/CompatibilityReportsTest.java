@@ -149,6 +149,7 @@ final class CompatibilityReportsTest {
             "| `interface-polymorphic` | pass |",
             "| `multi-dimensional-array` | pass |",
             "| `printstream-bounded-object` | pass |",
+            "| `printstream-null-receiver` | pass |",
             "| `primitive-array-clone` | pass |",
             "| `generated-object-clone-single-threaded` | pass |",
             "| `generated-object-clone-concurrent-return-handoff` | pass |",
@@ -652,10 +653,10 @@ final class CompatibilityReportsTest {
             "A broad JDK-compatibility release must report:",
             "The first native release is scenario-bounded.",
             "not a release-completion percentage.",
-            "| support rows | 348 |",
-            "| pass rows | 346 |",
+            "| support rows | 349 |",
+            "| pass rows | 347 |",
             "| scoped rows | 2 |",
-            "| accounted rows | 346 |",
+            "| accounted rows | 347 |",
             "| unaccounted rows | 2 |"
         );
         assertThat(matrix).contains(

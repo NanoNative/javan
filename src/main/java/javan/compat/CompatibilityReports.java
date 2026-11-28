@@ -437,6 +437,7 @@ public final class CompatibilityReports {
         return List.of(
             pass("println-string"),
             pass("printstream-bounded-object"),
+            pass("printstream-null-receiver"),
             pass("println-int"),
             pass("println-boolean"),
             pass("println-long"),

@@ -2285,6 +2285,18 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies supported PrintStream print and println overloads.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the call prints to a stream
+     */
+    public static boolean isPrintStreamPrint(final MethodRef methodRef) {
+        return "java/io/PrintStream".equals(methodRef.owner())
+            && ("print".equals(methodRef.name()) || "println".equals(methodRef.name()))
+            && isSupported(methodRef);
+    }
+
+    /**
      * Identifies object conversions performed by String or PrintStream.
      *
      * @param methodRef referenced JDK method

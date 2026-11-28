@@ -360,7 +360,9 @@ collection. `String.valueOf(Object)` and the object conversion inserted by `java
 concatenation call a reachable application `toString` override when the receiver types are proven.
 Supported exceptions and null return values are preserved. `PrintStream.print(Object)` and
 `println(Object)` use the same bounded dispatch, preserve conversion exceptions and null receiver
-checks, and support both standard output and error. A null result from `toString` raises a
+checks, and support both standard output and error. Supported primitive, String, character-array
+and zero-argument print overloads also evaluate arguments before rejecting null stream receivers.
+A null result from `toString` raises a
 `NullPointerException` for `print(Object)` and prints `null` for `println(Object)`.
 Plain objects and application classes
 whose known superclass chain reaches `Object` without a `toString` override use their runtime class

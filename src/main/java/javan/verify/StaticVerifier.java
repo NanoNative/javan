@@ -3716,6 +3716,10 @@ public final class StaticVerifier {
             visiting.remove(target);
             return result;
         }
+        if (JdkCallSupport.isPrintStreamPrint(target)) {
+            visiting.remove(target);
+            return Set.of("java/lang/NullPointerException");
+        }
         if (JdkCallSupport.isCollectionEqualitySearch(target) || JdkCallSupport.isCollectionContainsAll(target)
             || JdkCallSupport.isCollectionFilterAll(target)) {
             final Set<String> result = escapingPlatformExceptionTypes(classes,
