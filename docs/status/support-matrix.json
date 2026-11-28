@@ -11,8 +11,8 @@
     "rule": "a broad JDK-compatibility release requires zero unknown leftovers; the first native release is scenario-bounded and requires declared reachable behavior to be supported or rejected"
   },
   "counts": {
-    "rows": 382,
-    "pass": 380,
+    "rows": 383,
+    "pass": 381,
     "scoped": 2,
     "target": 0,
     "rejected": 0
@@ -60,6 +60,7 @@
     {"feature": "closed-world-field-get-int-static-final", "jdk25": "pass"},
     {"feature": "closed-world-field-set-int-static", "jdk25": "pass"},
     {"feature": "closed-world-setint-widening", "jdk25": "pass"},
+    {"feature": "closed-world-setlong-widening", "jdk25": "pass"},
     {"feature": "closed-world-declared-field-enumeration", "jdk25": "pass"},
     {"feature": "closed-world-field-enumeration-static-helper-flow", "jdk25": "pass"},
     {"feature": "closed-world-field-enumeration-trailing-class-flow", "jdk25": "pass"},

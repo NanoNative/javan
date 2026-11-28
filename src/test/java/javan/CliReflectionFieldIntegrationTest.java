@@ -2290,4 +2290,145 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
         assertThat(result.stdout()).isEqualTo(expected).isEqualTo("before\ninitialized\n-9223372036854775808\n5000000000\n");
     }
 
+    @Test
+    void writesLongFieldsAndWidensToFloatAndDouble() throws Exception {
+        final Path project = project("reflection-field-set-long-widen");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model { public long wide; public float decimal; public double precise; }
+                public static void main(String[] args) throws Exception {
+                    Model model = new Model();
+                    Model.class.getDeclaredField("wide").setLong(model, Long.MIN_VALUE);
+                    Model.class.getDeclaredField("decimal").setLong(model, 42L);
+                    Model.class.getDeclaredField("precise").setLong(model, 5000000000L);
+                    System.out.println(model.wide); System.out.println(model.decimal == 42.0f);
+                    System.out.println(model.precise == 5000000000.0);
+                    Model.class.getDeclaredField("decimal").setLong(model, Long.MAX_VALUE);
+                    Model.class.getDeclaredField("precise").setLong(model, Long.MIN_VALUE);
+                    System.out.println(model.decimal == (float) Long.MAX_VALUE);
+                    System.out.println(model.precise == (double) Long.MIN_VALUE);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-set-long-widen").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("-9223372036854775808\ntrue\ntrue\ntrue\ntrue\n");
+    }
+
+    @Test
+    void initializesStaticFieldsBeforeWritingLongValues() throws Exception {
+        final Path project = project("reflection-static-long-write");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model {
+                    static { System.out.println("initialized"); }
+                    public static long wide; public static float decimal; public static double precise;
+                }
+                public static void main(String[] args) throws Exception {
+                    var wide = Model.class.getDeclaredField("wide"); var decimal = Model.class.getDeclaredField("decimal");
+                    var precise = Model.class.getDeclaredField("precise"); System.out.println("before");
+                    wide.setLong(null, 5000000000L); decimal.setLong(null, 42L); precise.setLong(null, -7L);
+                    System.out.println(Model.wide); System.out.println(Model.decimal == 42.0f); System.out.println(Model.precise == -7.0);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-static-long-write").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("before\ninitialized\n5000000000\ntrue\ntrue\n");
+    }
+
+    @Test
+    void checksLongFieldWriteReceiverAndAccess() throws Exception {
+        final Path project = project("reflection-field-set-long-access");
+        writeJava(project, "com.other.Model", """
+            package com.other;
+            public class Model { public long value; private long secret; }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import com.other.Model;
+            import java.lang.reflect.Field;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    Field value = Model.class.getDeclaredField("value"), secret = Model.class.getDeclaredField("secret");
+                    Object wrong = new Object(); Model model = new Model();
+                    try { value.setLong(null, 1L); } catch (NullPointerException e) { System.out.println("null"); }
+                    try { value.setLong(wrong, 1L); } catch (IllegalArgumentException e) { System.out.println("wrong"); }
+                    try { secret.setLong(model, 1L); } catch (IllegalAccessException e) { System.out.println("denied"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-set-long-access").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("null\nwrong\ndenied\n");
+    }
+
+    @Test
+    void rejectsUnsupportedLongFieldWritesExplicitly() throws Exception {
+        final Path project = project("reflection-field-set-long-unsupported");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model { public int narrow; public volatile long changing; public final long fixed = 3; }
+                public static void main(String[] args) throws Exception {
+                    Model model = new Model(); var narrow = Model.class.getDeclaredField("narrow");
+                    var changing = Model.class.getDeclaredField("changing"); var fixed = Model.class.getDeclaredField("fixed");
+                    try { narrow.setLong(model, 4L); } catch (UnsupportedOperationException e) { System.out.println("type unsupported"); }
+                    try { changing.setLong(model, 4L); } catch (UnsupportedOperationException e) { System.out.println("volatile unsupported"); }
+                    try { fixed.setLong(model, 4L); } catch (UnsupportedOperationException e) { System.out.println("final unsupported"); }
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-set-long-unsupported").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("type unsupported\nvolatile unsupported\nfinal unsupported\n");
+    }
+
+    @Test
+    void writesLongFieldsDuringConcurrentGc() throws Exception {
+        final Path project = project("reflection-field-set-long-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger signal = new AtomicInteger(), finished = new AtomicInteger();
+                public static final class Model { public long value; }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        while (signal.get() == 0) Thread.yield();
+                        for (int i = 0; i < 1000; i++) { byte[] value = new byte[64]; value[0] = 1; }
+                        finished.set(1);
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Field field = Model.class.getDeclaredField("value"); Model model = new Model();
+                    Thread worker = new Thread(new Worker()); worker.start(); signal.set(1);
+                    while (finished.get() == 0) field.setLong(model, 5000000000L);
+                    worker.join(); field.setLong(model, 5000000000L); System.out.println(model.value);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-set-long-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("5000000000\n");
+    }
+
 }

@@ -157,6 +157,9 @@ conversion is implemented.
 `double` fields with Java's widening conversion and the same caller access and instance target checks.
 Static writes initialize the declaring class and ignore the target. Other field types, volatile and
 final fields raise `UnsupportedOperationException` for this accessor until implemented.
+`Field.setLong` writes selected, non-volatile, non-final application `long`, `float` and `double`
+fields with Java's widening conversion and the same access, target and initialization rules. Other
+field types, volatile and final fields raise `UnsupportedOperationException` until implemented.
 Public inherited-field lookup, other reflective field reads and writes, access override and generic
 `instanceof` on reflection interfaces remain outside this slice.
 Other dynamic constructor targets require a declared constructor, including when no declaration exists.

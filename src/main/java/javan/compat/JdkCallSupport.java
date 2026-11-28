@@ -172,6 +172,7 @@ public final class JdkCallSupport {
         runtime("Field.getInt", "java/lang/reflect/Field", "getInt", "(Ljava/lang/Object;)I"),
         runtime("Field.getLong", "java/lang/reflect/Field", "getLong", "(Ljava/lang/Object;)J"),
         runtime("Field.setInt", "java/lang/reflect/Field", "setInt", "(Ljava/lang/Object;I)V"),
+        runtime("Field.setLong", "java/lang/reflect/Field", "setLong", "(Ljava/lang/Object;J)V"),
         runtime("Field.getDeclaringClass", "java/lang/reflect/Field", "getDeclaringClass", "()Ljava/lang/Class;"),
         runtime("Field.getType", "java/lang/reflect/Field", "getType", "()Ljava/lang/Class;"),
         runtime("Field.getModifiers", "java/lang/reflect/Field", "getModifiers", "()I"),
@@ -3010,7 +3011,8 @@ public final class JdkCallSupport {
         if ("java/lang/reflect/Field".equals(methodRef.owner())
             && ("getInt".equals(methodRef.name()) && "(Ljava/lang/Object;)I".equals(methodRef.descriptor())
                 || "getLong".equals(methodRef.name()) && "(Ljava/lang/Object;)J".equals(methodRef.descriptor())
-                || "setInt".equals(methodRef.name()) && "(Ljava/lang/Object;I)V".equals(methodRef.descriptor()))) {
+                || "setInt".equals(methodRef.name()) && "(Ljava/lang/Object;I)V".equals(methodRef.descriptor())
+                || "setLong".equals(methodRef.name()) && "(Ljava/lang/Object;J)V".equals(methodRef.descriptor()))) {
             return List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException",
                 "java/lang/IllegalAccessException", "java/lang/UnsupportedOperationException",
                 "java/lang/ExceptionInInitializerError", "java/lang/NoClassDefFoundError", "java/lang/Error");
