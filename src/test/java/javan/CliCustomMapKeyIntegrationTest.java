@@ -1289,4 +1289,64 @@ final class CliCustomMapKeyIntegrationTest extends CliIntegrationSupport {
         assertThat(result.stdout()).isEqualTo(expected).isEqualTo("null\nfalse\n2\n");
     }
 
+    @Test
+    void negativeCapacityConstructorsThrowCatchableIllegalArgumentException() throws Exception {
+        final Path project = project("map-constructor-negative-capacity");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.ConcurrentHashMap;
+            public final class Main {
+                public static void main(String[] args) {
+                    try { new HashMap<>(-1); } catch (IllegalArgumentException e) { System.out.println(e.getMessage()); }
+                    try { new LinkedHashMap<>(-2); } catch (IllegalArgumentException e) { System.out.println(e.getMessage()); }
+                    try { new ConcurrentHashMap<>(-3); } catch (IllegalArgumentException e) { System.out.println(e.getMessage()); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-constructor-negative-capacity").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+
+    @Test
+    void negativeConstructorExceptionsSurviveConcurrentGc() throws Exception {
+        final Path project = project("map-constructor-negative-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger count = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 150; i++) {
+                            try { new HashMap<>(-1); }
+                            catch (IllegalArgumentException e) {
+                                if (e.getMessage().equals("Illegal initial capacity: -1")) count.incrementAndGet();
+                            }
+                        }
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(count.get());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-constructor-negative-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("300\n");
+    }
+
+
 }

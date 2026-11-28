@@ -24103,9 +24103,15 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsExactly(
             IrInstruction.callStaticVoid("javan_hashmap_new_into", List.of(IrExpression.objectLocalAddress("object0"))),
             IrInstruction.callStaticVoid(
-                "javan_map_initialize_capacity",
+                "javan_map_initialize_capacity_java",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"))
             ),
+            IrInstruction.branchIf(
+                "label_pending_continue_3",
+                IrExpression.intComparison("==", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))
+            ),
+            IrInstruction.propagatePending(),
+            IrInstruction.label("label_pending_continue_3"),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
@@ -24129,9 +24135,15 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsExactly(
             IrInstruction.callStaticVoid("javan_hashmap_new_into", List.of(IrExpression.objectLocalAddress("object0"))),
             IrInstruction.callStaticVoid(
-                "javan_map_initialize_capacity",
+                "javan_map_initialize_capacity_java",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"))
             ),
+            IrInstruction.branchIf(
+                "label_pending_continue_3",
+                IrExpression.intComparison("==", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))
+            ),
+            IrInstruction.propagatePending(),
+            IrInstruction.label("label_pending_continue_3"),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
@@ -24155,9 +24167,15 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsExactly(
             IrInstruction.callStaticVoid("javan_concurrent_hashmap_new_into", List.of(IrExpression.objectLocalAddress("object0"))),
             IrInstruction.callStaticVoid(
-                "javan_map_initialize_capacity",
+                "javan_map_initialize_capacity_java",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"))
             ),
+            IrInstruction.branchIf(
+                "label_pending_continue_3",
+                IrExpression.intComparison("==", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))
+            ),
+            IrInstruction.propagatePending(),
+            IrInstruction.label("label_pending_continue_3"),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }

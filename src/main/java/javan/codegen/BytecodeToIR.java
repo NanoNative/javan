@@ -742,6 +742,7 @@ public final class BytecodeToIR {
         for (final Map.Entry<String, Set<String>> entry : materializedTypes.entrySet()) {
             result.put(entry.getKey(), orderedThrowableTypes(entry.getValue()));
         }
+        result.put("javan_map_initialize_capacity_java", List.of("java/lang/IllegalArgumentException"));
         result.put("javan_list_contains_java", JdkCallSupport.transportedPlatformThrowableTypes(new MethodRef(
             "java/util/Collection", "contains", "(Ljava/lang/Object;)Z"
         )));

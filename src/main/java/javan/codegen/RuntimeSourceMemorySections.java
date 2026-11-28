@@ -15761,6 +15761,26 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_leave();
         }
 
+        void javan_map_initialize_capacity_java(void* value, int capacity) {
+            if (capacity < 0) {
+                javan_runtime_lock_enter();
+                javan_object_map* map = javan_map_checked(value);
+                void* message = NULL;
+                void** roots[] = { &message };
+                javan_root_frame_push(roots, 1);
+                if (map->concurrent == 0) {
+                    char buffer[64];
+                    snprintf(buffer, sizeof(buffer), "Illegal initial capacity: %d", capacity);
+                    message = javan_string_from(buffer);
+                }
+                javan_pending_throw("java/lang/IllegalArgumentException", message, NULL, NULL, NULL, -1, -1, NULL);
+                javan_root_frame_pop(roots);
+                javan_runtime_lock_leave();
+                return;
+            }
+            javan_map_initialize_capacity(value, capacity);
+        }
+
         void javan_map_initialize_capacity_with_load_factor(void* value, int capacity, float load_factor) {
             if (!(load_factor > 0.0f)) {
                 javan_panic("invalid map load factor");

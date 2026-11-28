@@ -153,6 +153,7 @@ final class CompatibilityReportsTest {
             "| `map-expected-size-factory-negative-exception` | pass |",
             "| `map-expected-size-factory-lazy-allocation` | pass |",
             "| `map-capacity-constructor-lazy-allocation` | pass |",
+            "| `map-capacity-constructor-negative-exception` | pass |",
             "| `map-view-and-iterator-creation-concurrent-gc` | pass |",
             "| `map-values-custom-contains` | pass |",
             "| `map-values-custom-remove` | pass |",
@@ -677,10 +678,10 @@ final class CompatibilityReportsTest {
             "A broad JDK-compatibility release must report:",
             "The first native release is scenario-bounded.",
             "not a release-completion percentage.",
-            "| support rows | 373 |",
-            "| pass rows | 371 |",
+            "| support rows | 374 |",
+            "| pass rows | 372 |",
             "| scoped rows | 2 |",
-            "| accounted rows | 371 |",
+            "| accounted rows | 372 |",
             "| unaccounted rows | 2 |"
         );
         assertThat(matrix).contains(

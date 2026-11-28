@@ -10109,4 +10109,40 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
     }
 
+    @Test
+    void nativeBuiltJavanCatchesNegativeMapConstructorCapacity() throws Exception {
+        final Path project = tempDir.resolve("selfhost-map-constructor-negative");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            import java.util.LinkedHashMap;
+            import java.util.concurrent.ConcurrentHashMap;
+            public final class Main {
+                public static void main(String[] args) {
+                    try { new HashMap<>(-1); } catch (IllegalArgumentException e) { System.out.println(e.getMessage()); }
+                    try { new LinkedHashMap<>(-2); } catch (IllegalArgumentException e) { System.out.println(e.getMessage()); }
+                    try { new ConcurrentHashMap<>(-3); } catch (IllegalArgumentException e) { System.out.println(e.getMessage()); }
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-map-constructor-negative"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-map-constructor-negative").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout()).isEqualTo("Illegal initial capacity: -1\nIllegal initial capacity: -2\nnull\n");
+    }
+
 }
