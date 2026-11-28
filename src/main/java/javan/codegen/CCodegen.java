@@ -1796,7 +1796,8 @@ public final class CCodegen {
             .append("    const JavanMethodMetadata* metadata = javan_method_metadata(field);\n");
         for (final IrReflectedClass owner : program.reflectedClasses()) {
             for (final IrFieldMetadata field : owner.declaredFields()) {
-                if (!"I".equals(field.descriptor()) || (field.modifiers() & (0x0008 | 0x0040)) != 0) continue;
+                if (!List.of("B", "S", "C", "I").contains(field.descriptor())
+                    || (field.modifiers() & (0x0008 | 0x0040)) != 0) continue;
                 IrClass layout = null;
                 for (final IrClass candidate : program.classes()) {
                     if (candidate.jvmName().equals(field.declaringJvmName())) layout = candidate;
@@ -1810,9 +1811,15 @@ public final class CCodegen {
                     .append("        int access = javan_method_can_access(field, target, caller, caller_nest);\n")
                     .append("        if (access < 0 && !javan_field_caller_can_access(field, target, caller, caller_nest)) access = 0;\n")
                     .append("        if (access < 0) { javan_pending_throw(\"java/lang/IllegalArgumentException\", NULL, NULL, NULL, NULL, -1, -1, NULL); return 0; }\n")
-                    .append("        if (access == 0) { javan_pending_throw(\"java/lang/IllegalAccessException\", NULL, NULL, NULL, NULL, -1, -1, NULL); return 0; }\n")
-                    .append("        return ((struct ").append(layout.symbol()).append("*) target)->")
-                    .append(fieldSymbol(field.name())).append(";\n    }\n");
+                    .append("        if (access == 0) { javan_pending_throw(\"java/lang/IllegalAccessException\", NULL, NULL, NULL, NULL, -1, -1, NULL); return 0; }\n");
+                final String value = "((struct " + layout.symbol() + "*) target)->" + fieldSymbol(field.name());
+                final String converted = switch (field.descriptor()) {
+                    case "B" -> "javan_i2b(" + value + ")";
+                    case "S" -> "javan_i2s(" + value + ")";
+                    case "C" -> "(" + value + " & 65535)";
+                    default -> value;
+                };
+                c.append("        return ").append(converted).append(";\n    }\n");
             }
         }
         c.append("    javan_pending_throw(\"java/lang/UnsupportedOperationException\", NULL, NULL, NULL, NULL, -1, -1, NULL); return 0;\n}\n\n");

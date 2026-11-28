@@ -9758,4 +9758,39 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
     }
 
+    @Test
+    void nativeBuiltJavanWidensFieldsForGetInt() throws Exception {
+        final Path project = tempDir.resolve("selfhost-reflection-field-get-int-widen");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model { public byte small = -127; public short middle = -32000; public char letter = 65535; }
+                public static void main(String[] args) throws Exception {
+                    Model model = new Model();
+                    System.out.println(Model.class.getDeclaredField("small").getInt(model));
+                    System.out.println(Model.class.getDeclaredField("middle").getInt(model));
+                    System.out.println(Model.class.getDeclaredField("letter").getInt(model));
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-reflection-field-get-int-widen"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-reflection-field-get-int-widen").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout()).isEqualTo("-127\n-32000\n65535\n");
+    }
+
 }

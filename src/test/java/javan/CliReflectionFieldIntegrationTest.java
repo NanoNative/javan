@@ -708,4 +708,98 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
         assertThat(result.stdout()).isEqualTo(expected).isEqualTo("23\n");
     }
 
+    @Test
+    void widensByteShortAndCharFieldsForGetInt() throws Exception {
+        final Path project = project("reflection-field-get-int-widen");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            public final class Main {
+                public static final class Model {
+                    public byte small = -127; public short middle = -32000; public char letter = 65535;
+                }
+                public static void main(String[] args) throws Exception {
+                    Model model = new Model();
+                    Field small = Model.class.getDeclaredField("small");
+                    Field middle = Model.class.getDeclaredField("middle");
+                    Field letter = Model.class.getDeclaredField("letter");
+                    System.out.println(small.getInt(model));
+                    System.out.println(middle.getInt(model));
+                    System.out.println(letter.getInt(model));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-get-int-widen").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("-127\n-32000\n65535\n");
+    }
+
+    @Test
+    void widensFieldsDuringConcurrentGc() throws Exception {
+        final Path project = project("reflection-field-get-int-widen-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger signal = new AtomicInteger(), finished = new AtomicInteger();
+                public static final class Model { public byte small = -127; public short middle = -32000; public char letter = 65535; }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        while (signal.get() == 0) Thread.yield();
+                        for (int i = 0; i < 1000; i++) { byte[] value = new byte[64]; value[0] = 1; }
+                        finished.set(1);
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Model target = new Model();
+                    Field small = Model.class.getDeclaredField("small");
+                    Field middle = Model.class.getDeclaredField("middle");
+                    Field letter = Model.class.getDeclaredField("letter");
+                    Thread worker = new Thread(new Worker()); worker.start(); signal.set(1);
+                    while (finished.get() == 0) {
+                        if (small.getInt(target) != -127 || middle.getInt(target) != -32000 || letter.getInt(target) != 65535) throw new AssertionError();
+                    }
+                    worker.join(); System.out.println(small.getInt(target)); System.out.println(middle.getInt(target)); System.out.println(letter.getInt(target));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-get-int-widen-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("-127\n-32000\n65535\n");
+    }
+
+    @Test
+    void widensDeclaredFieldsSelectedByExternalNames() throws Exception {
+        final Path project = project("reflection-field-get-int-widen-external");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.*;
+            public final class Main {
+                public static final class Model { public byte small = -127; public short middle = -32000; public char letter = 65535; }
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] { Model.class.getDeclaredField("small"), Model.class.getDeclaredField("middle"), Model.class.getDeclaredField("letter") };
+                }
+                public static void main(String[] args) throws Exception {
+                    System.out.println(Class.forName(args[0]).getDeclaredField(args[1]).getInt(new Model()));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final Path binary = project.resolve(".javan/bin/reflection-field-get-int-widen-external");
+        for (final List<String> example : List.of(List.of("small", "-127"), List.of("middle", "-32000"), List.of("letter", "65535"))) {
+            final ProcessResult result = process(project, List.of(binary.toString(), "com.acme.Main$Model", example.getFirst()));
+            assertThat(result.exitCode()).as(result.stderr()).isZero();
+            assertThat(result.stdout()).isEqualTo(example.getLast() + "\n");
+        }
+    }
+
 }
