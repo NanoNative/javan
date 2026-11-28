@@ -500,6 +500,7 @@ public final class JdkCallSupport {
         ),
         intrinsic("Float.intBitsToFloat", "java/lang/Float", "intBitsToFloat", "(I)F"),
         intrinsic("Float.floatToRawIntBits", "java/lang/Float", "floatToRawIntBits", "(F)I"),
+        intrinsic("Float.floatToIntBits", "java/lang/Float", "floatToIntBits", "(F)I"),
         intrinsic("Float.isFinite", "java/lang/Float", "isFinite", "(F)Z"),
         intrinsic("Double.parseDouble", "java/lang/Double", "parseDouble", "(Ljava/lang/String;)D"),
         intrinsic("Double.isFinite", "java/lang/Double", "isFinite", "(D)Z"),
@@ -521,6 +522,8 @@ public final class JdkCallSupport {
             "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
         ),
         intrinsic("Double.longBitsToDouble", "java/lang/Double", "longBitsToDouble", "(J)D"),
+        intrinsic("Double.doubleToRawLongBits", "java/lang/Double", "doubleToRawLongBits", "(D)J"),
+        intrinsic("Double.doubleToLongBits", "java/lang/Double", "doubleToLongBits", "(D)J"),
         intrinsic("Boolean.parseBoolean", "java/lang/Boolean", "parseBoolean", "(Ljava/lang/String;)Z"),
         intrinsic("Boolean.toString", "java/lang/Boolean", "toString", "(Z)Ljava/lang/String;"),
         runtime("Boolean.toString.instance", "java/lang/Boolean", "toString", "()Ljava/lang/String;"),

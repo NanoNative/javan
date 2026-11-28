@@ -372,6 +372,9 @@ Plain objects and application classes
 whose known superclass chain reaches `Object` without a `toString` override use their runtime class
 name and virtual `hashCode`, including identity hashing when no override exists. Unknown receiver
 types do not cause unrelated overrides to be retained and may still fail at runtime when no implementation was retained.
+`Double.doubleToRawLongBits`, `Double.doubleToLongBits` and `Float.floatToIntBits` preserve
+non-NaN bit patterns. The canonical conversions normalize NaN while the raw conversion preserves
+its available representation.
 Multi-dimensional array allocation evaluates every dimension before allocation, checks negative
 sizes in order, and supports partially allocated arrays and concurrent garbage collection.
 Array values converted to strings use their runtime array class name and identity hash, including

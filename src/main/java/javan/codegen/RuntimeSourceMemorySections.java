@@ -6340,6 +6340,16 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        int javan_float_to_int_bits(float value) {
+            uint32_t bits;
+            int result;
+            memcpy(&bits, &value, sizeof(bits));
+            if ((bits & UINT32_C(0x7f800000)) == UINT32_C(0x7f800000)
+                && (bits & UINT32_C(0x007fffff)) != 0) bits = UINT32_C(0x7fc00000);
+            memcpy(&result, &bits, sizeof(result));
+            return result;
+        }
+
         int javan_float_is_finite(float value) {
             const unsigned int bits = (unsigned int) javan_float_to_raw_int_bits(value);
             return (bits & 0x7f800000U) != 0x7f800000U;
@@ -6362,6 +6372,22 @@ final class RuntimeSourceMemorySections {
         double javan_double_long_bits_to_double(long long value) {
             double result;
             memcpy(&result, &value, sizeof(double));
+            return result;
+        }
+
+        long long javan_double_to_raw_long_bits(double value) {
+            long long result;
+            memcpy(&result, &value, sizeof(result));
+            return result;
+        }
+
+        long long javan_double_to_long_bits(double value) {
+            uint64_t bits;
+            long long result;
+            memcpy(&bits, &value, sizeof(bits));
+            if ((bits & UINT64_C(0x7ff0000000000000)) == UINT64_C(0x7ff0000000000000)
+                && (bits & UINT64_C(0x000fffffffffffff)) != 0) bits = UINT64_C(0x7ff8000000000000);
+            memcpy(&result, &bits, sizeof(result));
             return result;
         }
 

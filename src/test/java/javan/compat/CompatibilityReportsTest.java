@@ -140,6 +140,7 @@ final class CompatibilityReportsTest {
             "| `path-inline-varargs-typed-handler` | pass |",
             "| `print-inline-char-array-typed-handler` | pass |",
             "| `map-values-custom-contains` | pass |",
+            "| `floating-bit-conversions` | pass |",
             "| `boxed-primitive-gc` | pass |",
             "| `enum-basic` | pass |",
             "| `enum-ordinal` | pass |",
@@ -655,10 +656,10 @@ final class CompatibilityReportsTest {
             "A broad JDK-compatibility release must report:",
             "The first native release is scenario-bounded.",
             "not a release-completion percentage.",
-            "| support rows | 351 |",
-            "| pass rows | 349 |",
+            "| support rows | 352 |",
+            "| pass rows | 350 |",
             "| scoped rows | 2 |",
-            "| accounted rows | 349 |",
+            "| accounted rows | 350 |",
             "| unaccounted rows | 2 |"
         );
         assertThat(matrix).contains(

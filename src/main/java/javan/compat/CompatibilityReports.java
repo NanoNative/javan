@@ -447,6 +447,7 @@ public final class CompatibilityReports {
             pass("int-bitwise-and"),
             pass("long-basic"),
             pass("float-double"),
+            pass("floating-bit-conversions"),
             pass("boxed-primitive-gc"),
             pass("boolean-basic"),
             pass("static-fields"),
