@@ -230,6 +230,7 @@ public final class ReflectionFieldReachability {
         boolean writesInt = false;
         boolean writesLong = false;
         boolean writesDouble = false;
+        boolean writesFloat = false;
         for (final EntryPoint entry : reachable) {
             final ClassFile owner = classes.get(entry.className());
             final Optional<MethodInfo> method = owner == null ? Optional.empty() : owner.method(entry.methodName(), entry.descriptor());
@@ -249,9 +250,11 @@ public final class ReflectionFieldReachability {
                     && "(Ljava/lang/Object;J)V".equals(target.orElseThrow().descriptor())) writesLong = true;
                 if ("setDouble".equals(target.orElseThrow().name())
                     && "(Ljava/lang/Object;D)V".equals(target.orElseThrow().descriptor())) writesDouble = true;
+                if ("setFloat".equals(target.orElseThrow().name())
+                    && "(Ljava/lang/Object;F)V".equals(target.orElseThrow().descriptor())) writesFloat = true;
             }
         }
-        if (!readsInt && !readsLong && !readsDouble && !writesInt && !writesLong && !writesDouble) return Set.of();
+        if (!readsInt && !readsLong && !readsDouble && !writesInt && !writesLong && !writesDouble && !writesFloat) return Set.of();
         final Set<FieldRef> fields = new HashSet<>(literalLookups(classes, reachable));
         fields.addAll(ReflectionDeclaration.analyze(classes).fields());
         for (final String name : enumeratedOwners(classes, reachable)) {
@@ -276,6 +279,8 @@ public final class ReflectionFieldReachability {
                         || writesLong && List.of("J", "F", "D").contains(candidate.descriptor())
                             && (candidate.accessFlags() & 0x0010) == 0
                         || writesDouble && "D".equals(candidate.descriptor())
+                            && (candidate.accessFlags() & 0x0010) == 0
+                        || writesFloat && List.of("F", "D").contains(candidate.descriptor())
                             && (candidate.accessFlags() & 0x0010) == 0)) owners.add(field.owner());
             }
         }

@@ -166,6 +166,9 @@ field types, volatile and final fields raise `UnsupportedOperationException` unt
 `Field.setDouble` writes selected, non-volatile, non-final application `double` fields with the same
 access, target and initialization rules. Other field types, volatile and final fields raise
 `UnsupportedOperationException` until implemented.
+`Field.setFloat` writes selected, non-volatile, non-final application `float` and `double` fields,
+using Java's widening conversion and the same access, target and initialization rules. Other field
+types, volatile and final fields raise `UnsupportedOperationException` until implemented.
 Public inherited-field lookup, other reflective field reads and writes, access override and generic
 `instanceof` on reflection interfaces remain outside this slice.
 Other dynamic constructor targets require a declared constructor, including when no declaration exists.
