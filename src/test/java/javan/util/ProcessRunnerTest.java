@@ -328,7 +328,7 @@ final class ProcessRunnerTest {
             try {
                 new ProcessRunner().run(
                     tempDir,
-                    List.of("sh", "-c", "trap '' TERM; touch '" + started + "'; (trap '' TERM; sleep 30) & echo $! > '" + childPid + "'; wait; touch '" + completed + "'")
+                    List.of("sh", "-c", "trap '' TERM; touch '" + started + "'; (trap '' TERM; sleep 30) & echo $! > '" + childPid + ".tmp'; mv '" + childPid + ".tmp' '" + childPid + "'; wait; touch '" + completed + "'")
                 );
                 throw new AssertionError("Expected the process runner to be interrupted");
             } catch (final InterruptedException expected) {
