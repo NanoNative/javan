@@ -6689,7 +6689,9 @@ public final class StaticVerifier {
         if (toString.isPresent()) {
             for (final RecordObjectMethodsCall.Component component : toString.orElseThrow().components()) {
                 final String descriptor = component.field().descriptor();
-                if (!(descriptor.length() == 1 || "Ljava/lang/String;".equals(descriptor))) return false;
+                if (!(descriptor.length() == 1 || "Ljava/lang/String;".equals(descriptor)
+                    || descriptor.startsWith("L") && descriptor.endsWith(";")
+                        && isRecordBoxedPrimitive(descriptor.substring(1, descriptor.length() - 1)))) return false;
             }
             return true;
         }

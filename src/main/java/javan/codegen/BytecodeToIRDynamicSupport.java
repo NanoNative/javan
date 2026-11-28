@@ -459,6 +459,10 @@ final class BytecodeToIRDynamicSupport {
                         case "F" -> IrExpression.objectCall("javan_string_value_of_float", List.of(IrExpression.floatField(classFile.name(), field.name(), receiver)));
                         case "D" -> IrExpression.objectCall("javan_string_value_of_double", List.of(IrExpression.doubleField(classFile.name(), field.name(), receiver)));
                         case "Ljava/lang/String;" -> IrExpression.objectField(classFile.name(), field.name(), receiver);
+                        case "Ljava/lang/Boolean;", "Ljava/lang/Byte;", "Ljava/lang/Short;", "Ljava/lang/Character;",
+                            "Ljava/lang/Integer;", "Ljava/lang/Long;", "Ljava/lang/Float;", "Ljava/lang/Double;" ->
+                            IrExpression.objectCall("javan_printable_object_string",
+                                List.of(IrExpression.objectField(classFile.name(), field.name(), receiver)));
                         default -> throw unsupported(classFile, method, instruction);
                     };
                     parts.add(value);
