@@ -4032,6 +4032,7 @@ public final class CCodegen {
                     "javan_class_package_name",
                     "javan_class_descriptor_string",
                     "javan_method_get_name",
+                    "javan_printable_object_string",
                     "javan_string_from",
                     "javan_atomic_integer_new",
                     "javan_atomic_long_new",

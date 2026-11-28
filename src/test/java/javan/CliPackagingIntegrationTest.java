@@ -341,6 +341,26 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanConvertsBoxedValuesDuringStringConcatenation() throws Exception {
+        final Path project = project("selfhost-boxed-string-concat");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    Integer number = Integer.valueOf(7);
+                    Long other = Long.valueOf(8L);
+                    System.out.println("values:" + number + "/" + other);
+                }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()), Duration.ofSeconds(60));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-boxed-string-concat").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("values:7/8\n");
+    }
+
+    @Test
     void nativeBuiltJavanReadsPublicReflectionDeclaration() throws Exception {
         final Path project = project("selfhost-reflection-declaration");
         writeJava(project, "com.acme.Main", """

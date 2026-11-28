@@ -1305,7 +1305,13 @@ final class BytecodeToIRDynamicSupport {
             return IrExpression.objectCall("javan_string_value_of_double", List.of(popDouble(classFile, method, stack)));
         }
         if (type == 'L') {
-            return popObject(classFile, method, stack);
+            final IrExpression value = popObject(classFile, method, stack);
+            return switch (descriptor) {
+                case "Ljava/lang/Boolean;", "Ljava/lang/Byte;", "Ljava/lang/Short;", "Ljava/lang/Character;",
+                    "Ljava/lang/Integer;", "Ljava/lang/Long;", "Ljava/lang/Float;", "Ljava/lang/Double;" ->
+                    IrExpression.objectCall("javan_printable_object_string", List.of(value));
+                default -> value;
+            };
         }
         if (type == '[') {
             return popObject(classFile, method, stack);
