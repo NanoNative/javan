@@ -217,14 +217,15 @@ public final class ReflectionFieldReachability {
     }
 
     /**
-     * Returns owners of selected static fields when reflective integer reads or writes are reachable.
+     * Returns owners of selected static fields when supported reflective primitive access is reachable.
      *
      * @param classes parsed closed-world classes
      * @param reachable reachable methods
      * @return static field owners requiring class initialization
      */
-    public static Set<String> staticIntOwners(final Map<String, ClassFile> classes, final List<EntryPoint> reachable) {
+    public static Set<String> staticPrimitiveOwners(final Map<String, ClassFile> classes, final List<EntryPoint> reachable) {
         boolean readsInt = false;
+        boolean readsLong = false;
         boolean writesInt = false;
         for (final EntryPoint entry : reachable) {
             final ClassFile owner = classes.get(entry.className());
@@ -235,11 +236,13 @@ public final class ReflectionFieldReachability {
                 if (target.isEmpty() || !"java/lang/reflect/Field".equals(target.orElseThrow().owner())) continue;
                 if ("getInt".equals(target.orElseThrow().name())
                     && "(Ljava/lang/Object;)I".equals(target.orElseThrow().descriptor())) readsInt = true;
+                if ("getLong".equals(target.orElseThrow().name())
+                    && "(Ljava/lang/Object;)J".equals(target.orElseThrow().descriptor())) readsLong = true;
                 if ("setInt".equals(target.orElseThrow().name())
                     && "(Ljava/lang/Object;I)V".equals(target.orElseThrow().descriptor())) writesInt = true;
             }
         }
-        if (!readsInt && !writesInt) return Set.of();
+        if (!readsInt && !readsLong && !writesInt) return Set.of();
         final Set<FieldRef> fields = new HashSet<>(literalLookups(classes, reachable));
         fields.addAll(ReflectionDeclaration.analyze(classes).fields());
         for (final String name : enumeratedOwners(classes, reachable)) {
@@ -256,6 +259,8 @@ public final class ReflectionFieldReachability {
                 if (candidate.name().equals(field.name()) && candidate.descriptor().equals(field.descriptor())
                     && candidate.isStatic() && (candidate.accessFlags() & 0x0040) == 0
                     && (readsInt && List.of("B", "S", "C", "I").contains(candidate.descriptor())
+                        || readsLong && List.of("B", "S", "C", "I", "J").contains(candidate.descriptor())
+                            && !("J".equals(candidate.descriptor()) && (candidate.accessFlags() & 0x0010) != 0)
                         || writesInt && List.of("I", "J", "F", "D").contains(candidate.descriptor())
                             && (candidate.accessFlags() & 0x0010) == 0)) owners.add(field.owner());
             }

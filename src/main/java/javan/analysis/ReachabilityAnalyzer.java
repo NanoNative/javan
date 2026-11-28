@@ -159,7 +159,7 @@ public final class ReachabilityAnalyzer {
             if (constructorsChanged) continue;
             boolean fieldInitializersChanged = false;
             final List<String> fieldOwners = new ArrayList<>();
-            for (final String owner : ReflectionFieldReachability.staticIntOwners(classes, graph.reachableMethods())) {
+            for (final String owner : ReflectionFieldReachability.staticPrimitiveOwners(classes, graph.reachableMethods())) {
                 int index = 0;
                 while (index < fieldOwners.size() && Strings2.compareAscii(fieldOwners.get(index), owner) < 0) index++;
                 fieldOwners.add(index, owner);

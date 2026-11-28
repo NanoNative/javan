@@ -89,7 +89,7 @@ public final class ClassInitializationGraph {
                 roots.add(owner);
             }
         }
-        roots.addAll(ReflectionFieldReachability.staticIntOwners(classes, reachableMethods));
+        roots.addAll(ReflectionFieldReachability.staticPrimitiveOwners(classes, reachableMethods));
         final Map<String, List<String>> dependencies = new LinkedHashMap<>();
         for (final String root : sortedStrings(roots)) {
             addNode(classes, root, dependencies, new ArrayList<>());

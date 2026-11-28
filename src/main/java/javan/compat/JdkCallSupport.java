@@ -170,6 +170,7 @@ public final class JdkCallSupport {
         runtime("Class.getDeclaredFields", "java/lang/Class", "getDeclaredFields", "()[Ljava/lang/reflect/Field;"),
         runtime("Field.getName", "java/lang/reflect/Field", "getName", "()Ljava/lang/String;"),
         runtime("Field.getInt", "java/lang/reflect/Field", "getInt", "(Ljava/lang/Object;)I"),
+        runtime("Field.getLong", "java/lang/reflect/Field", "getLong", "(Ljava/lang/Object;)J"),
         runtime("Field.setInt", "java/lang/reflect/Field", "setInt", "(Ljava/lang/Object;I)V"),
         runtime("Field.getDeclaringClass", "java/lang/reflect/Field", "getDeclaringClass", "()Ljava/lang/Class;"),
         runtime("Field.getType", "java/lang/reflect/Field", "getType", "()Ljava/lang/Class;"),
@@ -3008,6 +3009,7 @@ public final class JdkCallSupport {
         }
         if ("java/lang/reflect/Field".equals(methodRef.owner())
             && ("getInt".equals(methodRef.name()) && "(Ljava/lang/Object;)I".equals(methodRef.descriptor())
+                || "getLong".equals(methodRef.name()) && "(Ljava/lang/Object;)J".equals(methodRef.descriptor())
                 || "setInt".equals(methodRef.name()) && "(Ljava/lang/Object;I)V".equals(methodRef.descriptor()))) {
             return List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException",
                 "java/lang/IllegalAccessException", "java/lang/UnsupportedOperationException",
