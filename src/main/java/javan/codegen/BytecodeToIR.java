@@ -499,7 +499,7 @@ public final class BytecodeToIR {
             final Optional<MethodInfo> method = owner == null ? Optional.empty() : owner.method(entry.methodName(), entry.descriptor());
             if (method.isEmpty() || method.orElseThrow().code().isEmpty()) continue;
             for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
-                if (instruction.methodRef().isPresent() && JdkCallSupport.isStringValueOfObject(instruction.methodRef().orElseThrow())) return true;
+                if (instruction.methodRef().isPresent() && JdkCallSupport.isObjectStringConversion(instruction.methodRef().orElseThrow())) return true;
                 if (instruction.dynamicRef().isPresent()) {
                     final Optional<RecordObjectMethodsCall> record =
                         RecordObjectMethodsCall.resolveToString(owner, method.orElseThrow(), instruction.dynamicRef().orElseThrow());
@@ -674,7 +674,7 @@ public final class BytecodeToIR {
                                     && "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;".equals(calledMethod.descriptor())))
                             && "toString".equals(callee.methodName())
                             && "()Ljava/lang/String;".equals(callee.descriptor());
-                        final boolean objectStringConversion = JdkCallSupport.isStringValueOfObject(calledMethod)
+                        final boolean objectStringConversion = JdkCallSupport.isObjectStringConversion(calledMethod)
                             && ("toString".equals(callee.methodName()) && "()Ljava/lang/String;".equals(callee.descriptor())
                                 || "hashCode".equals(callee.methodName()) && "()I".equals(callee.descriptor()));
                         final boolean collectionEquality = (JdkCallSupport.isCollectionEqualitySearch(calledMethod)
@@ -1750,8 +1750,9 @@ public final class BytecodeToIR {
                 || JdkCallSupport.isListEndpointAdd(reference)) {
                 possibleTypes.addAll(JdkCallSupport.transportedPlatformThrowableTypes(reference));
             }
-            if (JdkCallSupport.isStringValueOfObject(reference)) {
+            if (JdkCallSupport.isObjectStringConversion(reference)) {
                 addTransportedThrowableTypes(DEFAULT_OBJECT_HASH_DISPATCH, dispatches, transportedThrowableTypes, possibleTypes);
+                if ("java/io/PrintStream".equals(reference.owner())) possibleTypes.add("java/lang/NullPointerException");
             }
             if (JdkCallSupport.isMapKeyOperation(reference) || JdkCallSupport.isMapMultiEntryFactory(reference)
                 || JdkCallSupport.isMapCopyOf(reference) || JdkCallSupport.isMapEntryArrayFactory(reference)

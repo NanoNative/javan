@@ -436,6 +436,7 @@ public final class CompatibilityReports {
     private static List<SupportRow> supportRows() {
         return List.of(
             pass("println-string"),
+            pass("printstream-bounded-object"),
             pass("println-int"),
             pass("println-boolean"),
             pass("println-long"),

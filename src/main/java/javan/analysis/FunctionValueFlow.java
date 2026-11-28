@@ -385,7 +385,7 @@ public final class FunctionValueFlow {
                         || JdkCallSupport.isMapEntryArrayFactory(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isCollectionContainsAll(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isCollectionFilterAll(instruction.methodRef().orElseThrow())
-                        || JdkCallSupport.isStringValueOfObject(instruction.methodRef().orElseThrow()))) {
+                        || JdkCallSupport.isObjectStringConversion(instruction.methodRef().orElseThrow()))) {
                     if (JdkCallSupport.isMapMultiEntryFactory(instruction.methodRef().orElseThrow())) {
                         final int count = JdkCallSupport.mapFixedEntryCount(instruction.methodRef().orElseThrow());
                         for (int key = 0; key < count; key++) {
@@ -1963,7 +1963,7 @@ public final class FunctionValueFlow {
             || JdkCallSupport.isMapKeyOperation(methodRef)
             || JdkCallSupport.isMapMultiEntryFactory(methodRef) || JdkCallSupport.isMapEntryArrayFactory(methodRef)
             || JdkCallSupport.isCollectionContainsAll(methodRef) || JdkCallSupport.isCollectionFilterAll(methodRef)
-            || JdkCallSupport.isStringValueOfObject(methodRef))
+            || JdkCallSupport.isObjectStringConversion(methodRef))
             : directUse(callbackKind).equals(methodRef) || isIndirectUse(callbackKind, methodRef);
     }
 
@@ -1987,7 +1987,7 @@ public final class FunctionValueFlow {
             return JdkCallSupport.isCollectionEqualitySearch(methodRef) || JdkCallSupport.isCollectionContainsAll(methodRef)
                 || JdkCallSupport.isCollectionFilterAll(methodRef) || JdkCallSupport.isMapKeyOperation(methodRef)
                 || JdkCallSupport.isMapMultiEntryFactory(methodRef) || JdkCallSupport.isMapEntryArrayFactory(methodRef)
-                || JdkCallSupport.isStringValueOfObject(methodRef);
+                || JdkCallSupport.isObjectStringConversion(methodRef);
         }
         return callbackKind == CallbackKind.FUNCTION
             ? isIndirectFunctionUse(methodRef)

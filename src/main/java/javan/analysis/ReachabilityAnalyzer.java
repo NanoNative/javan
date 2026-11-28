@@ -922,7 +922,7 @@ public final class ReachabilityAnalyzer {
                         || JdkCallSupport.isMapKeyOperation(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isMapMultiEntryFactory(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isMapEntryArrayFactory(instruction.methodRef().orElseThrow())
-                        || JdkCallSupport.isStringValueOfObject(instruction.methodRef().orElseThrow()))) {
+                        || JdkCallSupport.isObjectStringConversion(instruction.methodRef().orElseThrow()))) {
                     return List.of();
                 }
                 return virtualTargets(member);
@@ -1488,7 +1488,7 @@ public final class ReachabilityAnalyzer {
             addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             return;
         }
-        if (instruction.opcode() == 184 && JdkCallSupport.isStringValueOfObject(target)) {
+        if (JdkCallSupport.isObjectStringConversion(target)) {
             final MethodRef toString = new MethodRef("java/lang/Object", "toString", "()Ljava/lang/String;");
             final List<EntryPoint> targetMethods = dispatchTargets.collectionTargets(current, instruction, toString);
             enqueueAll(work, workSet, targetMethods);

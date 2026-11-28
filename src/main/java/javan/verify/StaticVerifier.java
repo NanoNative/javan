@@ -3380,7 +3380,7 @@ public final class StaticVerifier {
             return false;
         }
         final MethodRef target = instruction.methodRef().orElseThrow();
-        if (instruction.opcode() == 184 && JdkCallSupport.isStringValueOfObject(target)) return true;
+        if (JdkCallSupport.isObjectStringConversion(target)) return true;
         final ClassFile targetClass = classes.get(target.owner());
         if (targetClass == null) {
             return supportedLambdaThrowableCall(classes, target);
@@ -3705,11 +3705,14 @@ public final class StaticVerifier {
             visiting.remove(target);
             return result;
         }
-        if (JdkCallSupport.isStringValueOfObject(target)) {
+        if (JdkCallSupport.isObjectStringConversion(target)) {
             final Set<String> result = new HashSet<>(escapingPlatformExceptionTypes(classes,
                 new MethodRef("java/lang/Object", "toString", "()Ljava/lang/String;"), visiting));
             result.addAll(escapingPlatformExceptionTypes(classes,
                 new MethodRef("java/lang/Object", "hashCode", "()I"), visiting));
+            if ("java/io/PrintStream".equals(target.owner())) {
+                result.add("java/lang/NullPointerException");
+            }
             visiting.remove(target);
             return result;
         }

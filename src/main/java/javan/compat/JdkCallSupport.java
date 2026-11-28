@@ -2285,6 +2285,19 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies object conversions performed by String or PrintStream.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the call converts an object to a string
+     */
+    public static boolean isObjectStringConversion(final MethodRef methodRef) {
+        if (isStringValueOfObject(methodRef)) return true;
+        return "java/io/PrintStream".equals(methodRef.owner())
+            && ("print".equals(methodRef.name()) || "println".equals(methodRef.name()))
+            && "(Ljava/lang/Object;)V".equals(methodRef.descriptor());
+    }
+
+    /**
      * Identifies bulk containment checks on supported collections.
      *
      * @param methodRef referenced JDK method

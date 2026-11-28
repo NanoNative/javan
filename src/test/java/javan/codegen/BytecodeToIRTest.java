@@ -7196,26 +7196,6 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersSystemErrPrintlnObjectToErrorPrintInstruction() {
-        final IrFunction function = lowerMain(method(
-            0x0008,
-            "main",
-            "([Ljava/lang/String;)V",
-            2,
-            1,
-            getStatic(0, new FieldRef("java/lang/System", "err", "Ljava/io/PrintStream;")),
-            stringConstant(1, "panic"),
-            invokeVirtual(2, new MethodRef("java/io/PrintStream", "println", "(Ljava/lang/Object;)V")),
-            plain(3, 177, "return")
-        ));
-
-        assertThat(function.instructions()).contains(
-            IrInstruction.printlnErrorObject(IrExpression.stringLiteral("panic")),
-            IrInstruction.returnVoid()
-        );
-    }
-
-    @Test
     void lowersSystemErrPrintStringToErrorPrintInstruction() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -7231,69 +7211,6 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.printErrorObject(IrExpression.stringLiteral("panic")),
-            IrInstruction.returnVoid()
-        );
-    }
-
-    @Test
-    void lowersSystemOutPrintObjectToPrintInstruction() {
-        final IrFunction function = lowerMain(method(
-            0x0008,
-            "main",
-            "()V",
-            2,
-            0,
-            getStatic(0, new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
-            plain(1, 1, "aconst_null"),
-            invokeVirtual(2, new MethodRef("java/io/PrintStream", "print", "(Ljava/lang/Object;)V")),
-            plain(3, 177, "return")
-        ));
-
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.printObject(IrExpression.objectNull()),
-            IrInstruction.returnVoid()
-        );
-    }
-
-    @Test
-    void lowersSystemErrPrintObjectToErrorPrintInstruction() {
-        final IrFunction function = lowerMain(method(
-            0x0008,
-            "main",
-            "()V",
-            2,
-            0,
-            getStatic(0, new FieldRef("java/lang/System", "err", "Ljava/io/PrintStream;")),
-            plain(1, 1, "aconst_null"),
-            invokeVirtual(2, new MethodRef("java/io/PrintStream", "print", "(Ljava/lang/Object;)V")),
-            plain(3, 177, "return")
-        ));
-
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.printErrorObject(IrExpression.objectNull()),
-            IrInstruction.returnVoid()
-        );
-    }
-
-    @Test
-    void lowersObjectBackedPrintStreamPrintObjectCallToRuntimeHelper() {
-        final IrFunction function = lowerMain(method(
-            0x0008,
-            "main",
-            "(Ljava/io/PrintStream;Ljava/lang/Object;)V",
-            2,
-            2,
-            plain(0, 42, "aload_0"),
-            plain(1, 43, "aload_1"),
-            invokeVirtual(2, new MethodRef("java/io/PrintStream", "print", "(Ljava/lang/Object;)V")),
-            plain(3, 177, "return")
-        ));
-
-        assertThat(function.instructions()).contains(
-            IrInstruction.callStaticVoid(
-                "javan_printstream_print_object",
-                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ),
             IrInstruction.returnVoid()
         );
     }
@@ -7488,29 +7405,6 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersObjectBackedPrintStreamPrintlnObjectToRuntimeHelper() {
-        final IrFunction function = lowerMain(method(
-            0x0008,
-            "main",
-            "(Ljava/io/PrintStream;Ljava/lang/Object;)V",
-            2,
-            2,
-            plain(0, 42, "aload_0"),
-            plain(1, 43, "aload_1"),
-            invokeVirtual(2, new MethodRef("java/io/PrintStream", "println", "(Ljava/lang/Object;)V")),
-            plain(3, 177, "return")
-        ));
-
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.callStaticVoid(
-                "javan_printstream_println_object",
-                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
-            ),
-            IrInstruction.returnVoid()
-        );
-    }
-
-    @Test
     void lowersObjectBackedPrintStreamPrintlnStringToRuntimeHelper() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -7595,26 +7489,6 @@ final class BytecodeToIRTest {
             getStatic(0, new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
             stringConstant(1, "value"),
             invokeVirtual(2, new MethodRef("java/io/PrintStream", "println", "(Ljava/lang/String;)V")),
-            plain(3, 177, "return")
-        ));
-
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.printlnObject(IrExpression.stringLiteral("value")),
-            IrInstruction.returnVoid()
-        );
-    }
-
-    @Test
-    void lowersSystemOutPrintlnObjectToPrintlnInstruction() {
-        final IrFunction function = lowerMain(method(
-            0x0008,
-            "main",
-            "()V",
-            2,
-            0,
-            getStatic(0, new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
-            stringConstant(1, "value"),
-            invokeVirtual(2, new MethodRef("java/io/PrintStream", "println", "(Ljava/lang/Object;)V")),
             plain(3, 177, "return")
         ));
 
