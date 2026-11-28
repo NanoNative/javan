@@ -926,4 +926,61 @@ final class CliCustomMapKeyIntegrationTest extends CliIntegrationSupport {
         assertThat(result.stdout()).isEqualTo(expected).isEqualTo("6000\n");
     }
 
+    @Test
+    void negativeExpectedMapSizesThrowCatchableIllegalArgumentException() throws Exception {
+        final Path project = project("map-factory-negative-catch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            import java.util.LinkedHashMap;
+            public final class Main {
+                public static void main(String[] args) {
+                    try { HashMap.newHashMap(-1); } catch (IllegalArgumentException e) { System.out.println(e.getMessage()); }
+                    try { LinkedHashMap.newLinkedHashMap(Integer.MIN_VALUE); } catch (IllegalArgumentException e) { System.out.println(e.getMessage()); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-factory-negative-catch").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("Negative number of mappings: -1\nNegative number of mappings: -2147483648\n");
+    }
+
+    @Test
+    void negativeFactoryExceptionsSurviveConcurrentGc() throws Exception {
+        final Path project = project("map-factory-negative-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger count = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 150; i++) {
+                            try { HashMap.newHashMap(-1); }
+                            catch (IllegalArgumentException e) {
+                                if (e.getMessage().equals("Negative number of mappings: -1")) count.incrementAndGet();
+                            }
+                        }
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(count.get());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-factory-negative-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("300\n");
+    }
+
 }

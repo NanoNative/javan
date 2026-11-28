@@ -24285,10 +24285,13 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_hashmap_new_with_expected_mappings_into",
-                List.of(IrExpression.intLocal("arg0"))
-            ))
+            IrInstruction.assignObject("object0", IrExpression.objectCall(
+                "javan_hashmap_new_with_expected_mappings_into", List.of(IrExpression.intLocal("arg0")))),
+            IrInstruction.branchIf("label_pending_continue_1",
+                IrExpression.intComparison("==", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))),
+            IrInstruction.propagatePending(),
+            IrInstruction.label("label_pending_continue_1"),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -24306,10 +24309,13 @@ final class BytecodeToIRTest {
         ));
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_linkedhashmap_new_with_expected_mappings_into",
-                List.of(IrExpression.intLocal("arg0"))
-            ))
+            IrInstruction.assignObject("object0", IrExpression.objectCall(
+                "javan_linkedhashmap_new_with_expected_mappings_into", List.of(IrExpression.intLocal("arg0")))),
+            IrInstruction.branchIf("label_pending_continue_1",
+                IrExpression.intComparison("==", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))),
+            IrInstruction.propagatePending(),
+            IrInstruction.label("label_pending_continue_1"),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 

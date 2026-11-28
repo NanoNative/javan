@@ -201,6 +201,8 @@ within the supported key semantics. `Map.ofEntries` also rejects null arrays and
 native map entries and does not yet support application-defined `Map.Entry` implementations.
 `containsKey`, `containsValue`, `get` and `getOrDefault` reject null queries on maps created by
 `Map.of`, `Map.ofEntries` and `Map.copyOf`, including unmodifiable views.
+`HashMap.newHashMap` and `LinkedHashMap.newLinkedHashMap` throw a catchable
+`IllegalArgumentException` with the Java message for a negative expected size.
 The no-argument `ConcurrentHashMap.keySet()` concrete `KeySetView` supports `add`, `contains`,
 `remove`, `size`, `isEmpty`, `clear` and `iterator`; `add` throws `UnsupportedOperationException`.
 Supported `Map.keySet()` views remain connected to their map. Reads and supported removals reflect

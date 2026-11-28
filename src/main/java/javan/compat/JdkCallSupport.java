@@ -2684,12 +2684,29 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies the expected-size map factories supported by the native runtime.
+     *
+     * @param methodRef invoked method
+     * @return whether the method is a supported expected-size map factory
+     * @throws NullPointerException if methodRef is null
+     */
+    public static boolean isMapExpectedSizeFactory(final MethodRef methodRef) {
+        return "java/util/HashMap".equals(methodRef.owner()) && "newHashMap".equals(methodRef.name())
+            && "(I)Ljava/util/HashMap;".equals(methodRef.descriptor())
+            || "java/util/LinkedHashMap".equals(methodRef.owner()) && "newLinkedHashMap".equals(methodRef.name())
+            && "(I)Ljava/util/LinkedHashMap;".equals(methodRef.descriptor());
+    }
+
+    /**
      * Returns platform throwable types transported by a supported JDK call.
      *
      * @param methodRef method reference
      * @return deterministic throwable types, or an empty list for non-transporting calls
      */
     public static List<String> transportedPlatformThrowableTypes(final MethodRef methodRef) {
+        if (isMapExpectedSizeFactory(methodRef)) {
+            return List.of("java/lang/IllegalArgumentException");
+        }
         if (isMapEntrySetValue(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException", "java/lang/IllegalStateException");
         }

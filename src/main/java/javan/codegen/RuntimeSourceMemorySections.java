@@ -15697,6 +15697,19 @@ final class RuntimeSourceMemorySections {
         }
 
         void javan_hashmap_new_with_expected_mappings_into(void** result, int num_mappings) {
+            if (num_mappings < 0) {
+                char buffer[64];
+                snprintf(buffer, sizeof(buffer), "Negative number of mappings: %d", num_mappings);
+                void* message = NULL;
+                void** roots[] = { &message };
+                javan_runtime_lock_enter();
+                javan_root_frame_push(roots, 1);
+                message = javan_string_from(buffer);
+                javan_pending_throw("java/lang/IllegalArgumentException", message, NULL, NULL, NULL, -1, -1, NULL);
+                javan_root_frame_pop(roots);
+                javan_runtime_lock_leave();
+                return;
+            }
             (void) javan_map_new_with_capacity_into(javan_hashmap_capacity_for_expected_mappings(num_mappings), 0, result);
         }
 

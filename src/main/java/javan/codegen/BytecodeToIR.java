@@ -1752,6 +1752,9 @@ public final class BytecodeToIR {
                 || JdkCallSupport.isListEndpointAdd(reference)) {
                 possibleTypes.addAll(JdkCallSupport.transportedPlatformThrowableTypes(reference));
             }
+            if (JdkCallSupport.isMapExpectedSizeFactory(reference)) {
+                possibleTypes.addAll(JdkCallSupport.transportedPlatformThrowableTypes(reference));
+            }
             if (JdkCallSupport.isObjectStringConversion(reference)) {
                 addTransportedThrowableTypes(DEFAULT_OBJECT_HASH_DISPATCH, dispatches, transportedThrowableTypes, possibleTypes);
             }
