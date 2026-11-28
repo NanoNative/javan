@@ -491,6 +491,7 @@ public final class CompatibilityReports {
             pass("closed-world-getint-widening"),
             pass("closed-world-getlong-widening"),
             pass("closed-world-getdouble-widening"),
+            pass("closed-world-getfloat-widening"),
             pass("closed-world-instance-int-field-write"),
             pass("closed-world-declared-constructor-invocation"),
             pass("closed-world-public-constructor-lookup"),

@@ -227,6 +227,7 @@ public final class ReflectionFieldReachability {
         boolean readsInt = false;
         boolean readsLong = false;
         boolean readsDouble = false;
+        boolean readsFloat = false;
         boolean writesInt = false;
         boolean writesLong = false;
         boolean writesDouble = false;
@@ -244,6 +245,8 @@ public final class ReflectionFieldReachability {
                     && "(Ljava/lang/Object;)J".equals(target.orElseThrow().descriptor())) readsLong = true;
                 if ("getDouble".equals(target.orElseThrow().name())
                     && "(Ljava/lang/Object;)D".equals(target.orElseThrow().descriptor())) readsDouble = true;
+                if ("getFloat".equals(target.orElseThrow().name())
+                    && "(Ljava/lang/Object;)F".equals(target.orElseThrow().descriptor())) readsFloat = true;
                 if ("setInt".equals(target.orElseThrow().name())
                     && "(Ljava/lang/Object;I)V".equals(target.orElseThrow().descriptor())) writesInt = true;
                 if ("setLong".equals(target.orElseThrow().name())
@@ -254,7 +257,7 @@ public final class ReflectionFieldReachability {
                     && "(Ljava/lang/Object;F)V".equals(target.orElseThrow().descriptor())) writesFloat = true;
             }
         }
-        if (!readsInt && !readsLong && !readsDouble && !writesInt && !writesLong && !writesDouble && !writesFloat) return Set.of();
+        if (!readsInt && !readsLong && !readsDouble && !readsFloat && !writesInt && !writesLong && !writesDouble && !writesFloat) return Set.of();
         final Set<FieldRef> fields = new HashSet<>(literalLookups(classes, reachable));
         fields.addAll(ReflectionDeclaration.analyze(classes).fields());
         for (final String name : enumeratedOwners(classes, reachable)) {
@@ -273,6 +276,7 @@ public final class ReflectionFieldReachability {
                     && (readsInt && List.of("B", "S", "C", "I").contains(candidate.descriptor())
                         || readsLong && List.of("B", "S", "C", "I", "J").contains(candidate.descriptor())
                         || readsDouble && List.of("B", "S", "C", "I", "J", "F", "D").contains(candidate.descriptor())
+                        || readsFloat && List.of("B", "S", "C", "I", "J", "F").contains(candidate.descriptor())
                         || writesInt && List.of("I", "J", "F", "D").contains(candidate.descriptor())
                             && (candidate.accessFlags() & 0x0010) == 0
                         || writesLong && List.of("J", "F", "D").contains(candidate.descriptor())

@@ -163,6 +163,9 @@ conversion is implemented.
 `Field.getDouble` reads selected non-volatile application numeric fields with Java's widening
 conversion and the same access, target and initialization rules. Volatile fields and non-numeric
 fields raise `UnsupportedOperationException` until modeled.
+`Field.getFloat` reads selected, non-volatile application `byte`, `short`, `char`, `int`, `long`
+and `float` fields with Java's widening conversion and the same access, target and initialization
+rules. Volatile fields and other types raise `UnsupportedOperationException` until modeled.
 `Field.setInt` writes selected, non-volatile, non-final application `int`, `long`, `float` and
 `double` fields with Java's widening conversion and the same caller access and instance target checks.
 Static writes initialize the declaring class and ignore the target. Other field types, volatile and

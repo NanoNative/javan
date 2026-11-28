@@ -221,6 +221,9 @@ public final class CCodegen {
         if (features.fieldGetDouble()) {
             emitFieldPrimitiveAccessHelper(program, c, "get_double");
         }
+        if (features.fieldGetFloat()) {
+            emitFieldPrimitiveAccessHelper(program, c, "get_float");
+        }
         if (features.fieldSetInt()) {
             emitFieldPrimitiveAccessHelper(program, c, "set_int");
         }
@@ -425,6 +428,9 @@ public final class CCodegen {
         if (features.fieldGetDouble()) {
             header.append("double javan_generated_field_get_double(void* field, void* target, void* caller, void* caller_nest);\n");
         }
+        if (features.fieldGetFloat()) {
+            header.append("float javan_generated_field_get_float(void* field, void* target, void* caller, void* caller_nest);\n");
+        }
         if (features.fieldSetInt()) {
             header.append("int javan_generated_field_set_int(void* field, void* target, void* caller, void* caller_nest, int new_value);\n");
         }
@@ -523,6 +529,9 @@ public final class CCodegen {
         }
         if (features.fieldGetDouble()) {
             emitFieldPrimitiveAccessHelper(program, core, "get_double");
+        }
+        if (features.fieldGetFloat()) {
+            emitFieldPrimitiveAccessHelper(program, core, "get_float");
         }
         if (features.fieldSetInt()) {
             emitFieldPrimitiveAccessHelper(program, core, "set_int");
@@ -774,6 +783,9 @@ public final class CCodegen {
         }
         if (features.fieldGetDouble()) {
             emitFieldPrimitiveAccessHelper(program, c, "get_double");
+        }
+        if (features.fieldGetFloat()) {
+            emitFieldPrimitiveAccessHelper(program, c, "get_float");
         }
         if (features.fieldSetInt()) {
             emitFieldPrimitiveAccessHelper(program, c, "set_int");
@@ -1943,6 +1955,7 @@ public final class CCodegen {
         final boolean doubleValue = operation.endsWith("_double");
         final boolean floatValue = operation.endsWith("_float");
         if (doubleValue && !write) c.append("JAVAN_PROGRAM_LINKAGE double javan_generated_field_");
+        else if (floatValue && !write) c.append("JAVAN_PROGRAM_LINKAGE float javan_generated_field_");
         else c.append(wide && !write ? "JAVAN_PROGRAM_LINKAGE long long javan_generated_field_" : "JAVAN_PROGRAM_LINKAGE int javan_generated_field_");
         c
             .append(operation).append("(void* field, void* target, void* caller, void* caller_nest")
@@ -1955,6 +1968,7 @@ public final class CCodegen {
                     : wide ? List.of("J", "F", "D").contains(field.descriptor())
                     : List.of("I", "J", "F", "D").contains(field.descriptor())
                     : doubleValue ? List.of("B", "S", "C", "I", "J", "F", "D").contains(field.descriptor())
+                    : floatValue ? List.of("B", "S", "C", "I", "J", "F").contains(field.descriptor())
                     : wide ? List.of("B", "S", "C", "I", "J").contains(field.descriptor())
                     : List.of("B", "S", "C", "I").contains(field.descriptor()))
                     || (field.modifiers() & (0x0040 | (write ? 0x0010 : 0))) != 0) continue;
@@ -6348,6 +6362,10 @@ public final class CCodegen {
             return calls("javan_generated_field_get_double");
         }
 
+        private boolean fieldGetFloat() {
+            return calls("javan_generated_field_get_float");
+        }
+
         private boolean declaredFieldMetadata() {
             return calls("javan_generated_class_get_declared_field");
         }
@@ -6381,7 +6399,7 @@ public final class CCodegen {
         }
 
         private boolean classAssignability() {
-            return methodInvocation() || constructorInvocation() || fieldGetInt() || fieldGetLong() || fieldGetDouble() || fieldSetInt() || fieldSetLong() || fieldSetDouble() || fieldSetFloat() || calls("javan_class_is_instance") || calls("javan_class_is_assignable_from")
+            return methodInvocation() || constructorInvocation() || fieldGetInt() || fieldGetLong() || fieldGetDouble() || fieldGetFloat() || fieldSetInt() || fieldSetLong() || fieldSetDouble() || fieldSetFloat() || calls("javan_class_is_instance") || calls("javan_class_is_assignable_from")
                 || calls("javan_class_cast") || calls("javan_method_can_access") || calls("javan_record_shape_validate");
         }
     }
