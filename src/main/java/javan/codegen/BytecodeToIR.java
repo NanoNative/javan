@@ -2446,6 +2446,18 @@ public final class BytecodeToIR {
             case 113:
                 binaryLong(classFile, method, stack, "%");
                 break;
+            case 114: {
+                final IrExpression right = popFloat(classFile, method, stack);
+                final IrExpression left = popFloat(classFile, method, stack);
+                stack.add(StackValue.floatExpression(IrExpression.floatCall("fmodf", List.of(left, right))));
+                break;
+            }
+            case 115: {
+                final IrExpression right = popDouble(classFile, method, stack);
+                final IrExpression left = popDouble(classFile, method, stack);
+                stack.add(StackValue.doubleExpression(IrExpression.doubleCall("fmod", List.of(left, right))));
+                break;
+            }
             case 116:
                 unaryIntNeg(classFile, method, stack);
                 break;

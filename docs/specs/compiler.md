@@ -374,7 +374,9 @@ name and virtual `hashCode`, including identity hashing when no override exists.
 types do not cause unrelated overrides to be retained and may still fail at runtime when no implementation was retained.
 `Double.doubleToRawLongBits`, `Double.doubleToLongBits` and `Float.floatToIntBits` preserve
 non-NaN bit patterns. The canonical conversions normalize NaN while the raw conversion preserves
-its available representation.
+its available representation. Floating-point `%` uses the Java remainder operation for `float`
+and `double`, including NaN, infinities, subnormal values and the sign of zero. Operand evaluation
+order is preserved.
 Multi-dimensional array allocation evaluates every dimension before allocation, checks negative
 sizes in order, and supports partially allocated arrays and concurrent garbage collection.
 Array values converted to strings use their runtime array class name and identity hash, including

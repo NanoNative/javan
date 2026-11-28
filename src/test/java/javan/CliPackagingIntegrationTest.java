@@ -4765,6 +4765,42 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsFloatingPointRemainder() throws Exception {
+        final Path project = tempDir.resolve("selfhost-floating-remainder");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static float rem(float left, float right) { return left % right; }
+                static double rem(double left, double right) { return left % right; }
+                public static void main(String[] args) {
+                    System.out.println(rem(-7.0f, 3.0f));
+                    System.out.println(rem(7.0, -3.0));
+                    System.out.println(Float.floatToRawIntBits(rem(-0.0f, 3.0f)));
+                    double value = rem(0.0, 0.0);
+                    System.out.println(value != value);
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-floating-remainder"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-floating-remainder").toString()), Duration.ofSeconds(30));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsFloatingDecimalOutput() throws Exception {
         final Path project = tempDir.resolve("selfhost-floating-decimal-output");
         final Path classes = project.resolve("classes");

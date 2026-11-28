@@ -2209,7 +2209,7 @@ public final class StaticVerifier {
 
     private static boolean boundedNonThrowingOpcode(final int opcode) {
         if (opcode >= 0 && opcode <= 45 || opcode >= 54 && opcode <= 78
-            || opcode >= 87 && opcode <= 107 || opcode >= 116 && opcode <= 152
+            || opcode >= 87 && opcode <= 107 || opcode == 114 || opcode == 115 || opcode >= 116 && opcode <= 152
             || opcode == 198 || opcode == 199) {
             return BytecodeSupport.classify(opcode) == BytecodeSupport.Status.NATIVE_SUPPORTED;
         }
@@ -5025,6 +5025,7 @@ public final class StaticVerifier {
     }
 
     private static boolean supportedInterruptedWaitProtectedInstruction(final Instruction instruction) {
+        if (instruction.opcode() == 114 || instruction.opcode() == 115) return true;
         if (supportedExplicitThrowRangeInstruction(instruction)) {
             return true;
         }

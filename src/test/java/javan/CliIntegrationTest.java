@@ -3361,33 +3361,28 @@ final class CliIntegrationTest extends CliIntegrationSupport {
         final Path project = project("unreachable-bytecode");
         writeJava(project, "com.acme.Main", """
             package com.acme;
-
             public final class Main {
-                private Main() {
-                }
-
-                public static void main(final String[] args) {
-                    System.out.println("ok");
-                }
-
-                public static void dead(final int value) {
-                    synchronized (Main.class) {
-                        final int[][] matrix = new int[1][1];
-                        final float remainder = value % 2.5f;
-                        System.out.println(remainder);
-                        switch (value) {
-                            case 1 -> System.out.println("one " + matrix.length);
-                            default -> System.out.println("other");
-                        }
-                    }
-                }
+                public static void main(String[] args) { System.out.println("ok"); }
+                public static void dead() { int[] values = new int[1]; System.out.println(values.length); }
             }
             """);
-
-        final CliRun run = run(tempDir, "check", project.toString());
-
+        assertThat(runJvm(project, "com.acme.Main")).isEqualTo("ok\n");
+        final Path classes = project.resolve("jvm-classes");
+        final Path classFile = classes.resolve("com/acme/Main.class");
+        final byte[] bytes = Files.readAllBytes(classFile);
+        int matches = 0;
+        for (int index = 0; index + 3 < bytes.length; index++) {
+            if ((bytes[index] & 0xff) == 4 && (bytes[index + 1] & 0xff) == 188
+                && (bytes[index + 2] & 0xff) == 10 && (bytes[index + 3] & 0xff) == 75) {
+                bytes[index + 2] = 99;
+                matches++;
+            }
+        }
+        assertThat(matches).isEqualTo(1);
+        Files.write(classFile, bytes);
+        final CliRun run = run(tempDir, "check", classes.toString(), "--main", "com.acme.Main");
         assertThat(run.exitCode()).isZero();
-        assertThat(run.stdout()).contains("warning[JAVAN130]", "frem");
+        assertThat(run.stdout()).contains("warning[JAVAN130]", "newarray atype-99");
     }
 
     @Test

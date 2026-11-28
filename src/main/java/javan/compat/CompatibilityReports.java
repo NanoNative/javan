@@ -448,6 +448,7 @@ public final class CompatibilityReports {
             pass("long-basic"),
             pass("float-double"),
             pass("floating-bit-conversions"),
+            pass("floating-point-remainder"),
             pass("boxed-primitive-gc"),
             pass("boolean-basic"),
             pass("static-fields"),
