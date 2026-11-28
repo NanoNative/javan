@@ -478,6 +478,7 @@ public final class CompatibilityReports {
             pass("closed-world-setint-widening"),
             pass("closed-world-declared-field-enumeration"),
             pass("closed-world-field-enumeration-static-helper-flow"),
+            pass("closed-world-field-enumeration-trailing-class-flow"),
             pass("closed-world-declared-field-metadata"),
             pass("closed-world-instance-int-field-read"),
             pass("closed-world-getint-widening"),

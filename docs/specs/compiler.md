@@ -138,7 +138,8 @@ model raise `UnsupportedOperationException` instead of returning incomplete clas
 Runtime names do not reveal unselected fields and produce `NoSuchFieldException`.
 `Class.getDeclaredFields` returns fresh arrays and field objects for application classes selected by
 literal class flow or the public project declaration when the receiver is dynamic. Literal targets
-also flow through chains of static methods with one unchanged `Class` parameter. It retains all
+also flow through chains of static methods with an unchanged trailing `Class` parameter, including
+methods with earlier arguments. It retains all
 declared fields of those selected classes without initializing them. Primitive and array classes
 return empty arrays. Unselected dynamic targets and platform classes raise
 `UnsupportedOperationException` until their enumeration is modeled.

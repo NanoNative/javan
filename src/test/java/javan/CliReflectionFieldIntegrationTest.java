@@ -2007,4 +2007,96 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
         assertThat(result.stdout()).isEqualTo("1\nnot retained\n");
     }
 
+    @Test
+    void tracesTrailingClassArgumentsAfterWideParameters() throws Exception {
+        final Path project = project("reflection-enumeration-trailing-class");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model { public int first; private long second; }
+                static int inspect(int tag, long wide, double decimal, Class<?> type) { return type.getDeclaredFields().length; }
+                static int forward(double value, Class<?> type) { return inspect(1, 2L, value, type); }
+                public static void main(String[] args) { System.out.println(forward(3.0, Model.class)); }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-enumeration-trailing-class").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("2\n");
+    }
+
+    @Test
+    void trailingClassFlowIgnoresWritesToOtherParametersAndUnrelatedDeclarations() throws Exception {
+        final Path project = project("reflection-enumeration-trailing-unchanged");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.*;
+            public final class Main {
+                public static final class Selected { public int value; }
+                public static final class Other { public int hidden; }
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[] { Other.class }; }
+                static int inspect(int count, Class<?> type) { count = 4; return count + type.getDeclaredFields().length; }
+                public static void main(String[] args) throws Exception {
+                    System.out.println(inspect(0, Selected.class)); String name = args[0]; Field field;
+                    try { field = Other.class.getDeclaredField(name); }
+                    catch (NoSuchFieldException e) { System.out.println("not retained"); return; }
+                    System.out.println("retained");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-enumeration-trailing-unchanged").toString(), "hidden"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("5\nnot retained\n");
+    }
+
+    @Test
+    void trailingClassFlowUsesDeclarationsForRuntimeTargets() throws Exception {
+        final Path project = project("reflection-enumeration-trailing-dynamic");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static final class Model { public int value; private long hidden; }
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[] { Model.class }; }
+                static int inspect(long prefix, Class<?> type) { return type.getDeclaredFields().length; }
+                public static void main(String[] args) throws Exception { System.out.println(inspect(7L, Class.forName(args[0]))); }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-enumeration-trailing-dynamic").toString(), "com.acme.Main$Model"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("2\n");
+    }
+
+    @Test
+    void reassignedTrailingClassParameterDoesNotRetainCallerTarget() throws Exception {
+        final Path project = project("reflection-enumeration-trailing-reassigned");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.*;
+            public final class Main {
+                public static final class Actual { public int value; }
+                public static final class Passed { public int hidden; }
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[] { Actual.class }; }
+                static int inspect(long prefix, Class<?> type) { type = Actual.class; return type.getDeclaredFields().length; }
+                public static void main(String[] args) throws Exception {
+                    System.out.println(inspect(7L, Passed.class)); String name = args[0]; Field field;
+                    try { field = Passed.class.getDeclaredField(name); }
+                    catch (NoSuchFieldException e) { System.out.println("not retained"); return; }
+                    System.out.println("retained");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-enumeration-trailing-reassigned").toString(), "hidden"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("1\nnot retained\n");
+    }
+
 }

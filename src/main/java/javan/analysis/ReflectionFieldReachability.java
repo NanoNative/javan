@@ -13,6 +13,8 @@ import javan.classfile.Instruction;
 import javan.classfile.LambdaMetafactoryCall;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
+import javan.codegen.MethodDescriptor;
+import javan.ir.IrType;
 
 /** Discovers field metadata required by statically proven declared-field lookups. */
 public final class ReflectionFieldReachability {
@@ -70,16 +72,16 @@ public final class ReflectionFieldReachability {
             final Optional<MethodInfo> method = owner == null ? Optional.empty() : owner.method(entry.methodName(), entry.descriptor());
             if (method.isEmpty() || method.orElseThrow().code().isEmpty()) continue;
             final List<Instruction> instructions = method.orElseThrow().code().orElseThrow().instructions();
-            final boolean unchangedArgument = hasUnmodifiedClassParameter(entry, method.orElseThrow(), instructions);
+            final int classArgumentSlot = unmodifiedTrailingClassParameterSlot(entry, method.orElseThrow(), instructions);
             for (int index = 1; index < instructions.size(); index++) {
                 final Optional<MethodRef> target = instructions.get(index).methodRef();
                 if (target.isEmpty() || !"java/lang/Class".equals(target.orElseThrow().owner())
                     || !"getDeclaredFields".equals(target.orElseThrow().name())
                     || !"()[Ljava/lang/reflect/Field;".equals(target.orElseThrow().descriptor())) continue;
                 final Instruction receiver = instructions.get(index - 1);
-                recordClassArgumentConsumer(classArgumentConsumers, entry, receiver, unchangedArgument, false);
+                recordClassArgumentConsumer(classArgumentConsumers, entry, receiver, classArgumentSlot, false);
                 needsDeclaredTargets = requiresDeclaredTargets(
-                    instructions, index - 1, unchangedArgument && !method.orElseThrow().isPublic(), needsDeclaredTargets);
+                    instructions, index - 1, classArgumentSlot, method.orElseThrow().isPublic(), needsDeclaredTargets);
                 for (final String name : ReflectionLiteralFlow.classNames(method.orElseThrow(), index - 1)) {
                     if (classes.containsKey(name)) owners.add(name);
                 }
@@ -93,7 +95,7 @@ public final class ReflectionFieldReachability {
                 final Optional<MethodInfo> method = owner == null ? Optional.empty() : owner.method(entry.methodName(), entry.descriptor());
                 if (method.isEmpty() || method.orElseThrow().code().isEmpty()) continue;
                 final List<Instruction> instructions = method.orElseThrow().code().orElseThrow().instructions();
-                final boolean unchangedArgument = hasUnmodifiedClassParameter(entry, method.orElseThrow(), instructions);
+                final int classArgumentSlot = unmodifiedTrailingClassParameterSlot(entry, method.orElseThrow(), instructions);
                 for (int index = 1; index < instructions.size(); index++) {
                     final Instruction call = instructions.get(index);
                     if (call.opcode() != 184 || call.methodRef().isEmpty()) continue;
@@ -104,8 +106,8 @@ public final class ReflectionFieldReachability {
                     owners.addAll(ReflectionLiteralFlow.classNames(method.orElseThrow(), index - 1));
                     final Instruction argument = instructions.get(index - 1);
                     needsDeclaredTargets = requiresDeclaredTargets(
-                        instructions, index - 1, unchangedArgument && !method.orElseThrow().isPublic(), needsDeclaredTargets);
-                    changed = recordClassArgumentConsumer(classArgumentConsumers, entry, argument, unchangedArgument, changed);
+                        instructions, index - 1, classArgumentSlot, method.orElseThrow().isPublic(), needsDeclaredTargets);
+                    changed = recordClassArgumentConsumer(classArgumentConsumers, entry, argument, classArgumentSlot, changed);
                 }
             }
         } while (changed);
@@ -116,12 +118,13 @@ public final class ReflectionFieldReachability {
     }
 
     private static boolean requiresDeclaredTargets(
-        final List<Instruction> instructions, final int sourceIndex, final boolean mayForward, final boolean required
+        final List<Instruction> instructions, final int sourceIndex, final int classArgumentSlot,
+        final boolean publicMethod, final boolean required
     ) {
         if (required) return true;
         final Instruction source = instructions.get(sourceIndex);
         if (ReflectionDeclaration.classLiteralDescriptor(source).isPresent()) return false;
-        if (mayForward && isFirstReferenceParameterLoad(source)) return false;
+        if (!publicMethod && classArgumentSlot >= 0 && isReferenceParameterLoad(source, classArgumentSlot)) return false;
         if (source.opcode() != 184 || source.methodRef().isEmpty() || sourceIndex == 0) return true;
         final MethodRef target = source.methodRef().orElseThrow();
         if (!"java/lang/Class".equals(target.owner()) || !"forName".equals(target.name())
@@ -159,36 +162,58 @@ public final class ReflectionFieldReachability {
 
     private static boolean recordClassArgumentConsumer(
         final List<EntryPoint> consumers, final EntryPoint entry, final Instruction argument,
-        final boolean unchangedArgument, final boolean changed
+        final int classArgumentSlot, final boolean changed
     ) {
-        if (!unchangedArgument) return changed;
-        if (!isFirstReferenceParameterLoad(argument)) return changed;
+        if (classArgumentSlot < 0) return changed;
+        if (!isReferenceParameterLoad(argument, classArgumentSlot)) return changed;
         if (consumers.contains(entry)) return changed;
         consumers.add(entry);
         return true;
     }
 
-    private static boolean hasUnmodifiedClassParameter(
+    private static int unmodifiedTrailingClassParameterSlot(
         final EntryPoint entry, final MethodInfo method, final List<Instruction> instructions
     ) {
-        if (!method.isStatic() || !entry.descriptor().startsWith("(Ljava/lang/Class;)")) return false;
+        if (!method.isStatic()) return -1;
+        final String descriptor = entry.descriptor();
+        final int end = descriptor.indexOf(')');
+        final String suffix = "Ljava/lang/Class;";
+        final int start = end - suffix.length();
+        if (start < 1 || !descriptor.substring(start, end).equals(suffix)) return -1;
+        if (start > 1 && descriptor.charAt(start - 1) == '[') return -1;
+        final List<IrType> parameters = MethodDescriptor.parse(descriptor).parameterTypes();
+        int slot = 0;
+        for (int index = 0; index < parameters.size() - 1; index++) slot += parameters.get(index).slotWidth();
         for (final Instruction instruction : instructions) {
-            final int opcode = instruction.opcode();
-            if (opcode == 196) return false;
-            if (opcode >= 54 && opcode <= 58 && instruction.operands().length > 0
-                && (instruction.operands()[0] & 0xff) == 0) return false;
-            if (opcode >= 59 && opcode <= 78 && (opcode - 59) % 4 == 0) return false;
-            if (opcode == 132 && instruction.operands().length > 0 && (instruction.operands()[0] & 0xff) == 0) return false;
+            if (writesLocalSlot(instruction, slot)) return -1;
         }
-        return true;
+        return slot;
     }
 
-    private static boolean isFirstReferenceParameterLoad(final Instruction instruction) {
-        if (instruction.opcode() == 42) return true;
+    private static boolean writesLocalSlot(final Instruction instruction, final int slot) {
+        final int opcode = instruction.opcode();
+        if (opcode == 196) return true;
+        int first = -1;
+        int width = 1;
+        if (opcode >= 54 && opcode <= 58 && instruction.operands().length > 0) {
+            first = instruction.operands()[0] & 0xff;
+            if (opcode == 55 || opcode == 57) width = 2;
+        } else if (opcode >= 59 && opcode <= 78) {
+            first = (opcode - 59) % 4;
+            final int group = (opcode - 59) / 4;
+            if (group == 1 || group == 3) width = 2;
+        } else if (opcode == 132 && instruction.operands().length > 0) {
+            first = instruction.operands()[0] & 0xff;
+        }
+        return first >= 0 && first <= slot && slot < first + width;
+    }
+
+    private static boolean isReferenceParameterLoad(final Instruction instruction, final int slot) {
+        if (instruction.opcode() >= 42 && instruction.opcode() <= 45) return instruction.opcode() - 42 == slot;
         if (instruction.opcode() != 25) return false;
         final byte[] operands = instruction.operands();
         if (operands.length == 0) return false;
-        return (operands[0] & 0xff) == 0;
+        return (operands[0] & 0xff) == slot;
     }
 
     /**
