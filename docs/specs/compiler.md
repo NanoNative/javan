@@ -364,6 +364,8 @@ checks, and support both standard output and error. Supported primitive, String,
 and zero-argument print overloads also evaluate arguments before rejecting null stream receivers.
 A null result from `toString` raises a
 `NullPointerException` for `print(Object)` and prints `null` for `println(Object)`.
+A literal `char[]` constructed directly for a protected print call is accepted when all stores
+are proven in bounds and no control flow can enter the initializer.
 Plain objects and application classes
 whose known superclass chain reaches `Object` without a `toString` override use their runtime class
 name and virtual `hashCode`, including identity hashing when no override exists. Unknown receiver

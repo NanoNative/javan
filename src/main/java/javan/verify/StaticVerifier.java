@@ -1978,6 +1978,46 @@ public final class StaticVerifier {
         return cursor;
     }
 
+    private static Set<Integer> boundedInlineCharArrayStores(final CodeAttribute code, final CodeException handler) {
+        final List<Instruction> instructions = code.instructions();
+        final Set<Integer> result = new HashSet<>();
+        for (int allocationIndex = 1; allocationIndex < instructions.size(); allocationIndex++) {
+            final Instruction allocation = instructions.get(allocationIndex);
+            final byte[] operands = allocation.operands();
+            if (allocation.opcode() != 188 || operands.length != 1 || (operands[0] & 0xff) != 5
+                || allocation.offset() < handler.startPc() || allocation.offset() >= handler.endPc()) continue;
+            final Instruction size = instructions.get(allocationIndex - 1);
+            final int length = size.intValue().orElse(-1);
+            if (length < 0 || length > instructions.size() / 4 || size.offset() < handler.startPc()) continue;
+            int cursor = allocationIndex + 1;
+            final Set<Integer> candidate = new HashSet<>();
+            boolean valid = true;
+            for (int index = 0; index < length; index++) {
+                if (cursor + 3 >= instructions.size() || instructions.get(cursor).opcode() != 89
+                    || instructions.get(cursor + 1).intValue().orElse(-1) != index
+                    || instructions.get(cursor + 2).intValue().isEmpty()
+                    || instructions.get(cursor + 3).opcode() != 85) {
+                    valid = false;
+                    break;
+                }
+                candidate.add(Integer.valueOf(instructions.get(cursor + 3).offset()));
+                cursor += 4;
+            }
+            if (!valid || cursor >= instructions.size()) continue;
+            final Instruction call = instructions.get(cursor);
+            if (call.offset() >= handler.endPc() || call.opcode() != 182 || call.methodRef().isEmpty()) continue;
+            final MethodRef target = call.methodRef().orElseThrow();
+            if (!JdkCallSupport.isPrintStreamPrint(target) || !"([C)V".equals(target.descriptor())
+                || hasControlFlowEntryInExpression(instructions, allocationIndex - 1, cursor - 1)) continue;
+            boolean handlerInside = false;
+            for (final CodeException exception : code.exceptionTable()) {
+                if (exception.handlerPc() >= size.offset() && exception.handlerPc() < call.offset()) handlerInside = true;
+            }
+            if (!handlerInside) result.addAll(candidate);
+        }
+        return result;
+    }
+
     private static Set<Integer> boundedInlineMapEntryArrayOperations(final CodeAttribute code, final CodeException handler) {
         final List<Instruction> instructions = code.instructions();
         final Set<Integer> result = new HashSet<>();
@@ -2262,6 +2302,7 @@ public final class StaticVerifier {
         final List<Instruction> instructions = code.instructions();
         final boolean reflectiveInvocationRange = containsMethodInvocation(instructions, handler);
         Set<Integer> inlineEntryArrayOperations = null;
+        final Set<Integer> inlineCharArrayStores = boundedInlineCharArrayStores(code, handler);
         final Optional<Instruction> protectedEntry = instructionAtOffset(code, handler.startPc());
         final boolean staticReceiverRange = protectedEntry.isPresent()
             && sameClassStaticRead(classes, currentOwner, code, handler, protectedEntry.orElseThrow());
@@ -2371,6 +2412,7 @@ public final class StaticVerifier {
                 classNameAfterLookup = classNameAfterLookup && isolated;
             }
             if ((inlineEntryArrayOperations == null || !inlineEntryArrayOperations.contains(Integer.valueOf(instruction.offset())))
+                && !inlineCharArrayStores.contains(Integer.valueOf(instruction.offset()))
                 && !supportedInterruptedWaitProtectedInstruction(instruction)
                 && !(staticReceiverRange && instruction.offset() == handler.startPc())
                 && !(staticReceiverRange && sameClassStaticArgumentCall(classes, currentOwner, instruction))

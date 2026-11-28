@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 349 |
-| pass | 347 |
+| rows | 350 |
+| pass | 348 |
 | scoped | 2 |
 | target | 0 |
 | rejected | 0 |
@@ -47,6 +47,7 @@ Status mapping:
 | `application-runtime-exception-transport` | pass |
 | `try-finally` | scoped |
 | `path-inline-varargs-typed-handler` | pass |
+| `print-inline-char-array-typed-handler` | pass |
 | `enum-basic` | pass |
 | `enum-ordinal` | pass |
 | `enum-values` | pass |

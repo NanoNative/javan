@@ -456,6 +456,7 @@ public final class CompatibilityReports {
             pass("application-runtime-exception-transport"),
             scoped("try-finally"),
             pass("path-inline-varargs-typed-handler"),
+            pass("print-inline-char-array-typed-handler"),
             pass("enum-basic"),
             pass("enum-ordinal"),
             pass("enum-values"),
