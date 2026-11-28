@@ -17965,7 +17965,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             """);
         final CliRun check = run(tempDir, "check", project.toString());
         assertThat(check.exitCode()).isEqualTo(2);
-        assertThat(check.stderr()).contains("error[JAVAN096]", "Array classes cannot declare method targets");
+        assertThat(check.stderr()).contains("error[JAVAN096]", "Array classes cannot declare member targets");
     }
 
     @Test
@@ -18009,7 +18009,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             """);
         final CliRun check = run(tempDir, "check", project.toString());
         assertThat(check.exitCode()).isEqualTo(2);
-        assertThat(check.stderr()).contains("error[JAVAN096]", "Primitive classes cannot declare method targets");
+        assertThat(check.stderr()).contains("error[JAVAN096]", "Primitive classes cannot declare member targets");
     }
 
     @Test

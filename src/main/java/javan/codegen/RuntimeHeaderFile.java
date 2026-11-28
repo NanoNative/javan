@@ -1027,8 +1027,10 @@ final class RuntimeHeaderFile {
         int javan_method_get_parameter_count(void* value);
         void javan_method_get_parameter_types(void** result, void* value);
         void* javan_method_get_return_type(void* value);
+        int javan_field_type_supported(void* value);
         int javan_method_get_modifiers(void* value);
         void* javan_method_new(const JavanMethodMetadata* metadata);
+        void javan_field_new_into(void** result, const JavanMethodMetadata* metadata);
         void javan_constructor_new_into(void** result, const JavanMethodMetadata* metadata);
         const JavanMethodMetadata* javan_method_metadata(void* value);
         int javan_method_access_override(void* value);
@@ -1054,6 +1056,7 @@ final class RuntimeHeaderFile {
         void* javan_class_package_name(void* class_value);
         void* javan_class_type_name(void* class_value);
         int javan_class_is_primitive(void* class_value);
+        int javan_class_is_compiled(void* class_value);
         void* javan_class_descriptor_string(void* class_value);
         void* javan_class_component_type(void* class_value);
         void* javan_class_array_type(void* class_value);

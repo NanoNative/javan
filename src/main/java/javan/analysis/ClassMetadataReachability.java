@@ -4,6 +4,7 @@ import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
 import javan.classfile.CodeException;
 import javan.classfile.Instruction;
+import javan.classfile.FieldRef;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
 
@@ -37,6 +38,7 @@ public final class ClassMetadataReachability {
             return Set.copyOf(classes.keySet());
         }
         final Set<String> retained = new HashSet<>();
+        boolean fieldTypeUsed = false;
         for (final String target : declaration.classes()) {
             addClass(classes, retained, target);
         }
@@ -64,6 +66,8 @@ public final class ClassMetadataReachability {
                 }
                 if (instruction.methodRef().isPresent()) {
                     final MethodRef reference = instruction.methodRef().orElseThrow();
+                    fieldTypeUsed |= "java/lang/reflect/Field".equals(reference.owner())
+                        && "getType".equals(reference.name()) && "()Ljava/lang/Class;".equals(reference.descriptor());
                     if (isClassForName(reference)) {
                         for (final String name : ReflectionLiteralFlow.classForNameNames(method.orElseThrow(), index)) {
                             addClass(classes, retained, name);
@@ -74,6 +78,12 @@ public final class ClassMetadataReachability {
                 if (instruction.fieldRef().isPresent()) {
                     addClass(classes, retained, instruction.fieldRef().orElseThrow().owner());
                 }
+            }
+        }
+        if (fieldTypeUsed) {
+            for (final FieldRef field : declaration.fields()) addClass(classes, retained, field.descriptor());
+            for (final FieldRef field : ReflectionFieldReachability.literalLookups(classes, callGraph.reachableMethods())) {
+                addClass(classes, retained, field.descriptor());
             }
         }
         for (final String type : callGraph.instantiatedTypes().types()) {

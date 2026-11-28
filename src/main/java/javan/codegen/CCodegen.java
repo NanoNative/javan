@@ -12,6 +12,7 @@ import javan.ir.IrClass;
 import javan.ir.IrDispatch;
 import javan.ir.IrDispatchTarget;
 import javan.ir.IrExpression;
+import javan.ir.IrFieldMetadata;
 import javan.ir.IrInstruction;
 import javan.ir.IrMethodMetadata;
 import javan.ir.IrProgram;
@@ -205,6 +206,9 @@ public final class CCodegen {
         if (features.classForName()) {
             emitClassForNameHelper(program, c);
         }
+        if (features.declaredFieldMetadata()) {
+            emitFieldLookupHelper(program, c);
+        }
         if (features.declaredMethodMetadata()) {
             emitMethodLookupHelper(program, c, true);
         }
@@ -382,6 +386,9 @@ public final class CCodegen {
         if (features.classForName()) {
             header.append("void* javan_generated_class_for_name(void* name_value, int initialize, void* loader);\n");
         }
+        if (features.declaredFieldMetadata()) {
+            header.append("int javan_generated_class_get_declared_field(void** result, void* class_value, void* name_value);\n");
+        }
         if (features.declaredMethodMetadata()) {
             header.append("void* javan_generated_class_get_declared_method(void* class_value, void* name_value, void* parameter_types);\n");
         }
@@ -453,6 +460,9 @@ public final class CCodegen {
         emitGeneratedObjectHelpers(program, features, core);
         if (features.classForName()) {
             emitClassForNameHelper(program, core);
+        }
+        if (features.declaredFieldMetadata()) {
+            emitFieldLookupHelper(program, core);
         }
         if (features.declaredMethodMetadata()) {
             emitMethodLookupHelper(program, core, true);
@@ -677,6 +687,9 @@ public final class CCodegen {
         emitGeneratedObjectHelpers(program, features, c);
         if (features.classForName()) {
             emitClassForNameHelper(program, c);
+        }
+        if (features.declaredFieldMetadata()) {
+            emitFieldLookupHelper(program, c);
         }
         if (features.declaredMethodMetadata()) {
             emitMethodLookupHelper(program, c, true);
@@ -1731,6 +1744,34 @@ public final class CCodegen {
                 .append("};")
                 .append(System.lineSeparator());
         }
+    }
+
+    private static void emitFieldLookupHelper(final IrProgram program, final StringBuilder c) {
+        c.append("JAVAN_PROGRAM_LINKAGE int javan_generated_class_get_declared_field(void** result, void* class_value, void* name_value) {")
+            .append(System.lineSeparator());
+        c.append("    *result = NULL;").append(System.lineSeparator());
+        for (final IrReflectedClass classInfo : program.reflectedClasses()) {
+            for (final IrFieldMetadata field : classInfo.declaredFields()) {
+                c.append("    if (javan_class_name_equals(class_value, ")
+                    .append(emitCStringLiteral(displayClassName(field.declaringJvmName())))
+                    .append(") && javan_string_equals((const char*) name_value, ")
+                    .append(emitCStringLiteral(field.name())).append(")) {").append(System.lineSeparator());
+                c.append("        static const JavanMethodMetadata metadata = {JAVAN_METHOD_METADATA_MAGIC, 0, ")
+                    .append(field.modifiers()).append(", ").append(field.declaringPublic() ? 1 : 0)
+                    .append(", 0, 0, NULL, ").append(emitCStringLiteral(field.name())).append(", ")
+                    .append(emitCStringLiteral(displayClassName(field.declaringJvmName()))).append(", ")
+                    .append(emitCStringLiteral(displayClassName(field.declaringNestJvmName()))).append(", ")
+                    .append(emitCStringLiteral(reflectionTypeName(field.descriptor()))).append(", NULL};")
+                    .append(System.lineSeparator());
+                c.append("        javan_field_new_into(result, &metadata);").append(System.lineSeparator());
+                c.append("        return 1;").append(System.lineSeparator());
+                c.append("    }").append(System.lineSeparator());
+            }
+        }
+        c.append("    if (javan_class_is_array(class_value) || javan_class_is_primitive(class_value) || javan_class_is_compiled(class_value)) return 0;")
+            .append(System.lineSeparator());
+        c.append("    return -1;").append(System.lineSeparator()).append("}")
+            .append(System.lineSeparator()).append(System.lineSeparator());
     }
 
     private static void emitMethodLookupHelper(
@@ -6056,6 +6097,10 @@ public final class CCodegen {
 
         private boolean classForName() {
             return calls("javan_generated_class_for_name");
+        }
+
+        private boolean declaredFieldMetadata() {
+            return calls("javan_generated_class_get_declared_field");
         }
 
         private boolean declaredMethodMetadata() {

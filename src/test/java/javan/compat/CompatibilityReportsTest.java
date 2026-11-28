@@ -137,6 +137,7 @@ final class CompatibilityReportsTest {
             "| `application-runtime-exception-transport` | pass |",
             "| `try-finally` | scoped |",
             "| `closed-world-reflective-method-literal-signature` | pass |",
+            "| `closed-world-declared-field-metadata` | pass |",
             "| `path-inline-varargs-typed-handler` | pass |",
             "| `print-inline-char-array-typed-handler` | pass |",
             "| `map-keyset-custom-contains` | pass |",
@@ -663,10 +664,10 @@ final class CompatibilityReportsTest {
             "A broad JDK-compatibility release must report:",
             "The first native release is scenario-bounded.",
             "not a release-completion percentage.",
-            "| support rows | 359 |",
-            "| pass rows | 357 |",
+            "| support rows | 360 |",
+            "| pass rows | 358 |",
             "| scoped rows | 2 |",
-            "| accounted rows | 357 |",
+            "| accounted rows | 358 |",
             "| unaccounted rows | 2 |"
         );
         assertThat(matrix).contains(

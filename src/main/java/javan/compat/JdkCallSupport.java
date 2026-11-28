@@ -166,6 +166,11 @@ public final class JdkCallSupport {
         runtime("Class.getPackageName", "java/lang/Class", "getPackageName", "()Ljava/lang/String;"),
         runtime("Class.getTypeName", "java/lang/Class", "getTypeName", "()Ljava/lang/String;"),
         runtime("Class.getComponentType", "java/lang/Class", "getComponentType", "()Ljava/lang/Class;"),
+        runtime("Class.getDeclaredField", "java/lang/Class", "getDeclaredField", "(Ljava/lang/String;)Ljava/lang/reflect/Field;"),
+        runtime("Field.getName", "java/lang/reflect/Field", "getName", "()Ljava/lang/String;"),
+        runtime("Field.getDeclaringClass", "java/lang/reflect/Field", "getDeclaringClass", "()Ljava/lang/Class;"),
+        runtime("Field.getType", "java/lang/reflect/Field", "getType", "()Ljava/lang/Class;"),
+        runtime("Field.getModifiers", "java/lang/reflect/Field", "getModifiers", "()I"),
         runtime(
             "Class.getDeclaredMethod",
             "java/lang/Class",
@@ -1879,11 +1884,11 @@ public final class JdkCallSupport {
             return List.of("arrays", "strings");
         }
         if ("java/lang/Class".equals(owner)
-            && ("forName".equals(name) || "getDeclaredMethod".equals(name) || "getMethod".equals(name)
+            && ("forName".equals(name) || "getDeclaredField".equals(name) || "getDeclaredMethod".equals(name) || "getMethod".equals(name)
                 || "getDeclaredConstructor".equals(name) || "getConstructor".equals(name))) {
             return List.of("reflection-metadata");
         }
-        if ("java/lang/reflect/Method".equals(owner) || "java/lang/reflect/Constructor".equals(owner)
+        if ("java/lang/reflect/Method".equals(owner) || "java/lang/reflect/Field".equals(owner) || "java/lang/reflect/Constructor".equals(owner)
             || "java/lang/reflect/Executable".equals(owner) || "java/lang/reflect/Member".equals(owner)
             || "java/lang/reflect/AccessibleObject".equals(owner)) {
             return List.of("reflection-metadata");
@@ -2942,6 +2947,11 @@ public final class JdkCallSupport {
             && "(Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Enum;".equals(methodRef.descriptor())) {
             return List.of("java/lang/Error");
         }
+        if ("java/lang/Class".equals(methodRef.owner()) && "getDeclaredField".equals(methodRef.name())
+            && "(Ljava/lang/String;)Ljava/lang/reflect/Field;".equals(methodRef.descriptor())) {
+            return List.of("java/lang/NullPointerException", "java/lang/NoSuchFieldException",
+                "java/lang/UnsupportedOperationException");
+        }
         if ("java/lang/Class".equals(methodRef.owner())
             && ("getDeclaredMethod".equals(methodRef.name()) || "getMethod".equals(methodRef.name()))
             && "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;".equals(methodRef.descriptor())) {
@@ -2961,6 +2971,10 @@ public final class JdkCallSupport {
                 "java/lang/IllegalArgumentException", "java/lang/InstantiationException",
                 "java/lang/reflect/InvocationTargetException", "java/lang/UnsupportedOperationException",
                 "java/lang/ExceptionInInitializerError", "java/lang/NoClassDefFoundError", "java/lang/Error");
+        }
+        if ("java/lang/reflect/Field".equals(methodRef.owner()) && "getType".equals(methodRef.name())
+            && "()Ljava/lang/Class;".equals(methodRef.descriptor())) {
+            return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
         }
         if (methodMetadataAccessor(methodRef)) {
             return List.of("java/lang/NullPointerException");
@@ -3175,12 +3189,14 @@ public final class JdkCallSupport {
     private static boolean methodMetadataAccessor(final MethodRef methodRef) {
         final boolean method = "java/lang/reflect/Method".equals(methodRef.owner());
         final boolean constructor = "java/lang/reflect/Constructor".equals(methodRef.owner());
+        final boolean field = "java/lang/reflect/Field".equals(methodRef.owner());
         final boolean executable = "java/lang/reflect/Executable".equals(methodRef.owner());
         final boolean member = "java/lang/reflect/Member".equals(methodRef.owner());
-        if (!method && !constructor && !executable && !member) {
+        if (!method && !constructor && !field && !executable && !member) {
             return false;
         }
-        return "getName".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())
+        return field && "getType".equals(methodRef.name()) && "()Ljava/lang/Class;".equals(methodRef.descriptor())
+            || "getName".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())
             || "getDeclaringClass".equals(methodRef.name()) && "()Ljava/lang/Class;".equals(methodRef.descriptor())
             || "getParameterCount".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())
             || "getParameterTypes".equals(methodRef.name())

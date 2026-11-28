@@ -12,6 +12,7 @@ import java.util.List;
  * @param declaredConstructors declared constructors available for lookup
  * @param abstractClass whether reflective construction must reject the class
  * @param enumClass whether reflective construction must reject enum constants
+ * @param declaredFields explicitly referenced declared fields
  */
 public record IrReflectedClass(
     String jvmName,
@@ -20,15 +21,30 @@ public record IrReflectedClass(
     boolean arrayFamily,
     List<IrMethodMetadata> declaredConstructors,
     boolean abstractClass,
-    boolean enumClass
+    boolean enumClass,
+    List<IrFieldMetadata> declaredFields
 ) {
     public IrReflectedClass {
         declaredMethods = List.copyOf(declaredMethods);
         publicMethods = List.copyOf(publicMethods);
         declaredConstructors = List.copyOf(declaredConstructors);
+        declaredFields = List.copyOf(declaredFields);
         if (arrayFamily && !declaredMethods.isEmpty()) {
             throw new IllegalArgumentException("Array-family reflection metadata cannot declare methods.");
         }
+    }
+
+    /** Creates class metadata without field metadata. */
+    public IrReflectedClass(
+        final String jvmName,
+        final List<IrMethodMetadata> declaredMethods,
+        final List<IrMethodMetadata> publicMethods,
+        final boolean arrayFamily,
+        final List<IrMethodMetadata> declaredConstructors,
+        final boolean abstractClass,
+        final boolean enumClass
+    ) {
+        this(jvmName, declaredMethods, publicMethods, arrayFamily, declaredConstructors, abstractClass, enumClass, List.of());
     }
 
     /** Creates method metadata without constructor metadata. */

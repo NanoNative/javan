@@ -215,7 +215,7 @@ public final class ReachabilityAnalyzer {
                     final MethodRef target = instruction.methodRef().orElseThrow();
                     if (ClassMetadataReachability.isClassForName(target)) return true;
                     if ("java/lang/Class".equals(target.owner())
-                        && ("getMethod".equals(target.name()) || "getDeclaredMethod".equals(target.name())
+                        && ("getDeclaredField".equals(target.name()) || "getMethod".equals(target.name()) || "getDeclaredMethod".equals(target.name())
                             || "getConstructor".equals(target.name()) || "getDeclaredConstructor".equals(target.name()))) return true;
                 }
             }

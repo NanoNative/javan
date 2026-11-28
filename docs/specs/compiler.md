@@ -73,6 +73,7 @@ supported reflection subset. Javan reads its
 bytecode without executing the method or initializing its declaring class. Supported entries
 are class literals from the compiled application or scanned dependencies, their array class
 literals, primitive and void class literals, primitive array class literals,
+`getDeclaredField` on non-array compiled classes with a literal field name,
 `getDeclaredMethod` on non-array classes with a literal name and literal parameter types,
 and `getDeclaredConstructor` or `getConstructor` on compiled classes with literal parameter types:
 
@@ -81,7 +82,7 @@ public static java.lang.reflect.AnnotatedElement[] javanReflectionTargets()
         throws ReflectiveOperationException {
     return new java.lang.reflect.AnnotatedElement[] {
         Plugin.class, Plugin.class.getDeclaredMethod("run", String.class),
-        Plugin.class.getDeclaredConstructor()
+        Plugin.class.getDeclaredField("name"), Plugin.class.getDeclaredConstructor()
     };
 }
 ```
@@ -91,8 +92,8 @@ reference component class without initializing it. Declared method bodies are re
 for the exact parameter list, including all bytecode methods with that name and parameter
 list when return types differ. Constructors retain their exact parameter list. An empty array
 is valid. Duplicate declarations, different signatures, missing members and computed or
-unsupported elements produce `JAVAN096`.
-Field declarations are not implemented yet. Dynamic `Class.forName` names resolve against
+unsupported elements produce `JAVAN096`. Declared fields retain exact declaring class and field
+identity; they do not retain every field on the class. Dynamic `Class.forName` names resolve against
 the declared classes, classes retained by reachable
 code and their required hierarchies, and class-name literals traced to the lookup directly or
 through local assignments and control flow in the same method. The three-argument overload
@@ -126,8 +127,17 @@ and `getModifiers`. Each `getParameterTypes` call returns a fresh array.
 Constructor `canAccess`, `setAccessible`, `trySetAccessible` and `isAccessible` use the same
 closed-world access checks as invocation, including rejection of non-null `canAccess` targets.
 The shared `Executable` and `Member` metadata accessors work for compiled Method and Constructor
-objects. Field reflection remains outside this subset.
-Other dynamic targets require a declared constructor, including when no declaration exists.
+objects. `Class.getDeclaredField` resolves declared fields selected by the project declaration or by
+class and field-name literals traced through supported local assignments and control flow. Platform
+field lookup raises `UnsupportedOperationException` until Java's platform field filtering is modeled.
+The Field `getName`,
+`getDeclaringClass`, `getType` and `getModifiers` accessors are supported, including through `Member`
+where the Java API permits. Reachable `getType` calls retain the selected field types and their
+required hierarchies without initializing them. Field types outside the supported class metadata
+model raise `UnsupportedOperationException` instead of returning incomplete class information.
+Runtime names do not reveal unselected fields and produce `NoSuchFieldException`. Public inherited-field lookup, reflective field reads and writes,
+access override and generic `instanceof` on reflection interfaces remain outside this slice.
+Other dynamic constructor targets require a declared constructor, including when no declaration exists.
 Platform constructor
 lookup fails explicitly with `UnsupportedOperationException` until implemented. Other
 constructor reflection APIs are not implied by this subset.

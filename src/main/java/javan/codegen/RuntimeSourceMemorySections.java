@@ -89,6 +89,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_HTTP_EXCHANGE_INPUT_STREAM 46
         #define JAVAN_RUNTIME_KIND_PLAIN_OBJECT 47
         #define JAVAN_RUNTIME_KIND_CONSTRUCTOR 48
+        #define JAVAN_RUNTIME_KIND_FIELD 49
         #define JAVAN_SERVICE_LOADER_MAGIC 0x4a534c44
         #define JAVAN_SERVICE_ITERATOR_MAGIC 0x4a534954
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
@@ -1424,7 +1425,8 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE_STATE
                 || runtime_kind == JAVAN_RUNTIME_KIND_CAUGHT_THROWABLE
                 || runtime_kind == JAVAN_RUNTIME_KIND_METHOD
-                || runtime_kind == JAVAN_RUNTIME_KIND_CONSTRUCTOR;
+                || runtime_kind == JAVAN_RUNTIME_KIND_CONSTRUCTOR
+                || runtime_kind == JAVAN_RUNTIME_KIND_FIELD;
             node->runtime_kind = runtime_kind;
             node->mark = 0;
             node->array_class_name = NULL;
@@ -1697,6 +1699,7 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_UUID
                 || runtime_kind == JAVAN_RUNTIME_KIND_METHOD
                 || runtime_kind == JAVAN_RUNTIME_KIND_CONSTRUCTOR
+                || runtime_kind == JAVAN_RUNTIME_KIND_FIELD
                 || runtime_kind == JAVAN_RUNTIME_KIND_SERVICE_LOADER
                 || runtime_kind == JAVAN_RUNTIME_KIND_SERVICE_ITERATOR;
             javan_heap_maybe_validate();
@@ -2506,6 +2509,7 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_UUID
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_METHOD
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_CONSTRUCTOR
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_FIELD
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_SERVICE_LOADER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_SERVICE_ITERATOR
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_PLAIN_OBJECT) {
@@ -4651,6 +4655,12 @@ final class RuntimeSourceMemorySections {
             }
             javan_allocation_metadata snapshot;
             int found = javan_find_allocation(object_value, &snapshot);
+            if (found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_FIELD) {
+                if (strcmp(state->binary_name, "java.lang.reflect.Field") == 0
+                    || strcmp(state->binary_name, "java.lang.reflect.AccessibleObject") == 0
+                    || strcmp(state->binary_name, "java.lang.reflect.Member") == 0
+                    || strcmp(state->binary_name, "java.lang.reflect.AnnotatedElement") == 0) return 1;
+            }
             if (found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_CONSTRUCTOR) {
                 if (strcmp(state->binary_name, "java.lang.reflect.Constructor") == 0
                     || strcmp(state->binary_name, "java.lang.reflect.Executable") == 0
@@ -4726,6 +4736,14 @@ final class RuntimeSourceMemorySections {
         int javan_class_is_array(void* class_value) {
             javan_runtime_lock_enter();
             int result = javan_runtime_class_checked_unlocked(class_value)->is_array;
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        int javan_class_is_compiled(void* class_value) {
+            javan_runtime_lock_enter();
+            javan_runtime_class_state* state = javan_runtime_class_checked_unlocked(class_value);
+            int result = state->exact_type_id > 0 && javan_type_descriptor_for(state->exact_type_id) != NULL;
             javan_runtime_lock_leave();
             return result;
         }
@@ -4806,6 +4824,9 @@ final class RuntimeSourceMemorySections {
             int found = javan_find_allocation(value, &snapshot);
             if (found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_CONSTRUCTOR) {
                 return javan_runtime_class_literal("java.lang.reflect.Constructor", 0, 0, 0, 0);
+            }
+            if (found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_FIELD) {
+                return javan_runtime_class_literal("java.lang.reflect.Field", 0, 0, 0, 0);
             }
             if (found != 0 && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_PLAIN_OBJECT) {
                 return javan_runtime_class_literal("java.lang.Object", JAVAN_CLASS_EXACT_OBJECT, 0, 0, 0);
@@ -4965,7 +4986,8 @@ final class RuntimeSourceMemorySections {
             if (node == NULL
                 || node->kind != JAVAN_HEAP_KIND_RUNTIME
                 || (node->runtime_kind != JAVAN_RUNTIME_KIND_METHOD
-                    && node->runtime_kind != JAVAN_RUNTIME_KIND_CONSTRUCTOR)) {
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_CONSTRUCTOR
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_FIELD)) {
                 javan_panic("invalid Method object");
             }
             javan_method_value* method = (javan_method_value*) value;
@@ -4984,6 +5006,14 @@ final class RuntimeSourceMemorySections {
             method->access_override = 0;
             javan_root_frame_pop(roots);
             return result;
+        }
+
+        void javan_field_new_into(void** result, const JavanMethodMetadata* metadata) {
+            javan_method_metadata_checked(metadata);
+            javan_alloc_runtime_rooted(sizeof(javan_method_value), result, JAVAN_RUNTIME_KIND_FIELD);
+            javan_method_value* field = (javan_method_value*) *result;
+            field->metadata = metadata;
+            field->access_override = 0;
         }
 
         void javan_constructor_new_into(void** result, const JavanMethodMetadata* metadata) {
@@ -5111,7 +5141,7 @@ final class RuntimeSourceMemorySections {
 
         void* javan_method_get_name(void* value) {
             const JavanMethodMetadata* metadata = javan_method_metadata(value);
-            return javan_string_from(strcmp(metadata->name, "<init>") == 0 ? metadata->declaring_name : metadata->name);
+            return (void*) (strcmp(metadata->name, "<init>") == 0 ? metadata->declaring_name : metadata->name);
         }
 
         void* javan_method_get_declaring_class(void* value) {
@@ -5144,6 +5174,26 @@ final class RuntimeSourceMemorySections {
                 );
             }
             javan_root_frame_pop(roots);
+        }
+
+        int javan_field_type_supported(void* value) {
+            const char* name = javan_method_metadata(value)->return_name;
+            const int array = *name == '[';
+            while (*name == '[') name++;
+            if (array && name[0] != '\\0' && name[1] == '\\0' && strchr("ZBSCIJFD", name[0]) != NULL) return 1;
+            if (array && *name == 'L') {
+                unsigned long length = (unsigned long) strlen(name);
+                if (length < 3UL || name[length - 1UL] != ';') return 0;
+                char* component = (char*) javan_raw_calloc_retry(length - 1UL);
+                if (component == NULL) javan_panic("out of memory");
+                memcpy(component, name + 1, length - 2UL);
+                int supported = javan_runtime_class_known_exact_type_id(component) != 0
+                    || javan_runtime_class_type_id_for_binary_name(component) != 0;
+                free(component);
+                return supported;
+            }
+            return javan_runtime_class_known_exact_type_id(name) != 0
+                || javan_runtime_class_type_id_for_binary_name(name) != 0;
         }
 
         void* javan_method_get_return_type(void* value) {
@@ -12478,6 +12528,7 @@ final class RuntimeSourceMemorySections {
                     || allocation.runtime_kind == JAVAN_RUNTIME_KIND_INET_SOCKET_ADDRESS
                     || allocation.runtime_kind == JAVAN_RUNTIME_KIND_METHOD
                     || allocation.runtime_kind == JAVAN_RUNTIME_KIND_CONSTRUCTOR
+                    || allocation.runtime_kind == JAVAN_RUNTIME_KIND_FIELD
                     || allocation.runtime_kind == JAVAN_RUNTIME_KIND_HTTP_HEADERS) {
                     javan_panic("unsupported Object.equals runtime receiver");
                 }

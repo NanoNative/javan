@@ -4729,6 +4729,51 @@ final class BytecodeToIRInvokeSupport {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
     ) {
+        if ("java/lang/Class".equals(methodRef.owner()) && "getDeclaredField".equals(methodRef.name())
+            && "(Ljava/lang/String;)Ljava/lang/reflect/Field;".equals(methodRef.descriptor())) {
+            final String nameLocal = newObjectLocal(localDeclarations);
+            final String classLocal = newObjectLocal(localDeclarations);
+            instructions.add(IrInstruction.assignObject(nameLocal, popObject(classFile, method, stack)));
+            instructions.add(IrInstruction.assignObject(classLocal, popObject(classFile, method, stack)));
+            final List<StackValue> successStack = List.copyOf(stack);
+            final String classPresent = "label_field_lookup_class_present_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(classPresent,
+                IrExpression.objectComparison("!=", IrExpression.objectLocal(classLocal), IrExpression.objectNull())));
+            routePendingPlatformException(classFile, method, instruction, instructions, stack, pendingExceptionHandlerStacks,
+                sourceLines, "java/lang/NullPointerException", IrExpression.stringLiteral("class"));
+            instructions.add(IrInstruction.label(classPresent));
+            stack.addAll(successStack);
+            final String namePresent = "label_field_lookup_name_present_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(namePresent,
+                IrExpression.objectComparison("!=", IrExpression.objectLocal(nameLocal), IrExpression.objectNull())));
+            routePendingPlatformException(classFile, method, instruction, instructions, stack, pendingExceptionHandlerStacks,
+                sourceLines, "java/lang/NullPointerException", IrExpression.stringLiteral("name"));
+            instructions.add(IrInstruction.label(namePresent));
+            stack.addAll(successStack);
+            final String resultLocal = newObjectLocal(localDeclarations);
+            final String statusLocal = "int" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.INT, statusLocal));
+            instructions.add(IrInstruction.assignInt(statusLocal, IrExpression.intCall(
+                "javan_generated_class_get_declared_field",
+                List.of(IrExpression.objectLocalAddress(resultLocal), IrExpression.objectLocal(classLocal),
+                    IrExpression.objectLocal(nameLocal)))));
+            final String supported = "label_field_lookup_supported_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(supported,
+                IrExpression.intComparison(">=", IrExpression.intLocal(statusLocal), IrExpression.intLiteral(0))));
+            routePendingPlatformException(classFile, method, instruction, instructions, stack, pendingExceptionHandlerStacks,
+                sourceLines, "java/lang/UnsupportedOperationException", IrExpression.stringLiteral("platform field metadata"));
+            instructions.add(IrInstruction.label(supported));
+            stack.addAll(successStack);
+            final String found = "label_field_lookup_found_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(found,
+                IrExpression.objectComparison("!=", IrExpression.objectLocal(resultLocal), IrExpression.objectNull())));
+            routePendingPlatformException(classFile, method, instruction, instructions, stack, pendingExceptionHandlerStacks,
+                sourceLines, "java/lang/NoSuchFieldException", IrExpression.objectLocal(nameLocal));
+            instructions.add(IrInstruction.label(found));
+            stack.addAll(successStack);
+            stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+            return true;
+        }
         if ("java/lang/reflect/Constructor".equals(methodRef.owner())
             && "newInstance".equals(methodRef.name())
             && "([Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor())) {
@@ -4834,6 +4879,7 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("java/lang/reflect/Method".equals(methodRef.owner())
             || "java/lang/reflect/Constructor".equals(methodRef.owner())
+            || "java/lang/reflect/Field".equals(methodRef.owner())
             || "java/lang/reflect/Executable".equals(methodRef.owner())
             || "java/lang/reflect/Member".equals(methodRef.owner())) {
             final String runtimeHelper = methodMetadataRuntimeHelper(methodRef);
@@ -4856,6 +4902,16 @@ final class BytecodeToIRInvokeSupport {
             );
             instructions.add(IrInstruction.label(receiverPresent));
             stack.addAll(successStack);
+            if ("java/lang/reflect/Field".equals(methodRef.owner()) && "getType".equals(methodRef.name())) {
+                final String typeSupported = "label_field_type_supported_" + instruction.offset();
+                instructions.add(IrInstruction.branchIf(typeSupported, IrExpression.intComparison("!=",
+                    IrExpression.intCall("javan_field_type_supported", List.of(IrExpression.objectLocal(receiverLocal))),
+                    IrExpression.intLiteral(0))));
+                routePendingPlatformException(classFile, method, instruction, instructions, stack, pendingExceptionHandlerStacks,
+                    sourceLines, "java/lang/UnsupportedOperationException", IrExpression.stringLiteral("field type metadata"));
+                instructions.add(IrInstruction.label(typeSupported));
+                stack.addAll(successStack);
+            }
             if ("getParameterCount".equals(methodRef.name()) || "getModifiers".equals(methodRef.name())) {
                 stack.add(StackValue.intExpression(IrExpression.intCall(
                     runtimeHelper, List.of(IrExpression.objectLocal(receiverLocal))
@@ -5093,7 +5149,8 @@ final class BytecodeToIRInvokeSupport {
             && "()[Ljava/lang/Class;".equals(methodRef.descriptor())) {
             return "javan_method_get_parameter_types";
         }
-        if ("getReturnType".equals(methodRef.name()) && "()Ljava/lang/Class;".equals(methodRef.descriptor())) {
+        if (("getReturnType".equals(methodRef.name()) || "java/lang/reflect/Field".equals(methodRef.owner())
+            && "getType".equals(methodRef.name())) && "()Ljava/lang/Class;".equals(methodRef.descriptor())) {
             return "javan_method_get_return_type";
         }
         if ("getModifiers".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {

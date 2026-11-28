@@ -6,17 +6,20 @@ import javan.analysis.ClassMetadataReachability;
 import javan.analysis.EntryPoint;
 import javan.analysis.GeneratedObjectCloneSupport;
 import javan.analysis.ReflectionDeclaration;
+import javan.analysis.ReflectionFieldReachability;
 import javan.analysis.ReflectionMethodReachability;
 import javan.analysis.ReflectionConstructorReachability;
 import javan.classfile.ClassFile;
 import javan.classfile.ClassFileScanner;
 import javan.classfile.FieldInfo;
+import javan.classfile.FieldRef;
 import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
 import javan.ir.IrClass;
 import javan.ir.IrExpression;
 import javan.ir.IrField;
+import javan.ir.IrFieldMetadata;
 import javan.ir.IrMethodMetadata;
 import javan.ir.IrParameter;
 import javan.ir.IrReflectedClass;
@@ -326,6 +329,7 @@ final class BytecodeToIRMetadataSupport {
         final List<EntryPoint> reachableMethods
     ) {
         boolean declaredMethodLookup = false;
+        boolean declaredFieldLookup = false;
         boolean publicMethodLookup = false;
         boolean declaredConstructorLookup = false;
         boolean dynamicClassLookup = false;
@@ -341,6 +345,9 @@ final class BytecodeToIRMetadataSupport {
             for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
                 if (instruction.methodRef().isPresent()) {
                     final MethodRef reference = instruction.methodRef().orElseThrow();
+                    declaredFieldLookup |= "java/lang/Class".equals(reference.owner())
+                        && "getDeclaredField".equals(reference.name())
+                        && "(Ljava/lang/String;)Ljava/lang/reflect/Field;".equals(reference.descriptor());
                     declaredMethodLookup |= "java/lang/Class".equals(reference.owner())
                         && "getDeclaredMethod".equals(reference.name())
                         && "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;".equals(reference.descriptor());
@@ -361,8 +368,11 @@ final class BytecodeToIRMetadataSupport {
                 }
             }
         }
+        if (!declaredMethodLookup && !publicMethodLookup && !declaredConstructorLookup && !declaredFieldLookup) {
+            return new ReflectionClasses(false, false, false, false, List.of());
+        }
         if (!declaredMethodLookup && !publicMethodLookup && !declaredConstructorLookup) {
-            return new ReflectionClasses(false, false, false, List.of());
+            return new ReflectionClasses(false, false, false, true, List.of());
         }
         if (dynamicClassLookup) {
             classLiterals.addAll(List.of(
@@ -382,7 +392,7 @@ final class BytecodeToIRMetadataSupport {
             }
             sorted.add(index, classLiteral);
         }
-        return new ReflectionClasses(declaredMethodLookup, publicMethodLookup, declaredConstructorLookup, List.copyOf(sorted));
+        return new ReflectionClasses(declaredMethodLookup, publicMethodLookup, declaredConstructorLookup, declaredFieldLookup, List.copyOf(sorted));
     }
 
     static Map<String, ClassFile> loadExternalReflectionClasses(
@@ -438,26 +448,28 @@ final class BytecodeToIRMetadataSupport {
         final Map<String, ClassFile> externalClasses,
         final List<EntryPoint> reachableMethods
     ) {
-        if (!reflection.declaredMethodLookup() && !reflection.publicMethodLookup() && !reflection.declaredConstructorLookup()) {
+        if (!reflection.declaredMethodLookup() && !reflection.publicMethodLookup() && !reflection.declaredConstructorLookup()
+            && !reflection.declaredFieldLookup()) {
             return List.of();
         }
         final Map<String, ClassFile> allClasses = new LinkedHashMap<>(externalClasses);
         allClasses.putAll(classes);
         final Set<String> classpathClasses = classes.keySet();
         final ReflectionDeclaration.Result declaration = ReflectionDeclaration.analyze(classes);
+        final Set<FieldRef> literalFields = ReflectionFieldReachability.literalLookups(classes, reachableMethods);
         final Set<String> literalLookups = ReflectionMethodReachability.literalLookups(classes, reachableMethods);
         final List<EntryPoint> literalConstructors = ReflectionConstructorReachability.analyze(classes, reachableMethods);
         final List<IrReflectedClass> result = new ArrayList<>();
         for (final IrClass retained : retainedClasses) {
             final ClassFile classFile = classes.get(retained.jvmName());
             if (classFile != null) {
-                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection, declaration, literalLookups, literalConstructors));
+                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection, declaration, literalLookups, literalConstructors, literalFields));
             }
         }
         for (final String jvmName : reflection.externalClassNames()) {
             final ClassFile classFile = externalClasses.get(jvmName);
             if (classFile != null) {
-                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection, declaration, literalLookups, literalConstructors));
+                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection, declaration, literalLookups, literalConstructors, literalFields));
             }
         }
         if (reflection.publicMethodLookup()) {
@@ -481,7 +493,8 @@ final class BytecodeToIRMetadataSupport {
         final ReflectionClasses reflection,
         final ReflectionDeclaration.Result declaration,
         final Set<String> literalLookups,
-        final List<EntryPoint> literalConstructors
+        final List<EntryPoint> literalConstructors,
+        final Set<FieldRef> literalFields
     ) {
         final List<IrMethodMetadata> constructors = new ArrayList<>();
         if (reflection.declaredConstructorLookup() && classpathClasses.contains(classFile.name())) {
@@ -496,6 +509,16 @@ final class BytecodeToIRMetadataSupport {
                     method.accessFlags(), classFile.isPublic(), true, List.of()));
             }
         }
+        final List<IrFieldMetadata> fields = new ArrayList<>();
+        if (reflection.declaredFieldLookup()) {
+            for (final FieldInfo field : classFile.fields()) {
+                final FieldRef reference = new FieldRef(classFile.name(), field.name(), field.descriptor());
+                if (declaration.fields().contains(reference) || literalFields.contains(reference)) {
+                    fields.add(new IrFieldMetadata(classFile.name(), classFile.nestHost(), field.name(),
+                        field.descriptor(), field.accessFlags(), classFile.isPublic()));
+                }
+            }
+        }
         return new IrReflectedClass(
             classFile.name(),
             reflection.declaredMethodLookup()
@@ -507,7 +530,8 @@ final class BytecodeToIRMetadataSupport {
             false,
             constructors,
             classFile.isAbstract(),
-            classFile.isEnum()
+            classFile.isEnum(),
+            fields
         );
     }
 
@@ -538,6 +562,7 @@ final class BytecodeToIRMetadataSupport {
         boolean declaredMethodLookup,
         boolean publicMethodLookup,
         boolean declaredConstructorLookup,
+        boolean declaredFieldLookup,
         List<String> externalClassNames
     ) {
         ReflectionClasses {
