@@ -3373,6 +3373,8 @@ final class CliIntegrationTest extends CliIntegrationSupport {
                 public static void dead(final int value) {
                     synchronized (Main.class) {
                         final int[][] matrix = new int[1][1];
+                        final float remainder = value % 2.5f;
+                        System.out.println(remainder);
                         switch (value) {
                             case 1 -> System.out.println("one " + matrix.length);
                             default -> System.out.println("other");
@@ -3385,7 +3387,7 @@ final class CliIntegrationTest extends CliIntegrationSupport {
         final CliRun run = run(tempDir, "check", project.toString());
 
         assertThat(run.exitCode()).isZero();
-        assertThat(run.stdout()).contains("warning[JAVAN130]");
+        assertThat(run.stdout()).contains("warning[JAVAN130]", "frem");
     }
 
     @Test
