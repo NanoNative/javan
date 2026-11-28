@@ -120,4 +120,32 @@ final class CliInlineCharArrayHandlerIntegrationTest extends CliIntegrationSuppo
         assertThat(first.stderr()).contains("JAVAN014").isEqualTo(second.stderr());
     }
 
+    @Test
+    void initializesAProtectedCharArrayFromLocalValues() throws Exception {
+        final Path project = project("inline-char-array-local-values");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.io.PrintStream;
+            public final class Main {
+                static void print(PrintStream stream, char value) {
+                    try { stream.print(new char[] {value, '!' }); }
+                    catch (NullPointerException expected) { System.out.println("caught"); }
+                }
+                static void extended(PrintStream stream, int a, int b, int c, char value) {
+                    try { stream.print(new char[] {value}); }
+                    catch (NullPointerException expected) { System.out.println("caught"); }
+                }
+                public static void main(String[] args) {
+                    print(null, 'q'); print(System.out, 'q'); extended(System.out, 0, 0, 0, 'r');
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/inline-char-array-local-values").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("caught\nq!r");
+    }
+
 }

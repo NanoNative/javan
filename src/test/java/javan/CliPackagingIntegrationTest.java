@@ -4598,11 +4598,11 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             package com.acme;
             import java.io.PrintStream;
             public final class Main {
-                static void print(PrintStream stream) {
-                    try { stream.print(new char[] {'x'}); }
+                static void print(PrintStream stream, char value) {
+                    try { stream.print(new char[] {value}); }
                     catch (NullPointerException expected) { System.out.println("caught"); }
                 }
-                public static void main(String[] args) { print(null); print(System.out); }
+                public static void main(String[] args) { print(null, 'x'); print(System.out, 'x'); }
             }
             """);
         final ProcessResult javac = process(tempDir,

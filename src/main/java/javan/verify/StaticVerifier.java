@@ -1995,8 +1995,13 @@ public final class StaticVerifier {
             for (int index = 0; index < length; index++) {
                 if (cursor + 3 >= instructions.size() || instructions.get(cursor).opcode() != 89
                     || instructions.get(cursor + 1).intValue().orElse(-1) != index
-                    || instructions.get(cursor + 2).intValue().isEmpty()
                     || instructions.get(cursor + 3).opcode() != 85) {
+                    valid = false;
+                    break;
+                }
+                final Instruction value = instructions.get(cursor + 2);
+                final int valueOpcode = value.opcode();
+                if (value.intValue().isEmpty() && valueOpcode != 21 && (valueOpcode < 26 || valueOpcode > 29)) {
                     valid = false;
                     break;
                 }
