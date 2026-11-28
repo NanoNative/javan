@@ -673,6 +673,7 @@ public final class CompatibilityReports {
             pass("map-values-backed-view"),
             pass("map-keyset-custom-contains"),
             pass("map-constructor-concurrent-gc"),
+            pass("map-capacity-constructor-concurrent-gc"),
             pass("map-expected-size-factory-concurrent-gc"),
             pass("map-view-and-iterator-creation-concurrent-gc"),
             pass("map-values-custom-contains"),

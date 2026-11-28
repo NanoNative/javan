@@ -15713,18 +15713,21 @@ final class RuntimeSourceMemorySections {
         }
 
         void javan_map_initialize_capacity(void* value, int capacity) {
+            javan_runtime_lock_enter();
             javan_object_map* map = javan_map_checked(value);
             javan_map_mutable_checked(map);
             if (capacity < 0) {
                 javan_panic("negative map capacity");
             }
             if (capacity == 0) {
+                javan_runtime_lock_leave();
                 return;
             }
             if (map->backing != NULL) {
                 javan_panic("unsupported map backing for capacity initialization");
             }
             javan_map_ensure_capacity(map, capacity);
+            javan_runtime_lock_leave();
         }
 
         void javan_map_initialize_capacity_with_load_factor(void* value, int capacity, float load_factor) {
