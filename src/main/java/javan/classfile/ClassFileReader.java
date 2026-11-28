@@ -147,7 +147,12 @@ public final class ClassFileReader {
                     if (List.of("B", "S", "C", "I", "Z").contains(descriptor)) {
                         final Optional<Integer> integerConstant = constantPool.intValue(constantIndex);
                         if (integerConstant.isEmpty()) throw new IOException("Invalid integer ConstantValue for field " + name);
-                        initialValueBits = integerConstant.orElseThrow().intValue();
+                        int value = integerConstant.orElseThrow().intValue();
+                        if ("B".equals(descriptor)) value = (byte) value;
+                        else if ("S".equals(descriptor)) value = (short) value;
+                        else if ("C".equals(descriptor)) value = (char) value;
+                        else if ("Z".equals(descriptor)) value &= 1;
+                        initialValueBits = value;
                     } else if ("J".equals(descriptor)) {
                         final Optional<Long> longConstant = constantPool.longValue(constantIndex);
                         if (longConstant.isEmpty()) throw new IOException("Invalid long ConstantValue for field " + name);

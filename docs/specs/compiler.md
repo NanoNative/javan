@@ -146,8 +146,9 @@ return empty arrays. Unselected dynamic targets and platform classes raise
 `Field.getInt` reads selected, non-volatile application fields declared as `byte`, `short`,
 `char` or `int`, with caller access checks, instance target validation and Java's widening
 conversion. Static fields initialize their declaring class on access and ignore the target.
-Static `int`, `long`, `float` and `double` `ConstantValue` attributes initialize their fields before
-class or interface initialization. Floating-point constants preserve binary32 and binary64 bits,
+Static primitive `ConstantValue` attributes initialize their fields before
+class or interface initialization. Integer constants are narrowed to `byte`, `short`, `char` or
+`boolean` as required by the field type. Floating-point constants preserve binary32 and binary64 bits,
 including signed zero, infinities and NaN payloads. Instance fields ignore `ConstantValue` attributes.
 Other floating-point literal paths retain their existing NaN behavior.
 Other field types and volatile fields raise `UnsupportedOperationException` for this accessor until

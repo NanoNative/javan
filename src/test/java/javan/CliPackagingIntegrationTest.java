@@ -24,6 +24,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.io.UncheckedIOException;
+import java.lang.classfile.ClassFile;
+import java.lang.classfile.attribute.ConstantValueAttribute;
+import java.lang.constant.ClassDesc;
+import java.lang.constant.MethodTypeDesc;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -10637,6 +10641,46 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
         assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
         assertThat(nativeRun.stdout()).isEqualTo(expected.stdout()).isEqualTo("true\n");
+    }
+
+    @Test
+    void nativeBuiltJavanNarrowsSmallIntegerConstantValues() throws Exception {
+        final Path project = tempDir.resolve("selfhost-small-integral-constant");
+        final Path classes = project.resolve("classes");
+        final Path dependency = classes.resolve("dep");
+        Files.createDirectories(dependency);
+        final ClassDesc constants = ClassDesc.of("dep.Constants"), reader = ClassDesc.of("dep.Reader");
+        final ClassDesc b = ClassDesc.ofDescriptor("B"), integer = ClassDesc.ofDescriptor("I");
+        final byte[] constantBytes = ClassFile.of().build(constants, builder -> builder
+            .withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_FINAL | ClassFile.ACC_SUPER)
+            .withField("VALUE", b, field -> field.withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_STATIC | ClassFile.ACC_FINAL)
+                .with(ConstantValueAttribute.of(384))));
+        final byte[] readerBytes = ClassFile.of().build(reader, builder -> builder
+            .withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_FINAL | ClassFile.ACC_SUPER)
+            .withMethodBody("read", MethodTypeDesc.of(integer), ClassFile.ACC_PUBLIC | ClassFile.ACC_STATIC,
+                code -> code.getstatic(constants, "VALUE", b).ireturn()));
+        Files.write(dependency.resolve("Constants.class"), constantBytes);
+        Files.write(dependency.resolve("Reader.class"), readerBytes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main { public static void main(String[] args) { System.out.println(dep.Reader.read()); } }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-cp", classes.toString(), "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-small-integral-constant"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-small-integral-constant").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout()).isEqualTo("-128\n");
     }
 
 }
