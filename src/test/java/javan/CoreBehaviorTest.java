@@ -331,16 +331,26 @@ final class CoreBehaviorTest {
     void bytecodeSupportClassifiesNativeRejectedAndUnknownOpcodes() {
         assertThat(BytecodeSupport.classify(190)).isEqualTo(BytecodeSupport.Status.NATIVE_SUPPORTED);
         assertThat(BytecodeSupport.classify(188)).isEqualTo(BytecodeSupport.Status.NATIVE_SUPPORTED);
-        assertThat(BytecodeSupport.classify(197)).isEqualTo(BytecodeSupport.Status.RECOGNIZED_REJECTED);
+        assertThat(BytecodeSupport.classify(197)).isEqualTo(BytecodeSupport.Status.NATIVE_SUPPORTED);
         assertThat(BytecodeSupport.classify(255)).isEqualTo(BytecodeSupport.Status.UNKNOWN_FATAL);
         assertThat(BytecodeSupport.mnemonic(190)).isEqualTo("arraylength");
         assertThat(BytecodeSupport.mnemonic(255)).isEqualTo("opcode_255");
         assertThat(BytecodeSupport.mnemonic(-1)).isEqualTo("opcode_-1");
         assertThat(BytecodeSupport.knownOpcodes()).contains(0, 201).doesNotContain(255);
         assertThat(BytecodeSupport.nativeSupportedOpcodes())
-            .contains(47, 48, 49, 80, 81, 82, 126, 146, 165, 166, 168, 169, 170, 171, 186, 188, 190, 200, 201)
-            .doesNotContain(197);
+            .contains(47, 48, 49, 80, 81, 82, 126, 146, 165, 166, 168, 169, 170, 171, 186, 188, 190, 197, 200, 201);
         assertThat(BytecodeSupport.knownOpcodes()).containsExactlyElementsOf(BytecodeSupport.knownOpcodes());
+    }
+
+    @Test
+    void multidimensionalArrayOperandsRequireAnArrayDescriptorAndValidDimensionCount() {
+        assertThat(BytecodeSupport.isValidMultiArrayDescriptor("[[I", 1)).isTrue();
+        assertThat(BytecodeSupport.isValidMultiArrayDescriptor("[[Ljava/lang/String;", 2)).isTrue();
+        assertThat(BytecodeSupport.isValidMultiArrayDescriptor("[[I", 0)).isFalse();
+        assertThat(BytecodeSupport.isValidMultiArrayDescriptor("[[I", 3)).isFalse();
+        assertThat(BytecodeSupport.isValidMultiArrayDescriptor("I", 1)).isFalse();
+        assertThat(BytecodeSupport.isValidMultiArrayDescriptor("[V", 1)).isFalse();
+        assertThat(BytecodeSupport.isValidMultiArrayDescriptor(null, 1)).isFalse();
     }
 
     @Test

@@ -1526,6 +1526,19 @@ public final class StaticVerifier {
                 diagnostics.add(jdkCallDiagnostic(classFile, method, target, reachable));
             }
         }
+        if (instruction.opcode() == 197) {
+            final byte[] operands = instruction.operands();
+            final int dimensions = operands.length == 3 ? operands[2] & 0xff : 0;
+            if (!BytecodeSupport.isValidMultiArrayDescriptor(instruction.className().orElse(""), dimensions)) {
+                final String reason = "multianewarray requires a valid array descriptor and a dimension count within its rank.";
+                final String fix = "Provide a valid class file with at least one allocated dimension and no more than the array rank.";
+                if (reachable == 1) {
+                    diagnostics.add(error(classFile, method, "JAVAN030", "invalid reachable bytecode", "multianewarray", reason, fix));
+                } else {
+                    diagnostics.add(warning(classFile, method, "JAVAN130", "invalid bytecode in unreachable code", "multianewarray", reason, fix));
+                }
+            }
+        }
         if (unsupportedNewArrayType(instruction)) {
             diagnostics.add(newArrayDiagnostic(classFile, method, instruction, reachable));
         }
@@ -2211,7 +2224,7 @@ public final class StaticVerifier {
         if (supportedMathArithmeticHandler(code, handler)) {
             return true;
         }
-        if (supportedNegativeArraySizeHandler(code, handler)) {
+        if (supportedNegativeArraySizeHandler(classes, code, handler)) {
             return true;
         }
         if (supportedSingleApplicationNegativeArraySizeHandler(classes, code, handler)) {
@@ -2294,7 +2307,7 @@ public final class StaticVerifier {
             if (instruction.opcode() == 191) {
                 hasThrowableTransport = 1;
             }
-            if (supportedCheckcastThrowable(instruction, catchType)) {
+            if (supportedProtectedOpcodeThrowable(instruction, catchType)) {
                 hasThrowableTransport = 1;
             }
             if (supportedGeneratedThrowableCall(classes, instruction)) {
@@ -2365,7 +2378,7 @@ public final class StaticVerifier {
                 && !freshCharacterArrayLength
                 && !initialization
                 && !supportedApplicationThrowableInstruction(classes, instruction)
-                && !supportedCheckcastThrowable(instruction, catchType)
+                && !supportedProtectedOpcode(instruction, catchType)
                 && !supportedGeneratedThrowableCall(classes, instruction)
                 && !supportedTransportedThrowableCall(classes, instruction, catchType)
                 && !supportedThrowableFieldPreparation(classes, instruction)
@@ -3281,6 +3294,18 @@ public final class StaticVerifier {
         return protectedInstructions > 0;
     }
 
+    private static boolean supportedProtectedOpcode(final Instruction instruction, final String catchType) {
+        if (BytecodeSupport.isArrayAllocation(instruction.opcode())) return true;
+        return supportedCheckcastThrowable(instruction, catchType);
+    }
+
+    private static boolean supportedProtectedOpcodeThrowable(final Instruction instruction, final String catchType) {
+        if (BytecodeSupport.isArrayAllocation(instruction.opcode())) {
+            return JdkCallSupport.isPlatformThrowableAssignable("java/lang/NegativeArraySizeException", catchType);
+        }
+        return supportedCheckcastThrowable(instruction, catchType);
+    }
+
     private static boolean supportedCheckcastThrowable(
         final Instruction instruction,
         final String catchType
@@ -3777,7 +3802,7 @@ public final class StaticVerifier {
                     }
                 }
             }
-            if (BytecodeSupport.isSingleDimensionArrayAllocation(instruction.opcode())
+            if (BytecodeSupport.isArrayAllocation(instruction.opcode())
                 && !caughtByThrowableHandler(
                     classes,
                     code,
@@ -4261,7 +4286,7 @@ public final class StaticVerifier {
         return opcode == 88 || opcode == 133;
     }
 
-    private static boolean supportedNegativeArraySizeHandler(final CodeAttribute code, final CodeException handler) {
+    private static boolean supportedNegativeArraySizeHandler(final Map<String, ClassFile> classes, final CodeAttribute code, final CodeException handler) {
         if (handler.catchType().isEmpty()
             || !JdkCallSupport.isPlatformThrowableAssignable(
                 "java/lang/NegativeArraySizeException",
@@ -4274,11 +4299,11 @@ public final class StaticVerifier {
             if (instruction.offset() < handler.startPc() || instruction.offset() >= handler.endPc()) {
                 continue;
             }
-            if (BytecodeSupport.isSingleDimensionArrayAllocation(instruction.opcode())) {
+            if (BytecodeSupport.isArrayAllocation(instruction.opcode())) {
                 arrayAllocationCount++;
                 continue;
             }
-            if (!boundedNonThrowingOpcode(instruction.opcode())) {
+            if (!boundedNonThrowingOpcode(instruction.opcode()) && !supportedGeneratedThrowableCall(classes, instruction)) {
                 return false;
             }
         }

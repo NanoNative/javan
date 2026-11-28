@@ -1,5 +1,7 @@
 package javan.compat;
 
+import javan.classfile.FieldInfo;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -15,7 +17,7 @@ public final class BytecodeSupport {
         97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 116, 117, 118,
         119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 138, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164,
         165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184,
-        185, 186, 187, 188, 189, 190, 191, 192, 193, 198, 199, 200, 201
+        185, 186, 187, 188, 189, 190, 191, 192, 193, 197, 198, 199, 200, 201
     };
 
     private static final int[] KNOWN_JVM = {
@@ -96,12 +98,36 @@ public final class BytecodeSupport {
         return opcode == 188 || opcode == 189;
     }
 
+    /**
+     * Returns whether an opcode allocates a Java array and can throw for a negative length.
+     *
+     * @param opcode unsigned JVM opcode
+     * @return whether the opcode allocates a one- or multi-dimensional array
+     */
+    public static boolean isArrayAllocation(final int opcode) {
+        return isSingleDimensionArrayAllocation(opcode) || opcode == 197;
+    }
+
+    /**
+     * Checks a multidimensional array operand against its JVM array descriptor.
+     *
+     * @param descriptor JVM array descriptor
+     * @param dimensions number of dimensions allocated by the instruction
+     * @return whether the operand is a valid multidimensional array type and count
+     */
+    public static boolean isValidMultiArrayDescriptor(final String descriptor, final int dimensions) {
+        if (descriptor == null || !FieldInfo.isValidDescriptor(descriptor) || dimensions < 1) return false;
+        int rank = 0;
+        while (rank < descriptor.length() && descriptor.charAt(rank) == '[') rank++;
+        return rank > 0 && dimensions <= rank;
+    }
+
     private static boolean recognizedRejectedOpcode(final int opcode) {
         return switch (opcode) {
             case 93, 94, 95,
                 114, 115,
                 137, 139, 140,
-                194, 195, 196, 197 -> true;
+                194, 195, 196 -> true;
             default -> false;
         };
     }

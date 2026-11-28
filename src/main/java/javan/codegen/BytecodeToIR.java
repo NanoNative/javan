@@ -1060,7 +1060,7 @@ public final class BytecodeToIR {
                     }
                 }
             }
-            if (BytecodeSupport.isSingleDimensionArrayAllocation(instruction.opcode())
+            if (BytecodeSupport.isArrayAllocation(instruction.opcode())
                 && !caughtBy(classes, method, instruction.offset(), "java/lang/NegativeArraySizeException")) {
                 result.add("java/lang/NegativeArraySizeException");
             }
@@ -2705,6 +2705,10 @@ public final class BytecodeToIR {
                     sourceLines
                 );
                 break;
+            case 197:
+                newMultiArray(classFile, method, instruction, instructions, stack, localDeclarations,
+                    pendingExceptionHandlerStacks, sourceLines);
+                break;
             case 190:
                 arrayLength(classFile, method, stack);
                 break;
@@ -3115,6 +3119,88 @@ public final class BytecodeToIR {
         } else {
             objectLocalThrowableTypes.put(slot, null);
         }
+    }
+
+    static void newMultiArray(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
+    ) {
+        final byte[] operands = instruction.operands();
+        final String descriptor = instruction.className().orElse("");
+        final int dimensions = operands.length == 3 ? unsigned(operands[2]) : 0;
+        if (!BytecodeSupport.isValidMultiArrayDescriptor(descriptor, dimensions)) {
+            throw unsupported(classFile, method, instruction);
+        }
+        final List<IrExpression> values = new ArrayList<>();
+        for (int dimension = 0; dimension < dimensions; dimension++) values.addFirst(popInt(classFile, method, stack));
+        final List<IrExpression> lengths = new ArrayList<>();
+        for (final IrExpression value : values) {
+            final String local = BytecodeToIRDynamicSupport.newIntLocal(localDeclarations);
+            instructions.add(IrInstruction.assignInt(local, value));
+            lengths.add(IrExpression.intLocal(local));
+        }
+        for (int dimension = 0; dimension < dimensions; dimension++) {
+            final IrExpression length = lengths.get(dimension);
+            final String success = "label_multi_array_non_negative_" + instruction.offset() + "_" + dimension;
+            instructions.add(IrInstruction.branchIf(success, IrExpression.intComparison(">=", length, IrExpression.intLiteral(0))));
+            final List<StackValue> successStack = List.copyOf(stack);
+            BytecodeToIRInvokeSupport.routePendingPlatformException(classFile, method, instruction, instructions, stack,
+                pendingExceptionHandlerStacks, sourceLines, "java/lang/NegativeArraySizeException",
+                IrExpression.objectCall("javan_string_value_of_int", List.of(length)));
+            instructions.add(IrInstruction.label(success));
+            stack.addAll(successStack);
+        }
+        final List<String> arrays = new ArrayList<>();
+        final List<String> indices = new ArrayList<>();
+        for (int dimension = 0; dimension < dimensions; dimension++) {
+            final String array = BytecodeToIRDynamicSupport.newObjectLocal(localDeclarations);
+            arrays.add(array);
+            final String arrayType = descriptor.substring(dimension);
+            final IrExpression length = lengths.get(dimension);
+            final IrExpression allocation;
+            if (arrayType.length() == 2) {
+                allocation = switch (arrayType.charAt(1)) {
+                    case 'Z' -> IrExpression.booleanArrayAllocation(length);
+                    case 'B' -> IrExpression.byteArrayAllocation(length);
+                    case 'C' -> IrExpression.charArrayAllocation(length);
+                    case 'S' -> IrExpression.shortArrayAllocation(length);
+                    case 'I' -> IrExpression.intArrayAllocation(length);
+                    case 'J' -> IrExpression.longArrayAllocation(length);
+                    case 'F' -> IrExpression.floatArrayAllocation(length);
+                    case 'D' -> IrExpression.doubleArrayAllocation(length);
+                    default -> throw unsupported(classFile, method, instruction);
+                };
+            } else {
+                allocation = IrExpression.objectArrayAllocation(length, arrayType.replace('/', '.'));
+            }
+            instructions.add(IrInstruction.assignObject(array, allocation));
+            if (dimension > 0) {
+                instructions.add(IrInstruction.assignArrayObject(IrExpression.objectLocal(arrays.get(dimension - 1)),
+                    IrExpression.intLocal(indices.get(dimension - 1)), IrExpression.objectLocal(array)));
+            }
+            if (dimension + 1 < dimensions) {
+                final String index = BytecodeToIRDynamicSupport.newIntLocal(localDeclarations);
+                indices.add(index);
+                instructions.add(IrInstruction.assignInt(index, IrExpression.intLiteral(0)));
+                instructions.add(IrInstruction.label("label_multi_array_start_" + instruction.offset() + "_" + dimension));
+                instructions.add(IrInstruction.branchIf("label_multi_array_end_" + instruction.offset() + "_" + dimension,
+                    IrExpression.intComparison(">=", IrExpression.intLocal(index), length)));
+            }
+        }
+        for (int dimension = dimensions - 2; dimension >= 0; dimension--) {
+            final String index = indices.get(dimension);
+            instructions.add(IrInstruction.assignInt(index,
+                IrExpression.intBinary("+", IrExpression.intLocal(index), IrExpression.intLiteral(1))));
+            instructions.add(IrInstruction.jump("label_multi_array_start_" + instruction.offset() + "_" + dimension));
+            instructions.add(IrInstruction.label("label_multi_array_end_" + instruction.offset() + "_" + dimension));
+        }
+        stack.add(StackValue.objectExpression(IrExpression.objectLocal(arrays.getFirst())));
     }
 
     static void newObjectArray(

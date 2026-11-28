@@ -362,6 +362,8 @@ Supported exceptions and null return values are preserved. Plain objects and app
 whose known superclass chain reaches `Object` without a `toString` override use their runtime class
 name and virtual `hashCode`, including identity hashing when no override exists. Unknown receiver
 types do not cause unrelated overrides to be retained and may still fail at runtime when no implementation was retained.
+Multi-dimensional array allocation evaluates every dimension before allocation, checks negative
+sizes in order, and supports partially allocated arrays and concurrent garbage collection.
 Array values converted to strings use their runtime array class name and identity hash, including
 cloned and copied arrays.
 Generated record `toString` supports primitive, boxed primitive, `String` and array components, plus

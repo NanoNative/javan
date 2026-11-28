@@ -915,7 +915,7 @@ public final class ClassFileReader {
         if (opcode == 19) {
             return constantPool.classLiteralName(index16(operands, 0));
         }
-        if (opcode == 187 || opcode == 189 || opcode == 192 || opcode == 193) {
+        if (opcode == 187 || opcode == 189 || opcode == 192 || opcode == 193 || opcode == 197) {
             return Optional.of(constantPool.className(index16(operands, 0)));
         }
         return Optional.empty();

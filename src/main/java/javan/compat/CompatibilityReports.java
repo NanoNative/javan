@@ -493,6 +493,7 @@ public final class CompatibilityReports {
             pass("records-basic"),
             pass("object-fields"),
             pass("object-array"),
+            pass("multi-dimensional-array"),
             pass("int-array"),
             pass("long-array"),
             pass("primitive-array-variants"),
