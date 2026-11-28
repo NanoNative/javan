@@ -9999,4 +9999,40 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         assertThat(nativeRun.stdout()).isEqualTo(expected.stdout()).isEqualTo("null\nfallback\nfalse\n0\n");
     }
 
+    @Test
+    void nativeBuiltJavanDefersExpectedSizeMapAllocation() throws Exception {
+        final Path project = tempDir.resolve("selfhost-map-factory-lazy");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            import java.util.LinkedHashMap;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println(HashMap.newHashMap(Integer.MAX_VALUE).size());
+                    System.out.println(LinkedHashMap.newLinkedHashMap(Integer.MAX_VALUE).size());
+                    var map = HashMap.<Integer, String>newHashMap(16); map.put(1, "value");
+                    System.out.println(map.get(1));
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-map-factory-lazy"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-map-factory-lazy").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout()).isEqualTo("0\n0\nvalue\n");
+    }
+
 }

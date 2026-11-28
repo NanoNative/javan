@@ -11,8 +11,8 @@
     "rule": "a broad JDK-compatibility release requires zero unknown leftovers; the first native release is scenario-bounded and requires declared reachable behavior to be supported or rejected"
   },
   "counts": {
-    "rows": 369,
-    "pass": 367,
+    "rows": 370,
+    "pass": 368,
     "scoped": 2,
     "target": 0,
     "rejected": 0
@@ -260,6 +260,7 @@
     {"feature": "map-capacity-constructor-concurrent-gc", "jdk25": "pass"},
     {"feature": "map-expected-size-factory-concurrent-gc", "jdk25": "pass"},
     {"feature": "map-expected-size-factory-negative-exception", "jdk25": "pass"},
+    {"feature": "map-expected-size-factory-lazy-allocation", "jdk25": "pass"},
     {"feature": "map-view-and-iterator-creation-concurrent-gc", "jdk25": "pass"},
     {"feature": "map-values-custom-contains", "jdk25": "pass"},
     {"feature": "map-values-custom-remove", "jdk25": "pass"},

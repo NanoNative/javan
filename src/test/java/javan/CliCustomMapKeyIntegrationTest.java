@@ -1078,4 +1078,141 @@ final class CliCustomMapKeyIntegrationTest extends CliIntegrationSupport {
         assertThat(result.stdout()).isEqualTo(expected).isEqualTo("73\n");
     }
 
+    @Test
+    void largeExpectedMapSizesDoNotAllocateUntilEntriesAreAdded() throws Exception {
+        final Path project = project("map-factory-large-empty");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            import java.util.LinkedHashMap;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println(HashMap.newHashMap(Integer.MAX_VALUE).size());
+                    System.out.println(LinkedHashMap.newLinkedHashMap(Integer.MAX_VALUE).size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-factory-large-empty").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("0\n0\n");
+    }
+
+    @Test
+    void emptyExpectedSizeMapsDoNotHashQueriesBeforeFirstInsertion() throws Exception {
+        final Path project = project("map-factory-lazy-empty-query");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            public final class Main {
+                static int hashes;
+                public static final class Key {
+                    public int hashCode() { hashes++; return 1; }
+                    public boolean equals(Object other) { return this == other; }
+                }
+                public static void main(String[] args) {
+                    HashMap<Key, String> map = HashMap.newHashMap(Integer.MAX_VALUE);
+                    Key key = new Key();
+                    System.out.println(map.containsKey(key)); System.out.println(map.get(key));
+                    map.clear(); System.out.println(map.size()); System.out.println(hashes);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-factory-lazy-empty-query").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("false\nnull\n0\n0\n");
+    }
+
+    @Test
+    void expectedSizeMapsGrowNormallyAfterTheirFirstInsertion() throws Exception {
+        final Path project = project("map-factory-lazy-growth");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            import java.util.LinkedHashMap;
+            public final class Main {
+                public static void main(String[] args) {
+                    var hash = HashMap.<Integer, Integer>newHashMap(16);
+                    var linked = LinkedHashMap.<Integer, Integer>newLinkedHashMap(16);
+                    for (int i = 0; i < 100; i++) { hash.put(i, i); linked.put(i, i); }
+                    int total = 0; for (int i = 0; i < 100; i++) total += hash.get(i) + linked.get(i);
+                    System.out.println(hash.size()); System.out.println(linked.size()); System.out.println(total);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-factory-lazy-growth").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("100\n100\n9900\n");
+    }
+
+    @Test
+    void expectedSizeMapValuesViewTracksFirstInsertionAndRemoval() throws Exception {
+        final Path project = project("map-factory-lazy-values-view");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            public final class Main {
+                public static void main(String[] args) {
+                    var map = HashMap.<Integer, String>newHashMap(16); var values = map.values();
+                    System.out.println(values.isEmpty()); map.put(1, "value");
+                    System.out.println(values.contains("value")); System.out.println(values.remove("value"));
+                    System.out.println(map.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-factory-lazy-values-view").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("true\ntrue\ntrue\n0\n");
+    }
+
+    @Test
+    void largeExpectedEmptyMapSupportsConcurrentQueriesDuringGc() throws Exception {
+        final Path project = project("map-factory-lazy-empty-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final HashMap<Key, String> map = HashMap.newHashMap(Integer.MAX_VALUE);
+                static final AtomicInteger count = new AtomicInteger();
+                public static final class Key {
+                    public int hashCode() { throw new IllegalStateException("unexpected hash"); }
+                    public boolean equals(Object other) { return this == other; }
+                }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        Key key = new Key();
+                        for (int i = 0; i < 200; i++) {
+                            if (map.getOrDefault(key, "fallback").equals("fallback") && map.values().isEmpty()) count.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Thread a = new Thread(new Worker()); Thread b = new Thread(new Worker());
+                    a.start(); b.start(); a.join(); b.join(); System.out.println(count.get());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-factory-lazy-empty-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("400\n");
+    }
+
 }

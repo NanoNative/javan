@@ -203,6 +203,8 @@ native map entries and does not yet support application-defined `Map.Entry` impl
 `Map.of`, `Map.ofEntries` and `Map.copyOf`, including unmodifiable views.
 `HashMap.newHashMap` and `LinkedHashMap.newLinkedHashMap` throw a catchable
 `IllegalArgumentException` with the Java message for a negative expected size.
+For nonnegative expected sizes, these factories defer backing storage allocation until insertion,
+so even a very large expected size can produce an empty map without allocating its table.
 The no-argument `ConcurrentHashMap.keySet()` concrete `KeySetView` supports `add`, `contains`,
 `remove`, `size`, `isEmpty`, `clear` and `iterator`; `add` throws `UnsupportedOperationException`.
 Supported `Map.keySet()` views remain connected to their map. Reads and supported removals reflect

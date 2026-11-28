@@ -165,6 +165,7 @@ final class RuntimeSourceMemorySections {
             int magic;
             int length;
             int capacity;
+            int initial_capacity;
             int immutable;
             int concurrent;
             int mod_count;
@@ -1919,7 +1920,9 @@ final class RuntimeSourceMemorySections {
                 javan_validate_runtime_managed_reference((void*) iterator->loader);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP) {
                 javan_object_map* map = (javan_object_map*) node->value;
-                if (map->magic != JAVAN_OBJECT_MAP_MAGIC || map->length < 0 || map->capacity < 0 || map->length > map->capacity) {
+                if (map->magic != JAVAN_OBJECT_MAP_MAGIC || map->length < 0 || map->capacity < 0
+                    || map->initial_capacity < 0 || (map->capacity > 0 && map->initial_capacity != 0)
+                    || map->length > map->capacity) {
                     javan_panic("invalid runtime map metadata");
                 }
                 javan_validate_runtime_managed_reference((void*) map->backing);
@@ -2959,6 +2962,7 @@ final class RuntimeSourceMemorySections {
                     map->key_hashes = NULL;
                     map->index_buckets = NULL;
                     map->capacity = 0;
+                    map->initial_capacity = 0;
                     map->index_capacity = 0;
                     map->indexed_length = -1;
                     map->length = 0;
@@ -15224,6 +15228,7 @@ final class RuntimeSourceMemorySections {
             map->magic = JAVAN_OBJECT_MAP_MAGIC;
             map->length = 0;
             map->capacity = capacity;
+            map->initial_capacity = 0;
             map->immutable = immutable;
             map->concurrent = 0;
             map->mod_count = 0;
@@ -15372,6 +15377,9 @@ final class RuntimeSourceMemorySections {
                 return;
             }
             int next_capacity = map->capacity <= 0 ? 8 : map->capacity * 2;
+            if (map->capacity == 0 && map->initial_capacity > 0) {
+                next_capacity = map->initial_capacity;
+            }
             while (next_capacity < required) {
                 next_capacity *= 2;
             }
@@ -15438,6 +15446,7 @@ final class RuntimeSourceMemorySections {
                 memset(next_hashes + map->capacity, 0, (unsigned long) (next_capacity - map->capacity) * sizeof(int));
             }
             map->capacity = next_capacity;
+            map->initial_capacity = 0;
             javan_root_frame_pop(javan_map_growth_roots);
             javan_map_rebuild_index(map);
         }
@@ -15710,7 +15719,11 @@ final class RuntimeSourceMemorySections {
                 javan_runtime_lock_leave();
                 return;
             }
-            (void) javan_map_new_with_capacity_into(javan_hashmap_capacity_for_expected_mappings(num_mappings), 0, result);
+            int initial_capacity = javan_hashmap_capacity_for_expected_mappings(num_mappings);
+            javan_object_map* map = javan_map_new_with_capacity_into(0, 0, result);
+            javan_runtime_lock_enter();
+            map->initial_capacity = initial_capacity;
+            javan_runtime_lock_leave();
         }
 
         void javan_linkedhashmap_new_with_expected_mappings_into(void** result, int num_mappings) {
@@ -15718,11 +15731,16 @@ final class RuntimeSourceMemorySections {
         }
 
         void* javan_hashmap_new_with_expected_mappings(int num_mappings) {
-            return javan_map_new_with_capacity(javan_hashmap_capacity_for_expected_mappings(num_mappings), 0);
+            void* result = NULL;
+            void** roots[] = { &result };
+            javan_root_frame_push(roots, 1);
+            javan_hashmap_new_with_expected_mappings_into(&result, num_mappings);
+            javan_root_frame_pop(roots);
+            return result;
         }
 
         void* javan_linkedhashmap_new_with_expected_mappings(int num_mappings) {
-            return javan_map_new_with_capacity(javan_hashmap_capacity_for_expected_mappings(num_mappings), 0);
+            return javan_hashmap_new_with_expected_mappings(num_mappings);
         }
 
         void javan_map_initialize_capacity(void* value, int capacity) {

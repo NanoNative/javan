@@ -677,6 +677,7 @@ public final class CompatibilityReports {
             pass("map-capacity-constructor-concurrent-gc"),
             pass("map-expected-size-factory-concurrent-gc"),
             pass("map-expected-size-factory-negative-exception"),
+            pass("map-expected-size-factory-lazy-allocation"),
             pass("map-view-and-iterator-creation-concurrent-gc"),
             pass("map-values-custom-contains"),
             pass("map-values-custom-remove"),
