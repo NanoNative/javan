@@ -4516,7 +4516,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void mapKeySetRejectsUnsupportedApplicationKeysWithoutMutation() throws Exception {
+    void mapKeySetContainsApplicationKeysWhileUnsupportedMutationsRemainRejected() throws Exception {
         final Path project = project("map-key-set-unsupported-key");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -4552,7 +4552,8 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-key-set-unsupported-key").toString()),
             Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
         assertThat(result.exitCode()).as(result.stderr()).isZero();
-        assertThat(result.stdout()).isEqualTo(("application-defined map key queries are not supported in key views\n").repeat(3) + "1\n");
+        assertThat(result.stdout()).isEqualTo("application-defined map key queries are not supported in key views\ntrue\n"
+            + "application-defined map key queries are not supported in key views\n1\n");
     }
 
     @Test

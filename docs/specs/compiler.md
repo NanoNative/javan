@@ -166,7 +166,7 @@ and loop joins. The fact is discarded when the array escapes, different array st
 unsupported stack operation occurs.
 Other entry arrays can use callbacks already retained by another proven call.
 Inherited platform key methods, application-defined map
-value equality and custom key queries through map views remain incomplete.
+value equality and other custom key queries through map views remain incomplete.
 `ConcurrentHashMap` rejects null keys for `get`, `getOrDefault`, `containsKey`, `put`, `putIfAbsent`,
 `remove` and `replace`, and null values for `containsValue`, `put`, `putIfAbsent` and `replace`,
 including through `Map` references. Bulk `putAll` rejects null entries when targeting a concurrent
@@ -187,7 +187,11 @@ The no-argument `ConcurrentHashMap.keySet()` concrete `KeySetView` supports `add
 `remove`, `size`, `isEmpty`, `clear` and `iterator`; `add` throws `UnsupportedOperationException`.
 Supported `Map.keySet()` views remain connected to their map. Reads and supported removals reflect
 changes in either direction, and concurrent map iterators remove the key they returned, including
-a subsequently reinserted equal supported key. Application-defined key comparisons in these views are not yet supported and raise `UnsupportedOperationException` before
+a subsequently reinserted equal supported key. `keySet().contains` on supported hash-based and
+immutable maps invokes the query `hashCode` and `equals` where the corresponding JDK map does,
+outside the runtime lock.
+Custom key queries on `TreeMap` key views and bulk comparisons remain unsupported and fail
+explicitly. Other unsupported key-view comparisons raise `UnsupportedOperationException` before
 bulk operations modify the map. Supported `Map.values()` views also remain connected to their map.
 Their iterators remove their returned entry, including when values repeat. Concurrent map iterators
 retain and safely return a value even when its mapping is removed during garbage collection.

@@ -104,6 +104,8 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_MAP_REJECT_NULL_QUERY 2
         #define JAVAN_MAP_EMPTY_COLLECTION 4
         #define JAVAN_MAP_SINGLETON_COLLECTION 8
+        #define JAVAN_MAP_TABLE_INITIALIZED 16
+        #define JAVAN_MAP_SORTED 32
         #define JAVAN_BUILTIN_INSTANCEOF_COLLECTION 1
         #define JAVAN_BUILTIN_INSTANCEOF_MAP 2
         #define JAVAN_BUILTIN_INSTANCEOF_MAP_ENTRY 3
@@ -13990,6 +13992,24 @@ final class RuntimeSourceMemorySections {
                 return 0;
             }
             javan_object_list* owner = javan_list_storage_owner(javan_list_checked(value));
+            if ((owner->view_flags & JAVAN_LIST_VIEW_MAP_KEYS) != 0 && !javan_map_key_view_query_supported(element)) {
+                javan_runtime_lock_enter();
+                void* map_root = owner->backing;
+                void* key_root = element;
+                javan_object_map* storage = (javan_object_map*) map_root;
+                while (storage->backing != NULL) storage = storage->backing;
+                if ((storage->view_flags & JAVAN_MAP_SORTED) != 0) {
+                    javan_map_view_check_query(owner->view_flags, element);
+                    javan_runtime_lock_leave();
+                    return 0;
+                }
+                void** roots[] = { &map_root, &key_root };
+                javan_root_frame_push(roots, 2);
+                javan_runtime_lock_leave();
+                int result = javan_map_contains_key_java(map_root, key_root);
+                javan_root_frame_pop(roots);
+                return result;
+            }
             if ((owner->view_flags & JAVAN_LIST_VIEW_MAP) != 0) {
                 if ((owner->view_flags & JAVAN_LIST_VIEW_MAP_VALUES) != 0 && element != NULL) {
                     javan_collection_equals_resolver_fn resolver = atomic_load_explicit(
@@ -15484,6 +15504,12 @@ final class RuntimeSourceMemorySections {
             return javan_map_new_with_capacity(0, 0);
         }
 
+        void* javan_treemap_new(void) {
+            javan_object_map* map = javan_map_new_with_capacity(0, 0);
+            map->view_flags |= JAVAN_MAP_SORTED;
+            return map;
+        }
+
         void* javan_concurrent_hashmap_new(void) {
             javan_object_map* map = javan_map_new_with_capacity(0, 0);
             map->concurrent = 1;
@@ -16157,7 +16183,11 @@ final class RuntimeSourceMemorySections {
             javan_object_map* storage = javan_map_checked(map_root);
             while (storage->backing != NULL) storage = storage->backing;
             int skip_hash = storage->immutable != 0 && storage->length <= 1;
+            int empty_uninitialized_lookup = operation == 6 && storage->immutable == 0
+                && storage->concurrent == 0 && storage->length == 0
+                && (storage->view_flags & (JAVAN_MAP_TABLE_INITIALIZED | JAVAN_MAP_SORTED)) == 0;
             javan_runtime_lock_leave();
+            if (empty_uninitialized_lookup) { javan_root_frame_pop(roots); return; }
             int hash = skip_hash ? 0 : hash_fn == NULL ? javan_map_key_hash(key_root) : hash_fn(key_root);
             if (javan_pending_has()) { javan_root_frame_pop(roots); return; }
             javan_runtime_lock_enter();
@@ -16182,7 +16212,7 @@ final class RuntimeSourceMemorySections {
                     continue;
                 }
                 candidate = map->keys[index];
-                if (candidate == key_root) break;
+                if (candidate == key_root && map->immutable == 0) break;
                 int version = map->mod_count;
                 javan_runtime_lock_leave();
                 int equal = equals == NULL ? javan_object_equals(key_root, candidate) : equals(key_root, candidate);
@@ -16225,6 +16255,7 @@ final class RuntimeSourceMemorySections {
                 map->values[map->length] = element_root;
                 map->key_hashes[map->length] = hash;
                 map->length++;
+                map->view_flags |= JAVAN_MAP_TABLE_INITIALIZED;
                 if (index_was_current) {
                     javan_map_index_insert(map, map->length - 1);
                     map->indexed_length = map->length;
@@ -16317,6 +16348,7 @@ final class RuntimeSourceMemorySections {
             map->values[insertion_index] = element_root;
             map->key_hashes[insertion_index] = javan_map_key_hash(key_root);
             map->length++;
+            map->view_flags |= JAVAN_MAP_TABLE_INITIALIZED;
             if (index_was_current != 0 && map->enum_key_type_id == 0 && insertion_index == map->length - 1) {
                 javan_map_index_insert(map, insertion_index);
                 map->indexed_length = map->length;
@@ -16390,6 +16422,7 @@ final class RuntimeSourceMemorySections {
             map->values[insertion_index] = element_root;
             map->key_hashes[insertion_index] = javan_map_key_hash(key_root);
             map->length++;
+            map->view_flags |= JAVAN_MAP_TABLE_INITIALIZED;
             if (index_was_current != 0 && map->enum_key_type_id == 0 && insertion_index == map->length - 1) {
                 javan_map_index_insert(map, insertion_index);
                 map->indexed_length = map->length;

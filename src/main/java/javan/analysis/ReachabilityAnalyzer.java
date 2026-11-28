@@ -919,6 +919,7 @@ public final class ReachabilityAnalyzer {
             if (provenance.unknown()) {
                 if (instruction.methodRef().isPresent()
                     && (JdkCallSupport.isCollectionObjectAddition(instruction.methodRef().orElseThrow())
+                        || JdkCallSupport.isPotentialMapKeyViewSearch(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isMapKeyOperation(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isMapMultiEntryFactory(instruction.methodRef().orElseThrow())
                         || JdkCallSupport.isMapEntryArrayFactory(instruction.methodRef().orElseThrow())
@@ -1523,8 +1524,8 @@ public final class ReachabilityAnalyzer {
             enqueueAll(work, workSet, targetMethods);
             addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
         }
-        if (JdkCallSupport.isMapKeyOperation(target) || JdkCallSupport.isMapMultiEntryFactory(target)
-            || JdkCallSupport.isMapEntryArrayFactory(target)) {
+        if (JdkCallSupport.isMapKeyOperation(target) || JdkCallSupport.isPotentialMapKeyViewSearch(target)
+            || JdkCallSupport.isMapMultiEntryFactory(target) || JdkCallSupport.isMapEntryArrayFactory(target)) {
             final List<EntryPoint> customEquals = new ArrayList<>();
             final List<EntryPoint> customHash = new ArrayList<>();
             final MethodRef equality = new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z");

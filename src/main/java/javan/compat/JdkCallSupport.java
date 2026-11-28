@@ -2376,6 +2376,18 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies membership calls whose receiver can be a map key view.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the query can require a map key hash
+     */
+    public static boolean isPotentialMapKeyViewSearch(final MethodRef methodRef) {
+        return ("java/util/Set".equals(methodRef.owner()) || "java/util/Collection".equals(methodRef.owner())
+                || "java/util/concurrent/ConcurrentHashMap$KeySetView".equals(methodRef.owner()))
+            && "contains".equals(methodRef.name()) && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor());
+    }
+
+    /**
      * Identifies supported collection searches that compare a single query element.
      *
      * @param methodRef referenced JDK method
