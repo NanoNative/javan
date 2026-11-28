@@ -128,8 +128,31 @@ public final class ClassFileReader {
             if (containsField(result, name, descriptor)) {
                 throw new IOException("Duplicate field: " + name + " " + descriptor);
             }
-            final Optional<String> signature = readSignatureAttribute(in, constantPool, "field " + name);
-            result.add(new FieldInfo(accessFlags, name, descriptor, signature));
+            final int attributeCount = in.u2();
+            Optional<String> signature = Optional.empty();
+            int initialIntegerValue = 0;
+            boolean constantSeen = false;
+            for (int attribute = 0; attribute < attributeCount; attribute++) {
+                final String attributeName = constantPool.utf8(in.u2());
+                final long length = in.u4();
+                if ("Signature".equals(attributeName)) {
+                    if (signature.isPresent()) throw new IOException("Duplicate Signature attribute for field " + name);
+                    if (length != 2) throw new IOException("Invalid Signature attribute length for field " + name);
+                    signature = Optional.of(constantPool.utf8(in.u2()));
+                } else if ("ConstantValue".equals(attributeName)) {
+                    if (constantSeen || length != 2) throw new IOException("Invalid ConstantValue attribute for field " + name);
+                    constantSeen = true;
+                    final int constantIndex = in.u2();
+                    if (List.of("B", "S", "C", "I", "Z").contains(descriptor)) {
+                        final Optional<Integer> integerConstant = constantPool.intValue(constantIndex);
+                        if (integerConstant.isEmpty()) throw new IOException("Invalid integer ConstantValue for field " + name);
+                        initialIntegerValue = integerConstant.orElseThrow().intValue();
+                    }
+                } else {
+                    in.skip(length);
+                }
+            }
+            result.add(new FieldInfo(accessFlags, name, descriptor, signature, initialIntegerValue));
         }
         return result;
     }

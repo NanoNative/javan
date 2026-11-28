@@ -10082,7 +10082,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             package com.acme;
             import java.lang.reflect.*;
             public final class Main {
-                public static final class Model { public static int value = 42; }
+                public static final class Model { public static final int value = 42; }
                 public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
                     return new AnnotatedElement[] { Model.class.getDeclaredField("value") };
                 }

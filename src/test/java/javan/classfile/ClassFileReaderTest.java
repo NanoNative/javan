@@ -593,6 +593,24 @@ final class ClassFileReaderTest {
     }
 
     @Test
+    void readerRejectsDuplicateConstantValueAttributes() {
+        assertThatThrownBy(() -> new ClassFileReader().read(classfileWithIntegerConstants(8, 2, 2), SOURCE))
+            .isInstanceOf(IOException.class).hasMessageContaining("Invalid ConstantValue attribute");
+    }
+
+    @Test
+    void readerRejectsWrongConstantValueLength() {
+        assertThatThrownBy(() -> new ClassFileReader().read(classfileWithIntegerConstants(8, 3), SOURCE))
+            .isInstanceOf(IOException.class).hasMessageContaining("Invalid ConstantValue attribute");
+    }
+
+    @Test
+    void readerRejectsNonIntegerConstantForIntegerField() {
+        assertThatThrownBy(() -> new ClassFileReader().read(classfileWithIntegerConstants(5, 2), SOURCE))
+            .isInstanceOf(IOException.class).hasMessageContaining("Invalid integer ConstantValue");
+    }
+
+    @Test
     void readerRejectsDuplicateFields() {
         assertThatThrownBy(() -> new ClassFileReader().read(classfileWithDuplicateFields(), SOURCE))
             .isInstanceOf(IOException.class)
@@ -1264,6 +1282,18 @@ final class ClassFileReaderTest {
             .u2(6)
             .u2(0)
             .toByteArray();
+    }
+
+    private static byte[] classfileWithIntegerConstants(final int constantIndex, final int... lengths) {
+        final Bytes bytes = new Bytes()
+            .u4(0xCAFEBABEL).u2(0).u2(65).u2(9)
+            .utf8("sample/Value").classInfo(1)
+            .utf8("java/lang/Object").classInfo(3)
+            .utf8("value").utf8("I").utf8("ConstantValue").rawInteger(123)
+            .u2(0x0031).u2(2).u2(4).u2(0).u2(1)
+            .u2(0x0019).u2(5).u2(6).u2(lengths.length);
+        for (final int length : lengths) bytes.u2(7).u4(length).u2(constantIndex);
+        return bytes.u2(0).u2(0).toByteArray();
     }
 
     private static byte[] classfileWithDuplicateFields() {

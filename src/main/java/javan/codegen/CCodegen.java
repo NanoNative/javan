@@ -1170,7 +1170,7 @@ public final class CCodegen {
                 c.append(field.type().cName())
                     .append(' ')
                     .append(staticFieldSymbol(classInfo.jvmName(), field.name()))
-                    .append(" = 0;")
+                    .append(" = ").append(field.initialIntegerValue()).append(';')
                     .append(System.lineSeparator());
                 emitted = true;
             }
@@ -1820,7 +1820,6 @@ public final class CCodegen {
                 }
                 if (layout == null) continue;
                 final boolean staticField = (field.modifiers() & 0x0008) != 0;
-                if (staticField && (field.modifiers() & 0x0010) != 0) continue;
                 c.append("    if (javan_string_equals(metadata->declaring_name, ")
                     .append(emitCStringLiteral(displayClassName(field.declaringJvmName())))
                     .append(") && javan_string_equals(metadata->name, ")

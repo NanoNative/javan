@@ -80,7 +80,7 @@ public final class ReflectionFieldReachability {
             if (owner == null) continue;
             for (final FieldInfo candidate : owner.fields()) {
                 if (candidate.name().equals(field.name()) && candidate.descriptor().equals(field.descriptor())
-                    && candidate.isStatic() && (candidate.accessFlags() & 0x0050) == 0
+                    && candidate.isStatic() && (candidate.accessFlags() & 0x0040) == 0
                     && List.of("B", "S", "C", "I").contains(candidate.descriptor())) owners.add(field.owner());
             }
         }

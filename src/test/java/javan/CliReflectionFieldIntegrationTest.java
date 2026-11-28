@@ -1204,15 +1204,14 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void rejectsStaticFinalIntegerConstantUntilSupported() throws Exception {
+    void readsStaticFinalIntegerConstant() throws Exception {
         final Path project = project("reflection-static-final-int");
         writeJava(project, "com.acme.Main", """
             package com.acme;
             public final class Main {
                 public static final class Model { public static final int value = 123; }
                 public static void main(String[] args) throws Exception {
-                    var field = Model.class.getDeclaredField("value");
-                    try { field.getInt(null); } catch (UnsupportedOperationException expected) { System.out.println("unsupported"); }
+                    System.out.println(Model.class.getDeclaredField("value").getInt(null));
                 }
             }
             """);
@@ -1220,7 +1219,77 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-static-final-int").toString()));
         assertThat(result.exitCode()).as(result.stderr()).isZero();
-        assertThat(result.stdout()).isEqualTo("unsupported\n");
+        assertThat(result.stdout()).isEqualTo("123\n");
+    }
+
+    @Test
+    void readsFinalStaticWidenedAndInitializedFields() throws Exception {
+        final Path project = project("reflection-static-final-widen");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model {
+                    static { System.out.println("initialized"); }
+                    public static final byte b = -127;
+                    public static final short s = -32000;
+                    public static final char c = 65535;
+                    public static final int min = Integer.MIN_VALUE;
+                    public static final int computed = compute();
+                    private static int compute() { return 77; }
+                }
+                public static void main(String[] args) throws Exception {
+                    var b = Model.class.getDeclaredField("b");
+                    var s = Model.class.getDeclaredField("s");
+                    var c = Model.class.getDeclaredField("c");
+                    var min = Model.class.getDeclaredField("min");
+                    var computed = Model.class.getDeclaredField("computed");
+                    System.out.println("before");
+                    System.out.println(b.getInt(null)); System.out.println(s.getInt(null));
+                    System.out.println(c.getInt(null)); System.out.println(min.getInt(null));
+                    System.out.println(computed.getInt(null));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-static-final-widen").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("before\ninitialized\n-127\n-32000\n65535\n-2147483648\n77\n");
+    }
+
+    @Test
+    void readsStaticFinalIntFieldsDuringConcurrentGc() throws Exception {
+        final Path project = project("reflection-static-final-field-read-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger signal = new AtomicInteger(), finished = new AtomicInteger();
+                public static final class Model { public static final int value = 42; }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        while (signal.get() == 0) Thread.yield();
+                        for (int i = 0; i < 1000; i++) { byte[] value = new byte[64]; value[0] = 1; }
+                        finished.set(1);
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Field field = Model.class.getDeclaredField("value");
+                    Thread worker = new Thread(new Worker()); worker.start(); signal.set(1);
+                    while (finished.get() == 0) { if (field.getInt(null) != 42) throw new AssertionError(); }
+                    worker.join(); System.out.println(field.getInt(null));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-static-final-field-read-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("42\n");
     }
 
 }

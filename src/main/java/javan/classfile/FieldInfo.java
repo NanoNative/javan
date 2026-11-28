@@ -9,8 +9,9 @@ import java.util.Optional;
  * @param name field name
  * @param descriptor field descriptor
  * @param signature optional generic field signature
+ * @param initialIntegerValue integer initial value, or zero when no integer constant exists
  */
-public record FieldInfo(int accessFlags, String name, String descriptor, Optional<String> signature) {
+public record FieldInfo(int accessFlags, String name, String descriptor, Optional<String> signature, int initialIntegerValue) {
     private static final int ACC_STATIC = 0x0008;
     private static final int ACC_ENUM = 0x4000;
 
@@ -18,6 +19,16 @@ public record FieldInfo(int accessFlags, String name, String descriptor, Optiona
         if (signature == null) {
             throw new IllegalArgumentException("field signature optional is null");
         }
+    }
+
+    /** Creates field metadata without an integer constant.
+     * @param accessFlags field access flags
+     * @param name field name
+     * @param descriptor field descriptor
+     * @param signature optional generic signature
+     */
+    public FieldInfo(final int accessFlags, final String name, final String descriptor, final Optional<String> signature) {
+        this(accessFlags, name, descriptor, signature, 0);
     }
 
     /**

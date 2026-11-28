@@ -138,9 +138,10 @@ model raise `UnsupportedOperationException` instead of returning incomplete clas
 Runtime names do not reveal unselected fields and produce `NoSuchFieldException`.
 `Field.getInt` reads selected, non-volatile application fields declared as `byte`, `short`,
 `char` or `int`, with caller access checks, instance target validation and Java's widening
-conversion. Non-final static fields initialize their declaring class on access and ignore the target.
-Other field types, volatile fields and static final fields raise `UnsupportedOperationException` for
-this accessor until implemented.
+conversion. Static fields initialize their declaring class on access and ignore the target.
+Integer `ConstantValue` attributes initialize their static fields, including final constants.
+Other field types and volatile fields raise `UnsupportedOperationException` for this accessor until
+implemented.
 `Field.setInt` writes selected, non-static, non-volatile, non-final application `int` fields with
 the same caller access and target checks. Other field types, static, volatile and final fields
 raise `UnsupportedOperationException` for this accessor until implemented.
