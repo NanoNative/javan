@@ -4801,6 +4801,40 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsFloatingClassifiers() throws Exception {
+        final Path project = tempDir.resolve("selfhost-floating-classifiers");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println(Float.isNaN(Float.intBitsToFloat(0x7fc00001)));
+                    System.out.println(Float.isInfinite(Float.NEGATIVE_INFINITY));
+                    System.out.println(Double.isNaN(Double.longBitsToDouble(0x7ff8000000000001L)));
+                    System.out.println(Double.isInfinite(Double.POSITIVE_INFINITY));
+                    System.out.println(Double.isInfinite(-0.0));
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-floating-classifiers"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-floating-classifiers").toString()), Duration.ofSeconds(30));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout());
+    }
+
+    @Test
     void nativeBuiltJavanBuildsFloatingDecimalOutput() throws Exception {
         final Path project = tempDir.resolve("selfhost-floating-decimal-output");
         final Path classes = project.resolve("classes");

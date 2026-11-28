@@ -879,12 +879,16 @@ final class RuntimeHeaderFile {
         int javan_float_to_raw_int_bits(float value);
         int javan_float_to_int_bits(float value);
         int javan_float_is_finite(float value);
+        int javan_float_is_nan(float value);
+        int javan_float_is_infinite(float value);
         void* javan_double_value_of(double value);
         double javan_double_double_value(void* value);
         double javan_double_long_bits_to_double(long long value);
         long long javan_double_to_raw_long_bits(double value);
         long long javan_double_to_long_bits(double value);
         int javan_double_is_finite(double value);
+        int javan_double_is_nan(double value);
+        int javan_double_is_infinite(double value);
         void* javan_boolean_value_of(int value);
         int javan_boolean_boolean_value(void* value);
         void* javan_byte_value_of(int value);

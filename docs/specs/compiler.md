@@ -376,7 +376,8 @@ types do not cause unrelated overrides to be retained and may still fail at runt
 non-NaN bit patterns. The canonical conversions normalize NaN while the raw conversion preserves
 its available representation. Floating-point `%` uses the Java remainder operation for `float`
 and `double`, including NaN, infinities, subnormal values and the sign of zero. Operand evaluation
-order is preserved.
+order is preserved. The static `Float.isNaN`, `Float.isInfinite`, `Double.isNaN` and
+`Double.isInfinite` methods classify finite values, infinities and NaNs by their representations.
 Multi-dimensional array allocation evaluates every dimension before allocation, checks negative
 sizes in order, and supports partially allocated arrays and concurrent garbage collection.
 Array values converted to strings use their runtime array class name and identity hash, including

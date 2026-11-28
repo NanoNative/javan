@@ -6355,6 +6355,16 @@ final class RuntimeSourceMemorySections {
             return (bits & 0x7f800000U) != 0x7f800000U;
         }
 
+        int javan_float_is_nan(float value) {
+            const uint32_t bits = (uint32_t) javan_float_to_raw_int_bits(value);
+            return (bits & UINT32_C(0x7fffffff)) > UINT32_C(0x7f800000);
+        }
+
+        int javan_float_is_infinite(float value) {
+            const uint32_t bits = (uint32_t) javan_float_to_raw_int_bits(value);
+            return (bits & UINT32_C(0x7fffffff)) == UINT32_C(0x7f800000);
+        }
+
         void* javan_double_value_of(double value) {
             javan_boxed_double* object = (javan_boxed_double*) javan_alloc(sizeof(javan_boxed_double));
             object->value = value;
@@ -6395,6 +6405,18 @@ final class RuntimeSourceMemorySections {
             uint64_t bits;
             memcpy(&bits, &value, sizeof(bits));
             return (bits & UINT64_C(0x7ff0000000000000)) != UINT64_C(0x7ff0000000000000);
+        }
+
+        int javan_double_is_nan(double value) {
+            uint64_t bits;
+            memcpy(&bits, &value, sizeof(bits));
+            return (bits & UINT64_C(0x7fffffffffffffff)) > UINT64_C(0x7ff0000000000000);
+        }
+
+        int javan_double_is_infinite(double value) {
+            uint64_t bits;
+            memcpy(&bits, &value, sizeof(bits));
+            return (bits & UINT64_C(0x7fffffffffffffff)) == UINT64_C(0x7ff0000000000000);
         }
 
         void* javan_boolean_value_of(int value) {

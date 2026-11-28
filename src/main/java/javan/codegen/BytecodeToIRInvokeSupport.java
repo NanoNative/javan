@@ -3701,6 +3701,16 @@ final class BytecodeToIRInvokeSupport {
                 "javan_float_to_int_bits", List.of(popFloat(classFile, method, stack)))));
             return true;
         }
+        if ("isNaN".equals(methodRef.name()) && "(F)Z".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_float_is_nan", List.of(popFloat(classFile, method, stack)))));
+            return true;
+        }
+        if ("isInfinite".equals(methodRef.name()) && "(F)Z".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_float_is_infinite", List.of(popFloat(classFile, method, stack)))));
+            return true;
+        }
         if ("isFinite".equals(methodRef.name()) && "(F)Z".equals(methodRef.descriptor())) {
             stack.add(StackValue.intExpression(IrExpression.intCall(
                 "javan_float_is_finite",
@@ -3737,6 +3747,16 @@ final class BytecodeToIRInvokeSupport {
         if ("doubleToLongBits".equals(methodRef.name()) && "(D)J".equals(methodRef.descriptor())) {
             stack.add(StackValue.longExpression(IrExpression.longCall(
                 "javan_double_to_long_bits", List.of(popDouble(classFile, method, stack)))));
+            return true;
+        }
+        if ("isNaN".equals(methodRef.name()) && "(D)Z".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_double_is_nan", List.of(popDouble(classFile, method, stack)))));
+            return true;
+        }
+        if ("isInfinite".equals(methodRef.name()) && "(D)Z".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_double_is_infinite", List.of(popDouble(classFile, method, stack)))));
             return true;
         }
         if ("isFinite".equals(methodRef.name()) && "(D)Z".equals(methodRef.descriptor())) {
