@@ -39,6 +39,9 @@ its contract instead of requiring identical values from separate executions.
 ## Current Boundary
 
 The public journey is `check -> build -> run`; `report` reads the same generated evidence.
+Classfile modified UTF-8 rejects raw zero bytes and overlong encodings while accepting the encoded
+null character and valid UTF-16 surrogate code units.
+
 The pipeline uses classfile ingestion, canonical control flow, reachability, verification,
 lowered IR and C generation. Legacy `jsr`, `jsr_w` and `ret` subroutines are normalized at
 ingress. The [analysis contract](analysis-and-optimization.md) owns the facts and transformations.

@@ -98,4 +98,14 @@ final class ClassByteCursorTest {
             .isInstanceOf(UTFDataFormatException.class)
             .hasMessage("Malformed modified UTF-8 at byte 0");
     }
+    @Test
+    void cursorAcceptsCanonicalNullBoundaryAndSurrogateEncodings() throws Exception {
+        final ClassByteCursor cursor = new ClassByteCursor(new byte[]{
+            0, 15, 'A', (byte) 0xc0, (byte) 0x80, (byte) 0xc2, (byte) 0x80,
+            (byte) 0xe0, (byte) 0xa0, (byte) 0x80, (byte) 0xed, (byte) 0xa0, (byte) 0xbd,
+            (byte) 0xed, (byte) 0xb8, (byte) 0x80, 0x7f
+        });
+        assertThat(cursor.modifiedUtf8()).isEqualTo("A\0\u0080\u0800\ud83d\ude00\u007f");
+    }
+
 }

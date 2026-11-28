@@ -10683,4 +10683,32 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         assertThat(nativeRun.stdout()).isEqualTo(expected.stdout()).isEqualTo("-128\n");
     }
 
+    @Test
+    void nativeBuiltJavanRejectsMalformedModifiedUtf8() throws Exception {
+        final Path classes = tempDir.resolve("selfhost-malformed-utf8");
+        Files.createDirectories(classes.resolve("dep"));
+        final byte[] bytes = ClassFile.of().build(ClassDesc.of("dep.Subject"), builder -> builder
+            .withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_SUPER)
+            .withField("VALUE", ClassDesc.of("java.lang.String"), field -> field
+                .withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_STATIC | ClassFile.ACC_FINAL)
+                .with(ConstantValueAttribute.of("target")))
+            .withMethodBody("main", MethodTypeDesc.ofDescriptor("([Ljava/lang/String;)V"),
+                ClassFile.ACC_PUBLIC | ClassFile.ACC_STATIC, code -> code.return_()));
+        final byte[] marker = "target".getBytes(StandardCharsets.US_ASCII);
+        int index = -1;
+        for (int position = 0; position <= bytes.length - marker.length; position++) {
+            boolean equal = true;
+            for (int i = 0; i < marker.length; i++) if (bytes[position + i] != marker[i]) equal = false;
+            if (equal) { index = position; break; }
+        }
+        assertThat(index).isNotNegative();
+        bytes[index + 1] = 0;
+        Files.write(classes.resolve("dep/Subject.class"), bytes);
+        final ProcessResult check = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "check", classes.toString(), "--main", "dep.Subject"),
+            Duration.ofSeconds(120));
+        assertThat(check.exitCode()).isNotZero();
+        assertThat(check.stderr()).contains("Malformed modified UTF-8");
+    }
+
 }

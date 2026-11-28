@@ -169,7 +169,9 @@ public final class ClassByteCursor {
         int charIndex = 0;
         while (byteIndex < end) {
             final int first = bytes[byteIndex] & 0xFF;
-            if (first <= 0x7F) {
+            if (first == 0) {
+                throw malformed(byteIndex - start);
+            } else if (first <= 0x7F) {
                 chars[charIndex] = (char) first;
                 charIndex++;
                 byteIndex++;
@@ -181,7 +183,9 @@ public final class ClassByteCursor {
                 if ((second & 0xC0) != 0x80) {
                     throw malformed(byteIndex - start);
                 }
-                chars[charIndex] = (char) (((first & 0x1F) << 6) | (second & 0x3F));
+                final int value = ((first & 0x1F) << 6) | (second & 0x3F);
+                if (value != 0 && value < 0x80) throw malformed(byteIndex - start);
+                chars[charIndex] = (char) value;
                 charIndex++;
                 byteIndex += 2;
             } else if ((first >> 4) == 14) {
@@ -193,7 +197,9 @@ public final class ClassByteCursor {
                 if ((second & 0xC0) != 0x80 || (third & 0xC0) != 0x80) {
                     throw malformed(byteIndex - start);
                 }
-                chars[charIndex] = (char) (((first & 0x0F) << 12) | ((second & 0x3F) << 6) | (third & 0x3F));
+                final int value = ((first & 0x0F) << 12) | ((second & 0x3F) << 6) | (third & 0x3F);
+                if (value < 0x800) throw malformed(byteIndex - start);
+                chars[charIndex] = (char) value;
                 charIndex++;
                 byteIndex += 3;
             } else {

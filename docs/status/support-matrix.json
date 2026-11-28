@@ -11,8 +11,8 @@
     "rule": "a broad JDK-compatibility release requires zero unknown leftovers; the first native release is scenario-bounded and requires declared reachable behavior to be supported or rejected"
   },
   "counts": {
-    "rows": 390,
-    "pass": 388,
+    "rows": 391,
+    "pass": 389,
     "scoped": 2,
     "target": 0,
     "rejected": 0
@@ -40,6 +40,7 @@
     {"feature": "static-fields", "jdk25": "pass"},
     {"feature": "static-long-constant-fields", "jdk25": "pass"},
     {"feature": "static-small-integral-constant-fields", "jdk25": "pass"},
+    {"feature": "classfile-modified-utf8-validation", "jdk25": "pass"},
     {"feature": "static-floating-constant-fields", "jdk25": "pass"},
     {"feature": "string-concat", "jdk25": "pass"},
     {"feature": "exception-panic", "jdk25": "pass"},

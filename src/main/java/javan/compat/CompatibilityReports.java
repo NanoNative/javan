@@ -457,6 +457,7 @@ public final class CompatibilityReports {
             pass("static-fields"),
             pass("static-long-constant-fields"),
             pass("static-small-integral-constant-fields"),
+            pass("classfile-modified-utf8-validation"),
             pass("static-floating-constant-fields"),
             pass("string-concat"),
             pass("exception-panic"),
