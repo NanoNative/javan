@@ -1215,4 +1215,78 @@ final class CliCustomMapKeyIntegrationTest extends CliIntegrationSupport {
         assertThat(result.stdout()).isEqualTo(expected).isEqualTo("400\n");
     }
 
+    @Test
+    void largeCapacityConstructorsDoNotAllocateUntilInsertion() throws Exception {
+        final Path project = project("map-constructor-large-empty");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            import java.util.LinkedHashMap;
+            import java.util.concurrent.ConcurrentHashMap;
+            public final class Main {
+                public static void main(String[] args) {
+                    System.out.println(new HashMap<Integer, String>(536870913).size());
+                    System.out.println(new LinkedHashMap<Integer, String>(536870913).size());
+                    System.out.println(new ConcurrentHashMap<Integer, String>(536870913).size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-constructor-large-empty").toString()), Duration.ofSeconds(5));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("0\n0\n0\n");
+    }
+
+    @Test
+    void capacityConstructedValuesViewTracksFirstInsertion() throws Exception {
+        final Path project = project("map-constructor-lazy-values-view");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            public final class Main {
+                public static void main(String[] args) {
+                    var map = new HashMap<Integer, String>(16); var values = map.values();
+                    System.out.println(values.isEmpty()); map.put(1, "value");
+                    System.out.println(values.contains("value")); System.out.println(values.remove("value"));
+                    System.out.println(map.size());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-constructor-lazy-values-view").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("true\ntrue\ntrue\n0\n");
+    }
+
+    @Test
+    void largeCapacityConcurrentMapStillHashesEmptyQueries() throws Exception {
+        final Path project = project("concurrent-map-constructor-lazy-query");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.ConcurrentHashMap;
+            public final class Main {
+                static int hashes;
+                public static final class Key {
+                    public int hashCode() { hashes++; return 1; }
+                    public boolean equals(Object other) { return this == other; }
+                }
+                public static void main(String[] args) {
+                    var map = new ConcurrentHashMap<Key, String>(536870913); Key key = new Key();
+                    System.out.println(map.get(key)); System.out.println(map.containsKey(key)); System.out.println(hashes);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/concurrent-map-constructor-lazy-query").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("null\nfalse\n2\n");
+    }
+
 }

@@ -205,6 +205,7 @@ native map entries and does not yet support application-defined `Map.Entry` impl
 `IllegalArgumentException` with the Java message for a negative expected size.
 For nonnegative expected sizes, these factories defer backing storage allocation until insertion,
 so even a very large expected size can produce an empty map without allocating its table.
+Nonnegative initial-capacity constructors of `HashMap`, `LinkedHashMap` and `ConcurrentHashMap` also defer backing storage until insertion.
 The no-argument `ConcurrentHashMap.keySet()` concrete `KeySetView` supports `add`, `contains`,
 `remove`, `size`, `isEmpty`, `clear` and `iterator`; `add` throws `UnsupportedOperationException`.
 Supported `Map.keySet()` views remain connected to their map. Reads and supported removals reflect

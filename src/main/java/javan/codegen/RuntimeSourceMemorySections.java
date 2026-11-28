@@ -15757,7 +15757,7 @@ final class RuntimeSourceMemorySections {
             if (map->backing != NULL) {
                 javan_panic("unsupported map backing for capacity initialization");
             }
-            javan_map_ensure_capacity(map, capacity);
+            map->initial_capacity = capacity;
             javan_runtime_lock_leave();
         }
 
