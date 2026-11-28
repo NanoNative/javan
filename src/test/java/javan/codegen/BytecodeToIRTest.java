@@ -24286,7 +24286,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_hashmap_new_with_expected_mappings",
+                "javan_hashmap_new_with_expected_mappings_into",
                 List.of(IrExpression.intLocal("arg0"))
             ))
         );
@@ -24307,7 +24307,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_linkedhashmap_new_with_expected_mappings",
+                "javan_linkedhashmap_new_with_expected_mappings_into",
                 List.of(IrExpression.intLocal("arg0"))
             ))
         );

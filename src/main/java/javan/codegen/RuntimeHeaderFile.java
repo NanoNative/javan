@@ -612,6 +612,8 @@ final class RuntimeHeaderFile {
         void* javan_hashmap_new(void);
         void* javan_treemap_new(void);
         void* javan_concurrent_hashmap_new(void);
+        void javan_hashmap_new_with_expected_mappings_into(void** result, int num_mappings);
+        void javan_linkedhashmap_new_with_expected_mappings_into(void** result, int num_mappings);
         void* javan_hashmap_new_with_expected_mappings(int num_mappings);
         void* javan_linkedhashmap_new_with_expected_mappings(int num_mappings);
         void javan_enummap_initialize(void* map, void* key_type);

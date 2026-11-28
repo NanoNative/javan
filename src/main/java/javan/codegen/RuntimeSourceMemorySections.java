@@ -15259,12 +15259,14 @@ final class RuntimeSourceMemorySections {
                 javan_update_runtime_allocation_kind((void*) next_hashes, JAVAN_RUNTIME_KIND_OWNED_BUFFER);
                 next_buckets = (int*) javan_alloc((unsigned long) next_index_capacity * sizeof(int));
                 javan_update_runtime_allocation_kind((void*) next_buckets, JAVAN_RUNTIME_KIND_OWNED_BUFFER);
+                javan_runtime_lock_enter();
                 map->keys = next_keys;
                 map->values = next_values;
                 map->key_hashes = next_hashes;
                 map->index_buckets = next_buckets;
                 map->index_capacity = next_index_capacity;
                 map->indexed_length = 0;
+                javan_runtime_lock_leave();
                 javan_root_frame_pop(javan_map_owner_roots);
             }
             return map;
@@ -15692,6 +15694,14 @@ final class RuntimeSourceMemorySections {
                 javan_panic_illegal_load_factor(load_factor);
             }
             javan_set_initialize_capacity(value, capacity);
+        }
+
+        void javan_hashmap_new_with_expected_mappings_into(void** result, int num_mappings) {
+            (void) javan_map_new_with_capacity_into(javan_hashmap_capacity_for_expected_mappings(num_mappings), 0, result);
+        }
+
+        void javan_linkedhashmap_new_with_expected_mappings_into(void** result, int num_mappings) {
+            javan_hashmap_new_with_expected_mappings_into(result, num_mappings);
         }
 
         void* javan_hashmap_new_with_expected_mappings(int num_mappings) {

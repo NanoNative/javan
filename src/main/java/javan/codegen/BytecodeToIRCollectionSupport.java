@@ -50,14 +50,14 @@ final class BytecodeToIRCollectionSupport {
             && "newHashMap".equals(name)
             && "(I)Ljava/util/HashMap;".equals(descriptor)) {
             final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_hashmap_new_with_expected_mappings", arguments)));
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_hashmap_new_with_expected_mappings_into", arguments)));
             return true;
         }
         if ("java/util/LinkedHashMap".equals(owner)
             && "newLinkedHashMap".equals(name)
             && "(I)Ljava/util/LinkedHashMap;".equals(descriptor)) {
             final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_linkedhashmap_new_with_expected_mappings", arguments)));
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_linkedhashmap_new_with_expected_mappings_into", arguments)));
             return true;
         }
         if ("java/util/HashSet".equals(owner)

@@ -9830,4 +9830,52 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         assertThat(nativeRun.stdout()).isEqualTo(expected.stdout()).isEqualTo("-17\n-17\n");
     }
 
+    @Test
+    void nativeBuiltJavanKeepsMapFactoryResultsDuringConcurrentGc() throws Exception {
+        final Path project = tempDir.resolve("selfhost-map-factory-gc");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger count = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 200; i++) {
+                            Map<Integer, String> map;
+                            if ((i & 1) == 0) map = HashMap.newHashMap(1);
+                            else map = LinkedHashMap.newLinkedHashMap(1);
+                            map.put(i, "value");
+                            if (map.get(i).equals("value")) count.incrementAndGet();
+                        }
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Thread a = new Thread(new Worker()); Thread b = new Thread(new Worker());
+                    a.start(); b.start(); a.join(); b.join(); System.out.println(count.get());
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-map-factory-gc"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-map-factory-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout()).isEqualTo("400\n");
+    }
+
 }

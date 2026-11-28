@@ -820,6 +820,8 @@ public final class CCodegen {
             result.add("javan_generated_class_get_declared_constructor");
         }
         result.add("javan_method_get_parameter_types");
+        result.add("javan_hashmap_new_with_expected_mappings_into");
+        result.add("javan_linkedhashmap_new_with_expected_mappings_into");
         result.add("javan_map_get_or_default_java_into");
         result.add("javan_map_put_if_absent_java_into");
         result.add("javan_map_replace_java_into");
