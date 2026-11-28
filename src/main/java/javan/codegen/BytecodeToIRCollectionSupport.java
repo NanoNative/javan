@@ -1472,7 +1472,8 @@ final class BytecodeToIRCollectionSupport {
                 stack.add(StackValue.intExpression(IrExpression.intCall("javan_map_is_empty", List.of(receiver))));
                 return true;
             }
-            if ("keySet()Ljava/util/Set;".equals(signature)) {
+            if ("keySet()Ljava/util/Set;".equals(signature)
+                || "keySet()Ljava/util/concurrent/ConcurrentHashMap$KeySetView;".equals(signature)) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_key_set", List.of(receiver))));
                 return true;
             }
@@ -2377,7 +2378,7 @@ final class BytecodeToIRCollectionSupport {
     }
 
     static boolean isJdkSetOwner(final String owner) {
-        if ("java/util/Set".equals(owner)) {
+        if ("java/util/Set".equals(owner) || "java/util/concurrent/ConcurrentHashMap$KeySetView".equals(owner)) {
             return true;
         }
         return isJdkSetClass(owner);

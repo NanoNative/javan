@@ -768,6 +768,13 @@ public final class JdkCallSupport {
         runtime("Collection.containsAll", "java/util/Collection", "containsAll", "(Ljava/util/Collection;)Z"),
         runtime("Collection.clear", "java/util/Collection", "clear", "()V"),
         runtime("Collection.toArray", "java/util/Collection", "toArray", "()[Ljava/lang/Object;"),
+        runtime("ConcurrentHashMap.KeySetView.add", "java/util/concurrent/ConcurrentHashMap$KeySetView", "add", "(Ljava/lang/Object;)Z"),
+        runtime("ConcurrentHashMap.KeySetView.contains", "java/util/concurrent/ConcurrentHashMap$KeySetView", "contains", "(Ljava/lang/Object;)Z"),
+        runtime("ConcurrentHashMap.KeySetView.remove", "java/util/concurrent/ConcurrentHashMap$KeySetView", "remove", "(Ljava/lang/Object;)Z"),
+        runtime("ConcurrentHashMap.KeySetView.size", "java/util/concurrent/ConcurrentHashMap$KeySetView", "size", "()I"),
+        runtime("ConcurrentHashMap.KeySetView.isEmpty", "java/util/concurrent/ConcurrentHashMap$KeySetView", "isEmpty", "()Z"),
+        runtime("ConcurrentHashMap.KeySetView.clear", "java/util/concurrent/ConcurrentHashMap$KeySetView", "clear", "()V"),
+        runtime("ConcurrentHashMap.KeySetView.iterator", "java/util/concurrent/ConcurrentHashMap$KeySetView", "iterator", "()Ljava/util/Iterator;"),
         runtime("Set.add", "java/util/Set", "add", "(Ljava/lang/Object;)Z"),
         runtime("Set.addAll", "java/util/Set", "addAll", "(Ljava/util/Collection;)Z"),
         runtime("Set.removeAll", "java/util/Set", "removeAll", "(Ljava/util/Collection;)Z"),
@@ -948,7 +955,7 @@ public final class JdkCallSupport {
         runtime("TreeMap.keySet", "java/util/TreeMap", "keySet", "()Ljava/util/Set;"),
         runtime("TreeMap.entrySet", "java/util/TreeMap", "entrySet", "()Ljava/util/Set;"),
         runtime("TreeMap.isEmpty", "java/util/TreeMap", "isEmpty", "()Z"),
-        runtime("ConcurrentHashMap.keySet", "java/util/concurrent/ConcurrentHashMap", "keySet", "()Ljava/util/Set;"),
+        runtime("ConcurrentHashMap.keySet", "java/util/concurrent/ConcurrentHashMap", "keySet", "()Ljava/util/Set;", "()Ljava/util/concurrent/ConcurrentHashMap$KeySetView;"),
         runtime("ConcurrentHashMap.entrySet", "java/util/concurrent/ConcurrentHashMap", "entrySet", "()Ljava/util/Set;"),
         runtime("ConcurrentHashMap.isEmpty", "java/util/concurrent/ConcurrentHashMap", "isEmpty", "()Z"),
         runtime("Map.values", "java/util/Map", "values", "()Ljava/util/Collection;"),
@@ -2083,6 +2090,20 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Identifies no-argument concurrent key-view calls that require a non-null receiver.
+     *
+     * @param methodRef referenced JDK method
+     * @return whether the call creates the supported key view or its iterator
+     */
+    public static boolean isConcurrentKeyViewReceiver(final MethodRef methodRef) {
+        return ("java/util/concurrent/ConcurrentHashMap".equals(methodRef.owner())
+                && "keySet".equals(methodRef.name())
+                && "()Ljava/util/concurrent/ConcurrentHashMap$KeySetView;".equals(methodRef.descriptor()))
+            || ("java/util/concurrent/ConcurrentHashMap$KeySetView".equals(methodRef.owner())
+                && "iterator".equals(methodRef.name()) && "()Ljava/util/Iterator;".equals(methodRef.descriptor()));
+    }
+
+    /**
      * Identifies supported no-argument collection size queries.
      *
      * @param methodRef referenced JDK method
@@ -2381,7 +2402,8 @@ public final class JdkCallSupport {
     public static boolean isCollectionObjectRemoval(final MethodRef methodRef) {
         return ("java/util/List".equals(methodRef.owner()) || "java/util/ArrayList".equals(methodRef.owner())
                 || "java/util/Collection".equals(methodRef.owner()) || "java/util/Set".equals(methodRef.owner())
-                || "java/util/HashSet".equals(methodRef.owner()) || "java/util/LinkedHashSet".equals(methodRef.owner()))
+                || "java/util/HashSet".equals(methodRef.owner()) || "java/util/LinkedHashSet".equals(methodRef.owner())
+                || "java/util/concurrent/ConcurrentHashMap$KeySetView".equals(methodRef.owner()))
             && "remove".equals(methodRef.name()) && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor())
             && isSupported(methodRef);
     }
@@ -2685,7 +2707,8 @@ public final class JdkCallSupport {
         if (isMapObjectGetOrPut(methodRef) || isMapMembershipOrDefaultQuery(methodRef)) {
             return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
         }
-        if (isCollectionObjectSearch(methodRef) || isCollectionSizeQuery(methodRef)) {
+        if (isCollectionObjectSearch(methodRef) || isCollectionSizeQuery(methodRef)
+            || isConcurrentKeyViewReceiver(methodRef)) {
             return List.of("java/lang/NullPointerException");
         }
         if ("java/lang/Object".equals(methodRef.owner()) && "equals".equals(methodRef.name())
@@ -3251,7 +3274,7 @@ public final class JdkCallSupport {
         if ("java/util/Collection".equals(owner)) {
             return true;
         }
-        if ("java/util/Set".equals(owner)) {
+        if ("java/util/Set".equals(owner) || "java/util/concurrent/ConcurrentHashMap$KeySetView".equals(owner)) {
             return true;
         }
         if ("java/util/AbstractSet".equals(owner)) {

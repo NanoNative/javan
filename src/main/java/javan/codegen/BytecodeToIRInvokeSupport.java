@@ -195,7 +195,8 @@ final class BytecodeToIRInvokeSupport {
             || JdkCallSupport.isMapMembershipOrDefaultQuery(target) || JdkCallSupport.isMapPutIfAbsent(target)
             || JdkCallSupport.isMapRemove(target) || JdkCallSupport.isMapReplace(target) || JdkCallSupport.isMapPutAll(target);
         final boolean guardedCollectionOrMapReceiver = guardedObjectArguments || JdkCallSupport.isCollectionSizeQuery(target)
-            || JdkCallSupport.isCollectionClear(target) || JdkCallSupport.isMapClear(target);
+            || JdkCallSupport.isCollectionClear(target) || JdkCallSupport.isMapClear(target)
+            || JdkCallSupport.isConcurrentKeyViewReceiver(target);
         if (!guardedCollectionOrMapReceiver && !guardedOptionalReceiver(target)
             && !(classes.containsKey(target.owner())
                 && classes.get(target.owner()).application()
