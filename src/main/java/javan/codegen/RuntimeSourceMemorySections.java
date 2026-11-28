@@ -11099,21 +11099,23 @@ final class RuntimeSourceMemorySections {
             return length;
         }
 
+        static const unsigned char* javan_utf16_skip(const char* value, int offset, int* pending) {
+            const unsigned char* cursor = (const unsigned char*) value;
+            for (int index = 0; index < offset; index++) {
+                (void) javan_utf16_next_char(&cursor, pending);
+            }
+            return cursor;
+        }
+
         static int javan_string_region_matches(const char* left, int left_offset, const char* right, int right_offset, int count) {
             /* Callers validate the UTF-16 ranges. Keep each string's decoding position local. */
             if (count == 0) {
                 return 1;
             }
-            const unsigned char* left_cursor = (const unsigned char*) left;
-            const unsigned char* right_cursor = (const unsigned char*) right;
             int left_pending = -1;
             int right_pending = -1;
-            for (int index = 0; index < left_offset; index++) {
-                (void) javan_utf16_next_char(&left_cursor, &left_pending);
-            }
-            for (int index = 0; index < right_offset; index++) {
-                (void) javan_utf16_next_char(&right_cursor, &right_pending);
-            }
+            const unsigned char* left_cursor = javan_utf16_skip(left, left_offset, &left_pending);
+            const unsigned char* right_cursor = javan_utf16_skip(right, right_offset, &right_pending);
             for (int index = 0; index < count; index++) {
                 if (javan_utf16_next_char(&left_cursor, &left_pending)
                     != javan_utf16_next_char(&right_cursor, &right_pending)) {
@@ -11647,7 +11649,71 @@ final class RuntimeSourceMemorySections {
             return javan_string_ends_with(left, suffix);
         }
 
-        int javan_string_region_matches_java(const char* left, int left_offset, const char* right, int right_offset, int count) {
+        static int javan_unicode_case_fold(int code_point) {
+            if (code_point < 0x80) {
+                return code_point >= 'A' && code_point <= 'Z' ? code_point + ('a' - 'A') : code_point;
+            }
+            size_t low = 0;
+            size_t high = sizeof(javan_unicode_case_folds) / sizeof(javan_unicode_case_folds[0]);
+            while (low < high) {
+                size_t middle = low + (high - low) / 2;
+                int first = javan_unicode_case_folds[middle].first;
+                if (code_point < first) {
+                    high = middle;
+                } else if (code_point > javan_unicode_case_folds[middle].last) {
+                    low = middle + 1;
+                } else {
+                    int stride = javan_unicode_case_folds[middle].stride;
+                    return (code_point - first) % stride == 0
+                        ? code_point + javan_unicode_case_folds[middle].delta : code_point;
+                }
+            }
+            return code_point;
+        }
+
+        typedef struct {
+            const unsigned char* cursor;
+            int pending;
+            int remaining;
+        } javan_utf16_region;
+
+        static int javan_utf16_region_next_code_point(javan_utf16_region* region) {
+            int first = javan_utf16_next_char(&region->cursor, &region->pending);
+            region->remaining--;
+            if (first >= 0xd800 && first <= 0xdbff && region->remaining > 0) {
+                javan_utf16_region after_pair = *region;
+                int second = javan_utf16_next_char(&after_pair.cursor, &after_pair.pending);
+                if (second >= 0xdc00 && second <= 0xdfff) {
+                    after_pair.remaining--;
+                    *region = after_pair;
+                    return 0x10000 + ((first - 0xd800) << 10) + second - 0xdc00;
+                }
+            }
+            return first;
+        }
+
+        static int javan_string_region_matches_ignore_case(
+            const char* left, int left_offset, const char* right, int right_offset, int count
+        ) {
+            javan_utf16_region left_region = {NULL, -1, count};
+            javan_utf16_region right_region = {NULL, -1, count};
+            left_region.cursor = javan_utf16_skip(left, left_offset, &left_region.pending);
+            right_region.cursor = javan_utf16_skip(right, right_offset, &right_region.pending);
+            /* Unicode 16 simple case mappings preserve the UTF-16 width of every code point. */
+            while (left_region.remaining > 0 && right_region.remaining > 0) {
+                int left_code_point = javan_utf16_region_next_code_point(&left_region);
+                int right_code_point = javan_utf16_region_next_code_point(&right_region);
+                if (left_code_point != right_code_point
+                    && javan_unicode_case_fold(left_code_point) != javan_unicode_case_fold(right_code_point)) {
+                    return 0;
+                }
+            }
+            return left_region.remaining == right_region.remaining;
+        }
+
+        int javan_string_region_matches_java(
+            const char* left, int ignore_case, int left_offset, const char* right, int right_offset, int count
+        ) {
             if (left == NULL) {
                 javan_pending_throw("java/lang/NullPointerException", NULL, NULL, NULL, NULL, -1, -1, NULL);
                 return 0;
@@ -11662,7 +11728,12 @@ final class RuntimeSourceMemorySections {
             if (right_offset > (long long) javan_string_length(right) - count) {
                 return 0;
             }
-            return count <= 0 || javan_string_region_matches(left, left_offset, right, right_offset, count);
+            if (count <= 0) {
+                return 1;
+            }
+            return ignore_case != 0
+                ? javan_string_region_matches_ignore_case(left, left_offset, right, right_offset, count)
+                : javan_string_region_matches(left, left_offset, right, right_offset, count);
         }
 
         int javan_string_starts_with(const char* left, const char* prefix) {
@@ -18239,6 +18310,7 @@ final class RuntimeSourceMemorySections {
         String result = SOURCE_ARRAYS;
         result = result + SOURCE_BASE64;
         result = result + SOURCE_ARRAYS_TAIL;
+        result = result + Unicode16CaseFold.SOURCE;
         result = result + SOURCE_ARRAYS_TAIL_STRINGS;
         result = result + SOURCE_STRING_ROOTING;
         return result;

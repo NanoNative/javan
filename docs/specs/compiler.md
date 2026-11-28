@@ -401,8 +401,22 @@ Unicode literals.
 The supported integer and String overloads of `String.indexOf` and `lastIndexOf` accept Unicode
 literals and transport null-receiver and null-argument exceptions within supported handler shapes.
 The bounded `String.indexOf` overloads also transport invalid-range exceptions.
-The case-sensitive `String.regionMatches(int, String, int, int)` compares UTF-16 code units.
-It preserves Java's range results and null-check order, including zero and negative lengths.
+Both `String.regionMatches` overloads accept UTF-16 indices and lengths, including slices
+that split surrogate pairs. They preserve Java's range results and null-check order, including
+zero and negative lengths. Case-sensitive comparisons use code units. Case-insensitive comparisons
+pair surrogates only within each slice and apply Java 25's locale-independent
+`Character.toLowerCase(Character.toUpperCase(codePoint))` rule.
+The native compiler embeds the generated Unicode 16 comparison table and needs no JVM to use it.
+The table is derived from [UnicodeData 16.0.0](https://www.unicode.org/Public/16.0.0/ucd/UnicodeData.txt)
+and distributed under the [Unicode License v3](../../src/main/resources/META-INF/LICENSE-UNICODE-3.0.txt).
+The notice is included in the Javan JAR and generated C. Preserve it with redistributed generated
+binaries that contain the table. Regenerate the table with Python 3 from the pinned input.
+
+```sh
+python3 scripts/generate-unicode-case-fold.py /path/to/UnicodeData.txt > \
+  src/main/java/javan/codegen/Unicode16CaseFold.java
+```
+
 `String.substring` and `String.subSequence` preserve UTF-16 code units and transport null-receiver
 and invalid-range exceptions within supported handler shapes.
 `String.replace(char, char)` preserves UTF-16 code units, returns its receiver if the old character

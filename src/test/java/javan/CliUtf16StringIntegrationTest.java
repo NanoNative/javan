@@ -51,6 +51,21 @@ final class CliUtf16StringIntegrationTest extends CliIntegrationSupport {
             new Comparison("region-negative-length", "value.regionMatches(8, \"\", 1, -1)", "true"),
             new Comparison("region-minimum-length", "value.regionMatches(Integer.MAX_VALUE, \"\", Integer.MAX_VALUE, Integer.MIN_VALUE)", "true"),
             new Comparison("region-maximum-length", "value.regionMatches(1, \"\", 1, Integer.MAX_VALUE)", "false"),
+            new Comparison("region-ignore-case-cyrillic-16", "\"\\u1c89\".regionMatches(true, 0, \"\\u1c8a\", 0, 1)", "true"),
+            new Comparison("region-exact-cyrillic-16", "\"\\u1c89\".regionMatches(false, 0, \"\\u1c8a\", 0, 1)", "false"),
+            new Comparison("region-ignore-case-kelvin", "\"\\u212a\".regionMatches(true, 0, \"k\", 0, 1)", "true"),
+            new Comparison("region-ignore-case-turkish", "\"I\\u0130\".regionMatches(true, 0, \"\\u0131i\", 0, 2)", "true"),
+            new Comparison("region-ignore-case-sigma-nul", "\"\\0\\u03a3\".regionMatches(true, 0, \"\\0\\u03c2\", 0, 2)", "true"),
+            new Comparison("region-ignore-case-sharp-s", "\"\\u1e9e\".regionMatches(true, 0, \"\\u00df\", 0, 1)", "true"),
+            new Comparison("region-ignore-case-no-expansion", "\"\\u00dfx\".regionMatches(true, 0, \"SS\", 0, 2)", "false"),
+            new Comparison("region-ignore-case-no-normalization", "\"\\u00e9x\".regionMatches(true, 0, \"e\\u0301\", 0, 2)", "false"),
+            new Comparison("region-ignore-case-supplementary", "\"a\\ud801\\udc00\".regionMatches(true, 1, \"\\ud801\\udc28\", 0, 2)", "true"),
+            new Comparison("region-ignore-case-high-half", "\"\\ud801\\udc00\".regionMatches(true, 0, \"\\ud801\\udc28\", 0, 1)", "true"),
+            new Comparison("region-ignore-case-low-half", "\"\\ud801\\udc00\".regionMatches(true, 1, \"\\ud801\\udc28\", 1, 1)", "false"),
+            new Comparison("region-ignore-case-unpaired-high", "\"\\ud801\".regionMatches(true, 0, \"\\ud801\\udc28\", 0, 1)", "true"),
+            new Comparison("region-ignore-case-minimum-length", "value.regionMatches(true, Integer.MAX_VALUE, \"\", Integer.MAX_VALUE, Integer.MIN_VALUE)", "true"),
+            new Comparison("region-ignore-case-maximum-length", "value.regionMatches(true, 1, \"\", 1, Integer.MAX_VALUE)", "false"),
+            new Comparison("region-exact-zero-at-end", "value.regionMatches(false, 7, \"\", 0, 0)", "true"),
             new Comparison("find-low-half", "value.indexOf(new String(new char[]{'\\ude00', 'b'}))", "3"),
             new Comparison("find-last-pair", "value.lastIndexOf(new String(new char[]{'\\ud83d', '\\ude00'}))", "5"),
             new Comparison("find-last-low-half", "value.lastIndexOf(String.valueOf('\\ude00'), 4)", "3"),
@@ -183,6 +198,55 @@ final class CliUtf16StringIntegrationTest extends CliIntegrationSupport {
         final CliRun build = run(tempDir, "build", project.toString(), "--release");
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/utf16-region-matches-argument-gc").toString()),
+            defaultProcessTimeout(), Map.of("JAVAN_GC_STRESS", "1", "JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stderr()).isEmpty();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void regionMatchesWithCaseFlagPreservesNullChecksAndRootedArgumentOrder() throws Exception {
+        final Path project = project("utf16-region-matches-case-flag");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                static boolean flag() { System.out.println("flag"); return true; }
+                static String value(String marker, char last) {
+                    System.out.println(marker);
+                    return new String(new char[]{'\\ud801', last});
+                }
+                static int number(String marker, int result) {
+                    System.out.println(marker);
+                    return new String(new char[result]).length();
+                }
+                static int compare(String value, boolean flag, int offset, String other, int start, int count) {
+                    boolean matches;
+                    try { matches = value.regionMatches(flag, offset, other, start, count); }
+                    catch (NullPointerException expected) { return -1; }
+                    return matches ? 1 : 0;
+                }
+                public static void main(String[] args) {
+                    System.out.println(compare("x", true, 2, null, 0, 1));
+                    System.out.println(compare("x", false, 2, null, 0, 1));
+                    System.out.println(compare("x", true, 0, null, -1, 1));
+                    System.out.println(compare("x", true, 0, null, Integer.MAX_VALUE, 1));
+                    System.out.println(compare("x", false, 0, null, Integer.MAX_VALUE, 1));
+                    System.out.println(value("receiver", '\\udc00').regionMatches(
+                        flag(), number("offset", 0), value("other", '\\udc28'), number("start", 0), number("count", 2)));
+                    String missing = args.length == 0 ? null : "x";
+                    try {
+                        missing.regionMatches(flag(), number("offset", 0), value("other", '\\udc28'),
+                            number("start", 0), number("count", 2));
+                    } catch (NullPointerException expected) { System.out.println("null receiver"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        assertThat(expected).isEqualTo("0\n0\n0\n-1\n-1\nreceiver\nflag\noffset\nother\nstart\ncount\ntrue\n"
+            + "flag\noffset\nother\nstart\ncount\nnull receiver\n");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/utf16-region-matches-case-flag").toString()),
             defaultProcessTimeout(), Map.of("JAVAN_GC_STRESS", "1", "JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
         assertThat(result.exitCode()).as(result.stderr()).isZero();
         assertThat(result.stderr()).isEmpty();

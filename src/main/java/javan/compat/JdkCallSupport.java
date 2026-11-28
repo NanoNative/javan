@@ -622,7 +622,7 @@ public final class JdkCallSupport {
         runtime("String.contains", "java/lang/String", "contains", "(Ljava/lang/CharSequence;)Z"),
         runtime("String.startsWith", "java/lang/String", "startsWith", "(Ljava/lang/String;)Z", "(Ljava/lang/String;I)Z"),
         runtime("String.endsWith", "java/lang/String", "endsWith", "(Ljava/lang/String;)Z"),
-        runtime("String.regionMatches", "java/lang/String", "regionMatches", "(ILjava/lang/String;II)Z"),
+        runtime("String.regionMatches", "java/lang/String", "regionMatches", "(ILjava/lang/String;II)Z", "(ZILjava/lang/String;II)Z"),
         runtime("String.replace", "java/lang/String", "replace", "(CC)Ljava/lang/String;",
             "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;"),
         runtime("String.repeat", "java/lang/String", "repeat", "(I)Ljava/lang/String;"),
@@ -2845,7 +2845,8 @@ public final class JdkCallSupport {
             return List.of("java/lang/NullPointerException");
         }
         if ("java/lang/String".equals(methodRef.owner()) && "regionMatches".equals(methodRef.name())
-            && "(ILjava/lang/String;II)Z".equals(methodRef.descriptor())) {
+            && ("(ILjava/lang/String;II)Z".equals(methodRef.descriptor())
+                || "(ZILjava/lang/String;II)Z".equals(methodRef.descriptor()))) {
             return List.of("java/lang/NullPointerException");
         }
         if ("java/lang/String".equals(methodRef.owner()) && "subSequence".equals(methodRef.name())

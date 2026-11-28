@@ -725,14 +725,17 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if ("java/lang/String".equals(methodRef.owner()) && "regionMatches".equals(methodRef.name())
-            && "(ILjava/lang/String;II)Z".equals(methodRef.descriptor())) {
+            && ("(ILjava/lang/String;II)Z".equals(methodRef.descriptor())
+                || "(ZILjava/lang/String;II)Z".equals(methodRef.descriptor()))) {
             final IrExpression length = popInt(classFile, method, stack);
             final IrExpression otherOffset = popInt(classFile, method, stack);
             final IrExpression other = popObject(classFile, method, stack);
             final IrExpression offset = popInt(classFile, method, stack);
+            final IrExpression ignoreCase = "(ZILjava/lang/String;II)Z".equals(methodRef.descriptor())
+                ? popInt(classFile, method, stack) : IrExpression.intLiteral(0);
             final IrExpression receiver = popObject(classFile, method, stack);
             pushIntCall(instructions, stack, localDeclarations, "javan_string_region_matches_java",
-                List.of(receiver, offset, other, otherOffset, length));
+                List.of(receiver, ignoreCase, offset, other, otherOffset, length));
             return;
         }
         if ("java/lang/String".equals(methodRef.owner())

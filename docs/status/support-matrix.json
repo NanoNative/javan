@@ -11,8 +11,8 @@
     "rule": "a broad JDK-compatibility release requires zero unknown leftovers; the first native release is scenario-bounded and requires declared reachable behavior to be supported or rejected"
   },
   "counts": {
-    "rows": 385,
-    "pass": 383,
+    "rows": 386,
+    "pass": 384,
     "scoped": 2,
     "target": 0,
     "rejected": 0
@@ -76,6 +76,7 @@
     {"feature": "closed-world-class-for-name-loader", "jdk25": "pass"},
     {"feature": "string-intrinsics", "jdk25": "pass"},
     {"feature": "string-region-matches", "jdk25": "pass"},
+    {"feature": "string-region-matches-ignore-case", "jdk25": "pass"},
     {"feature": "non-ascii-string-semantic-rejection", "jdk25": "pass"},
     {"feature": "operand-object-compare-temporary-root", "jdk25": "pass"},
     {"feature": "operand-field-load-temporary-root", "jdk25": "pass"},
