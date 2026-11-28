@@ -154,6 +154,9 @@ class or interface initialization. Integer constants are narrowed to `byte`, `sh
 `boolean` as required by the field type. Floating-point constants preserve binary32 and binary64 bits,
 including signed zero, infinities and NaN payloads. Instance fields ignore `ConstantValue` attributes.
 Other floating-point literal paths retain their existing NaN behavior.
+`Field.getBoolean` reads selected, non-volatile application `boolean` fields with the same access,
+target and initialization rules. Volatile and non-boolean fields raise `UnsupportedOperationException`
+until modeled.
 Other field types and volatile fields raise `UnsupportedOperationException` for this accessor until
 implemented.
 `Field.getLong` reads selected, non-volatile application `byte`, `short`, `char`, `int` and

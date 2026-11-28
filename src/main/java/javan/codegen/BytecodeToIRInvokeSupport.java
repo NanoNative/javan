@@ -4937,6 +4937,30 @@ final class BytecodeToIRInvokeSupport {
                 pendingExceptionHandlerStacks, "label_field_get_int_pending_continue_" + instruction.offset());
             return true;
         }
+        if ("java/lang/reflect/Field".equals(methodRef.owner()) && "getBoolean".equals(methodRef.name())
+            && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor())) {
+            final String targetLocal = newObjectLocal(localDeclarations);
+            final String receiverLocal = newObjectLocal(localDeclarations);
+            instructions.add(IrInstruction.assignObject(targetLocal, popObject(classFile, method, stack)));
+            instructions.add(IrInstruction.assignObject(receiverLocal, popObject(classFile, method, stack)));
+            final List<StackValue> successStack = List.copyOf(stack);
+            final String receiverPresent = "label_field_get_boolean_receiver_present_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(receiverPresent, IrExpression.objectComparison(
+                "!=", IrExpression.objectLocal(receiverLocal), IrExpression.objectNull())));
+            routePendingPlatformException(classFile, method, instruction, instructions, stack,
+                pendingExceptionHandlerStacks, sourceLines, "java/lang/NullPointerException", IrExpression.stringLiteral("field"));
+            instructions.add(IrInstruction.label(receiverPresent));
+            stack.addAll(successStack);
+            pushIntCall(instructions, stack, localDeclarations, "javan_generated_field_get_boolean", List.of(
+                IrExpression.objectLocal(receiverLocal), IrExpression.objectLocal(targetLocal),
+                IrExpression.stringLiteral(classFile.name().replace('/', '.')),
+                IrExpression.stringLiteral(classFile.nestHost().replace('/', '.'))));
+            BytecodeToIRControlFlowSupport.appendPendingExceptionDispatch(classes, method, instruction, instructions,
+                List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException",
+                    "java/lang/IllegalAccessException", "java/lang/UnsupportedOperationException"),
+                pendingExceptionHandlerStacks, "label_field_get_boolean_pending_continue_" + instruction.offset());
+            return true;
+        }
         if ("java/lang/reflect/Field".equals(methodRef.owner()) && "getLong".equals(methodRef.name())
             && "(Ljava/lang/Object;)J".equals(methodRef.descriptor())) {
             final String targetLocal = newObjectLocal(localDeclarations);
