@@ -142,10 +142,10 @@ conversion. Static fields initialize their declaring class on access and ignore 
 Integer `ConstantValue` attributes initialize their static fields, including final constants.
 Other field types and volatile fields raise `UnsupportedOperationException` for this accessor until
 implemented.
-`Field.setInt` writes selected, non-volatile, non-final application `int` fields with the same
-caller access and instance target checks. Static writes initialize the declaring class and ignore
-the target. Other field types, volatile and final fields raise `UnsupportedOperationException` for
-this accessor until implemented.
+`Field.setInt` writes selected, non-volatile, non-final application `int`, `long`, `float` and
+`double` fields with Java's widening conversion and the same caller access and instance target checks.
+Static writes initialize the declaring class and ignore the target. Other field types, volatile and
+final fields raise `UnsupportedOperationException` for this accessor until implemented.
 Public inherited-field lookup, other reflective field reads and writes, access override and generic
 `instanceof` on reflection interfaces remain outside this slice.
 Other dynamic constructor targets require a declared constructor, including when no declaration exists.

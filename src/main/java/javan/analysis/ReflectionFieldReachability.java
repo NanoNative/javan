@@ -85,7 +85,8 @@ public final class ReflectionFieldReachability {
                 if (candidate.name().equals(field.name()) && candidate.descriptor().equals(field.descriptor())
                     && candidate.isStatic() && (candidate.accessFlags() & 0x0040) == 0
                     && (readsInt && List.of("B", "S", "C", "I").contains(candidate.descriptor())
-                        || writesInt && "I".equals(candidate.descriptor()) && (candidate.accessFlags() & 0x0010) == 0)) owners.add(field.owner());
+                        || writesInt && List.of("I", "J", "F", "D").contains(candidate.descriptor())
+                            && (candidate.accessFlags() & 0x0010) == 0)) owners.add(field.owner());
             }
         }
         return Set.copyOf(owners);

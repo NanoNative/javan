@@ -1430,4 +1430,107 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
     }
 
 
+    @Test
+    void widensIntWritesToLongFloatAndDoubleFields() throws Exception {
+        final Path project = project("reflection-field-set-int-widen");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model {
+                    public long wide; public float decimal; public double precise;
+                    public static long staticWide; public static float staticDecimal; public static double staticPrecise;
+                }
+                public static void main(String[] args) throws Exception {
+                    Model target = new Model();
+                    Model.class.getDeclaredField("wide").setInt(target, Integer.MIN_VALUE);
+                    Model.class.getDeclaredField("decimal").setInt(target, Integer.MAX_VALUE);
+                    Model.class.getDeclaredField("precise").setInt(target, Integer.MAX_VALUE);
+                    Model.class.getDeclaredField("staticWide").setInt(null, Integer.MIN_VALUE);
+                    Model.class.getDeclaredField("staticDecimal").setInt(null, Integer.MAX_VALUE);
+                    Model.class.getDeclaredField("staticPrecise").setInt(null, Integer.MAX_VALUE);
+                    System.out.println(target.wide == -2147483648L);
+                    System.out.println(target.decimal == 2147483648.0f);
+                    System.out.println(target.precise == 2147483647.0d);
+                    System.out.println(Model.staticWide == -2147483648L);
+                    System.out.println(Model.staticDecimal == 2147483648.0f);
+                    System.out.println(Model.staticPrecise == 2147483647.0d);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-set-int-widen").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("true\ntrue\ntrue\ntrue\ntrue\ntrue\n");
+    }
+
+    @Test
+    void initializesStaticWideFieldsWhenOnlyReflectiveWritesAreReachable() throws Exception {
+        final Path project = project("reflection-field-set-int-widen-static-only");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            public final class Main {
+                public static final class Model {
+                    static { System.out.println("initialized"); }
+                    public static long wide = 1; public static float decimal = 2; public static double precise = 3;
+                }
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] { Model.class.getDeclaredField("wide"), Model.class.getDeclaredField("decimal"), Model.class.getDeclaredField("precise") };
+                }
+                public static void main(String[] args) throws Exception {
+                    var wide = Model.class.getDeclaredField(args[0]);
+                    var decimal = Model.class.getDeclaredField(args[1]);
+                    var precise = Model.class.getDeclaredField(args[2]);
+                    System.out.println("before"); wide.setInt(null, 1); decimal.setInt(null, 2); precise.setInt(null, 3);
+                    System.out.println("done");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-set-int-widen-static-only").toString(), "wide", "decimal", "precise"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("before\ninitialized\ndone\n");
+    }
+
+    @Test
+    void widensIntFieldWritesDuringConcurrentGc() throws Exception {
+        final Path project = project("reflection-field-set-int-widen-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger signal = new AtomicInteger(), finished = new AtomicInteger();
+                public static final class Model { public long wide; public float decimal; public double precise; }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        while (signal.get() == 0) Thread.yield();
+                        for (int i = 0; i < 1000; i++) { byte[] value = new byte[64]; value[0] = 1; }
+                        finished.set(1);
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Model target = new Model();
+                    Field wide = Model.class.getDeclaredField("wide");
+                    Field decimal = Model.class.getDeclaredField("decimal");
+                    Field precise = Model.class.getDeclaredField("precise");
+                    Thread worker = new Thread(new Worker()); worker.start(); signal.set(1);
+                    while (finished.get() == 0) { wide.setInt(target, -42); decimal.setInt(target, -42); precise.setInt(target, -42); }
+                    worker.join(); wide.setInt(target, 73); decimal.setInt(target, 73); precise.setInt(target, 73);
+                    System.out.println(target.wide == 73 && target.decimal == 73.0f && target.precise == 73.0d);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-set-int-widen-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("true\n");
+    }
+
 }

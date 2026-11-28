@@ -1812,7 +1812,7 @@ public final class CCodegen {
             .append("    const JavanMethodMetadata* metadata = javan_method_metadata(field);\n");
         for (final IrReflectedClass owner : program.reflectedClasses()) {
             for (final IrFieldMetadata field : owner.declaredFields()) {
-                if (!(write ? "I".equals(field.descriptor()) : List.of("B", "S", "C", "I").contains(field.descriptor()))
+                if (!(write ? List.of("I", "J", "F", "D").contains(field.descriptor()) : List.of("B", "S", "C", "I").contains(field.descriptor()))
                     || (field.modifiers() & (0x0040 | (write ? 0x0010 : 0))) != 0) continue;
                 IrClass layout = null;
                 for (final IrClass candidate : program.classes()) {

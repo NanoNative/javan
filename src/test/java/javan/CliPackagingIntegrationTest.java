@@ -10218,4 +10218,46 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         assertThat(nativeRun.stdout()).isEqualTo(expected.stdout()).isEqualTo("-17\n-17\n");
     }
 
+    @Test
+    void nativeBuiltJavanWidensIntFieldWrites() throws Exception {
+        final Path project = tempDir.resolve("selfhost-reflection-field-set-int-widen");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.*;
+            public final class Main {
+                public static final class Model { public static long wide; public float decimal; public double precise; }
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] { Model.class.getDeclaredField("wide"), Model.class.getDeclaredField("decimal"), Model.class.getDeclaredField("precise") };
+                }
+                public static void main(String[] args) throws Exception {
+                    Model target = new Model();
+                    Model.class.getDeclaredField("wide").setInt(null, Integer.MIN_VALUE);
+                    Model.class.getDeclaredField("decimal").setInt(target, Integer.MAX_VALUE);
+                    Model.class.getDeclaredField("precise").setInt(target, Integer.MAX_VALUE);
+                    System.out.println(Model.wide == -2147483648L);
+                    System.out.println(target.decimal == 2147483648.0f);
+                    System.out.println(target.precise == 2147483647.0d);
+                }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-reflection-field-set-int-widen"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-reflection-field-set-int-widen").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout()).isEqualTo("true\ntrue\ntrue\n");
+    }
+
 }
