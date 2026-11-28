@@ -2562,4 +2562,163 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
         assertThat(result.stdout()).isEqualTo(expected).isEqualTo("7.25\n");
     }
 
+    @Test
+    void readsDoubleFieldsAndWidensNumericFields() throws Exception {
+        final Path project = project("reflection-field-get-double");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model {
+                    public byte small = -4; public short medium = -300; public char letter = 65535;
+                    public int number = -70000; public long large = 5000000000L;
+                    public float decimal = 1.5f; public double precise = -0.0;
+                }
+                public static void main(String[] args) throws Exception {
+                    Model value = new Model();
+                    System.out.println(Model.class.getDeclaredField("small").getDouble(value));
+                    System.out.println(Model.class.getDeclaredField("medium").getDouble(value));
+                    System.out.println(Model.class.getDeclaredField("letter").getDouble(value));
+                    System.out.println(Model.class.getDeclaredField("number").getDouble(value));
+                    System.out.println(Model.class.getDeclaredField("large").getDouble(value));
+                    System.out.println(Model.class.getDeclaredField("decimal").getDouble(value));
+                    System.out.println(Double.doubleToRawLongBits(Model.class.getDeclaredField("precise").getDouble(value)));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-get-double").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void initializesStaticDoubleFieldBeforeReflectiveRead() throws Exception {
+        final Path project = project("reflection-static-double-read");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model { static { System.out.println("initialized"); } public static double value = 2.5; }
+                public static void main(String[] args) throws Exception {
+                    var field = Model.class.getDeclaredField("value"); System.out.println("before");
+                    System.out.println(field.getDouble(null)); System.out.println(field.getDouble(new Object()));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-static-double-read").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("before\ninitialized\n2.5\n2.5\n");
+    }
+
+    @Test
+    void checksDoubleFieldReadReceiverAndAccess() throws Exception {
+        final Path project = project("reflection-field-get-double-access");
+        writeJava(project, "com.other.Model", """
+            package com.other;
+            public class Model { public double value; private double secret; }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import com.other.Model;
+            import java.lang.reflect.Field;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    Field value = Model.class.getDeclaredField("value"), secret = Model.class.getDeclaredField("secret");
+                    Object wrong = new Object(); Model model = new Model();
+                    try { value.getDouble(null); } catch (NullPointerException e) { System.out.println("null"); }
+                    try { value.getDouble(wrong); } catch (IllegalArgumentException e) { System.out.println("wrong"); }
+                    try { secret.getDouble(model); } catch (IllegalAccessException e) { System.out.println("denied"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-get-double-access").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("null\nwrong\ndenied\n");
+    }
+
+    @Test
+    void rejectsUnsupportedDoubleFieldReadsExplicitly() throws Exception {
+        final Path project = project("reflection-field-get-double-unsupported");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model { public boolean flag; public volatile double changing; public static final double CONSTANT = 3.25; }
+                public static void main(String[] args) throws Exception {
+                    Model model = new Model(); var flag = Model.class.getDeclaredField("flag");
+                    var changing = Model.class.getDeclaredField("changing"); var constant = Model.class.getDeclaredField("CONSTANT");
+                    try { flag.getDouble(model); } catch (UnsupportedOperationException e) { System.out.println("type unsupported"); }
+                    try { changing.getDouble(model); } catch (UnsupportedOperationException e) { System.out.println("volatile unsupported"); }
+                    try { constant.getDouble(null); } catch (UnsupportedOperationException e) { System.out.println("constant unsupported"); }
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-get-double-unsupported").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("type unsupported\nvolatile unsupported\nconstant unsupported\n");
+    }
+
+    @Test
+    void readsDoubleFieldsDuringConcurrentGc() throws Exception {
+        final Path project = project("reflection-field-get-double-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger signal = new AtomicInteger(), finished = new AtomicInteger();
+                public static final class Model { public double value = 7.25; }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        while (signal.get() == 0) Thread.yield();
+                        for (int i = 0; i < 1000; i++) { byte[] value = new byte[64]; value[0] = 1; }
+                        finished.set(1);
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Field field = Model.class.getDeclaredField("value"); Model model = new Model();
+                    Thread worker = new Thread(new Worker()); worker.start(); signal.set(1);
+                    while (finished.get() == 0) { if (field.getDouble(model) != 7.25) throw new AssertionError(); }
+                    worker.join(); System.out.println(field.getDouble(model));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-get-double-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("7.25\n");
+    }
+
+    @Test
+    void roundsWideLongValuesWhenReadingAsDouble() throws Exception {
+        final Path project = project("reflection-field-get-double-rounding");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model { public long value = 9007199254740993L; }
+                public static void main(String[] args) throws Exception {
+                    Model model = new Model(); var field = Model.class.getDeclaredField("value");
+                    System.out.println(Double.doubleToRawLongBits(field.getDouble(model)));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-get-double-rounding").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
 }
