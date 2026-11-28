@@ -2649,13 +2649,12 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
         writeJava(project, "com.acme.Main", """
             package com.acme;
             public final class Main {
-                public static final class Model { public boolean flag; public volatile double changing; public static final double CONSTANT = 3.25; }
+                public static final class Model { public boolean flag; public volatile double changing; }
                 public static void main(String[] args) throws Exception {
                     Model model = new Model(); var flag = Model.class.getDeclaredField("flag");
-                    var changing = Model.class.getDeclaredField("changing"); var constant = Model.class.getDeclaredField("CONSTANT");
+                    var changing = Model.class.getDeclaredField("changing");
                     try { flag.getDouble(model); } catch (UnsupportedOperationException e) { System.out.println("type unsupported"); }
                     try { changing.getDouble(model); } catch (UnsupportedOperationException e) { System.out.println("volatile unsupported"); }
-                    try { constant.getDouble(null); } catch (UnsupportedOperationException e) { System.out.println("constant unsupported"); }
                 }
             }
             """);
@@ -2663,7 +2662,7 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-get-double-unsupported").toString()));
         assertThat(result.exitCode()).as(result.stderr()).isZero();
-        assertThat(result.stdout()).isEqualTo("type unsupported\nvolatile unsupported\nconstant unsupported\n");
+        assertThat(result.stdout()).isEqualTo("type unsupported\nvolatile unsupported\n");
     }
 
     @Test
@@ -2855,5 +2854,32 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
         assertThat(result.stdout()).isEqualTo(expected).isEqualTo("before\ninitialized\n2.5\n3.25\n");
     }
 
+
+    @Test
+    void readsStaticFinalFloatingConstantsAndInitializesTheirClass() throws Exception {
+        final Path project = project("reflection-static-final-floating");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model {
+                    static { System.out.println("initialized"); }
+                    public static final float FLOAT_VALUE = 3.25f;
+                    public static final double DOUBLE_VALUE = -0.0;
+                }
+                public static void main(String[] args) throws Exception {
+                    var first = Model.class.getDeclaredField("FLOAT_VALUE");
+                    var second = Model.class.getDeclaredField("DOUBLE_VALUE");
+                    System.out.println("before"); System.out.println(first.getDouble(null));
+                    System.out.println(Double.doubleToRawLongBits(second.getDouble(null)));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-static-final-floating").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("before\ninitialized\n3.25\n-9223372036854775808\n");
+    }
 
 }

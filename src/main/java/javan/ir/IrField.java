@@ -7,9 +7,9 @@ package javan.ir;
  * @param type field type
  * @param name JVM field name
  * @param symbol C field symbol
- * @param initialIntegralValue static integral initial value
+ * @param initialValueBits signed integral or raw floating-point initializer, with binary32 bits sign-extended to long
  */
-public record IrField(IrType type, String name, String symbol, long initialIntegralValue) {
+public record IrField(IrType type, String name, String symbol, long initialValueBits) {
     /**
      * Creates a field initialized to zero.
      *

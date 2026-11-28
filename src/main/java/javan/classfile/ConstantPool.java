@@ -104,9 +104,14 @@ public final class ConstantPool {
      * @return float literal when the index points at one
      */
     public Optional<Float> floatValue(final int index) {
-        final Object entry = entries[index];
-        if (entry instanceof RawEntry rawEntry && rawEntry.tag() == 4 && rawEntry.value() instanceof Float value) {
-            return Optional.of(value);
+        final Optional<Integer> bits = floatBits(index);
+        return bits.isPresent() ? Optional.of(Float.intBitsToFloat(bits.orElseThrow().intValue())) : Optional.empty();
+    }
+
+    Optional<Integer> floatBits(final int index) {
+        final Object entry = entry(index);
+        if (entry instanceof RawEntry rawEntry && rawEntry.tag() == 4 && rawEntry.value() instanceof Integer bits) {
+            return Optional.of(bits);
         }
         return Optional.empty();
     }
@@ -118,9 +123,14 @@ public final class ConstantPool {
      * @return double literal when the index points at one
      */
     public Optional<Double> doubleValue(final int index) {
-        final Object entry = entries[index];
-        if (entry instanceof RawEntry rawEntry && rawEntry.tag() == 6 && rawEntry.value() instanceof Double value) {
-            return Optional.of(value);
+        final Optional<Long> bits = doubleBits(index);
+        return bits.isPresent() ? Optional.of(Double.longBitsToDouble(bits.orElseThrow().longValue())) : Optional.empty();
+    }
+
+    Optional<Long> doubleBits(final int index) {
+        final Object entry = entry(index);
+        if (entry instanceof RawEntry rawEntry && rawEntry.tag() == 6 && rawEntry.value() instanceof Long bits) {
+            return Optional.of(bits);
         }
         return Optional.empty();
     }
@@ -367,6 +377,12 @@ public final class ConstantPool {
                 : BootstrapArgument.unknown("");
         }
         if (entry instanceof RawEntry rawEntry) {
+            if (rawEntry.tag() == 4 && rawEntry.value() instanceof Integer bits) {
+                return BootstrapArgument.raw(BootstrapArgument.Kind.FLOAT, Float.toString(Float.intBitsToFloat(bits.intValue())));
+            }
+            if (rawEntry.tag() == 6 && rawEntry.value() instanceof Long bits) {
+                return BootstrapArgument.raw(BootstrapArgument.Kind.DOUBLE, Double.toString(Double.longBitsToDouble(bits.longValue())));
+            }
             return rawBootstrapArgument(rawEntry.value());
         }
         return BootstrapArgument.unknown("");
@@ -427,12 +443,6 @@ public final class ConstantPool {
         }
         if (value instanceof Long longValue) {
             return BootstrapArgument.raw(BootstrapArgument.Kind.LONG, Long.toString(longValue.longValue()));
-        }
-        if (value instanceof Float floatValue) {
-            return BootstrapArgument.raw(BootstrapArgument.Kind.FLOAT, Float.toString(floatValue.floatValue()));
-        }
-        if (value instanceof Double doubleValue) {
-            return BootstrapArgument.raw(BootstrapArgument.Kind.DOUBLE, Double.toString(doubleValue.doubleValue()));
         }
         return BootstrapArgument.unknown("");
     }

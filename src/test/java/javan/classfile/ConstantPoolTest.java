@@ -44,8 +44,8 @@ final class ConstantPoolTest {
             new ConstantPool.MethodTypeEntry(4),
             new ConstantPool.RawEntry(3, Integer.valueOf(7)),
             new ConstantPool.RawEntry(5, Long.valueOf(9L)),
-            new ConstantPool.RawEntry(4, Float.valueOf(1.5f)),
-            new ConstantPool.RawEntry(6, Double.valueOf(2.5d))
+            new ConstantPool.RawEntry(4, Integer.valueOf(Float.floatToRawIntBits(1.5f))),
+            new ConstantPool.RawEntry(6, Long.valueOf(Double.doubleToRawLongBits(2.5d)))
         });
 
         assertThat(pool.dynamicRef(1, List.of(new BootstrapMethod(5, List.of(13, 14, 15, 16, 17, 18)))))

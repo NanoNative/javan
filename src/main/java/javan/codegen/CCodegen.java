@@ -1242,13 +1242,43 @@ public final class CCodegen {
                 c.append(field.type().cName())
                     .append(' ')
                     .append(staticFieldSymbol(classInfo.jvmName(), field.name()))
-                    .append(" = ").append(field.type() == IrType.LONG
-                        ? longLiteral(Long.toString(field.initialIntegralValue())) : Long.toString(field.initialIntegralValue())).append(';')
+                    .append(" = ").append(staticFieldInitializer(field.type(), field.initialValueBits())).append(';')
                     .append(System.lineSeparator());
                 emitted = true;
             }
         }
         return emitted;
+    }
+
+    private static String staticFieldInitializer(final IrType type, final long bits) {
+        if (type == IrType.LONG) {
+            return longLiteral(Long.toString(bits));
+        }
+        if (bits == 0 || (type != IrType.FLOAT && type != IrType.DOUBLE)) {
+            return Long.toString(bits);
+        }
+        // Build a typed C constant from the IEEE fields without converting through a Java float or double.
+        final boolean binary32 = type == IrType.FLOAT;
+        final int fractionWidth = binary32 ? 23 : 52;
+        final int exponentMask = binary32 ? 0xff : 0x7ff;
+        final long implicitBit = 1L << fractionWidth;
+        final long fraction = bits & (implicitBit - 1);
+        final int storedExponent = (int) (bits >>> fractionWidth) & exponentMask;
+        final String sign = bits < 0 ? "-" : "";
+        final String suffix = binary32 ? "f" : "";
+        if (storedExponent == exponentMask) {
+            if (fraction == 0) {
+                return sign + "__builtin_inf" + suffix + "()";
+            }
+            final long quietBit = implicitBit >>> 1;
+            final String signaling = (fraction & quietBit) == 0 ? "s" : "";
+            return sign + "__builtin_nan" + signaling + suffix
+                + "(\"0x" + Long.toHexString(fraction & (quietBit - 1)) + "\")";
+        }
+        final int bias = exponentMask >>> 1;
+        final long significand = storedExponent == 0 ? fraction : implicitBit | fraction;
+        final int exponent = Math.max(storedExponent, 1) - bias - fractionWidth;
+        return sign + "0x" + Long.toHexString(significand) + "p" + exponent + suffix;
     }
 
     private static void emitStaticRootInventory(final IrProgram program, final StringBuilder c) {
@@ -1928,8 +1958,6 @@ public final class CCodegen {
                     : wide ? List.of("B", "S", "C", "I", "J").contains(field.descriptor())
                     : List.of("B", "S", "C", "I").contains(field.descriptor()))
                     || (field.modifiers() & (0x0040 | (write ? 0x0010 : 0))) != 0) continue;
-                if (doubleValue && !write && List.of("F", "D").contains(field.descriptor())
-                    && (field.modifiers() & 0x0018) == 0x0018) continue;
                 IrClass layout = null;
                 for (final IrClass candidate : program.classes()) {
                     if (candidate.jvmName().equals(field.declaringJvmName())) layout = candidate;

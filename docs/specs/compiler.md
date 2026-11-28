@@ -146,7 +146,10 @@ return empty arrays. Unselected dynamic targets and platform classes raise
 `Field.getInt` reads selected, non-volatile application fields declared as `byte`, `short`,
 `char` or `int`, with caller access checks, instance target validation and Java's widening
 conversion. Static fields initialize their declaring class on access and ignore the target.
-Integer and long `ConstantValue` attributes initialize their static fields, including final constants.
+Static `int`, `long`, `float` and `double` `ConstantValue` attributes initialize their fields before
+class or interface initialization. Floating-point constants preserve binary32 and binary64 bits,
+including signed zero, infinities and NaN payloads. Instance fields ignore `ConstantValue` attributes.
+Other floating-point literal paths retain their existing NaN behavior.
 Other field types and volatile fields raise `UnsupportedOperationException` for this accessor until
 implemented.
 `Field.getLong` reads selected, non-volatile application `byte`, `short`, `char`, `int` and
@@ -154,8 +157,8 @@ implemented.
 Volatile fields and other field types raise `UnsupportedOperationException` until their storage or
 conversion is implemented.
 `Field.getDouble` reads selected non-volatile application numeric fields with Java's widening
-conversion and the same access, target and initialization rules. Static final `float` and `double`
-fields, volatile fields and non-numeric fields raise `UnsupportedOperationException` until modeled.
+conversion and the same access, target and initialization rules. Volatile fields and non-numeric
+fields raise `UnsupportedOperationException` until modeled.
 `Field.setInt` writes selected, non-volatile, non-final application `int`, `long`, `float` and
 `double` fields with Java's widening conversion and the same caller access and instance target checks.
 Static writes initialize the declaring class and ignore the target. Other field types, volatile and

@@ -273,7 +273,6 @@ public final class ReflectionFieldReachability {
                     && (readsInt && List.of("B", "S", "C", "I").contains(candidate.descriptor())
                         || readsLong && List.of("B", "S", "C", "I", "J").contains(candidate.descriptor())
                         || readsDouble && List.of("B", "S", "C", "I", "J", "F", "D").contains(candidate.descriptor())
-                            && !(List.of("F", "D").contains(candidate.descriptor()) && (candidate.accessFlags() & 0x0010) != 0)
                         || writesInt && List.of("I", "J", "F", "D").contains(candidate.descriptor())
                             && (candidate.accessFlags() & 0x0010) == 0
                         || writesLong && List.of("J", "F", "D").contains(candidate.descriptor())

@@ -710,7 +710,7 @@ final class BytecodeToIRMetadataSupport {
             final Optional<IrType> type = fieldType(field.descriptor());
             if (type.isPresent()) {
                 result.add(new IrField(type.orElseThrow(), field.name(), fieldSymbol(field.name()),
-                    statics ? field.initialIntegralValue() : 0));
+                    statics ? field.initialValueBits() : 0));
             }
         }
         return List.copyOf(result);

@@ -629,6 +629,40 @@ final class ClassFileReaderTest {
     }
 
     @Test
+    void readerRejectsInvalidFloatConstantIndicesAndTags() {
+        for (final int index : List.of(0, 8, 10, 11, 12, 65535)) {
+            assertThatThrownBy(() -> new ClassFileReader().read(classfileWithFloatingConstant("F", 0x0019, index, 12), SOURCE))
+                .as("constant pool index %s", index)
+                .isInstanceOf(IOException.class).hasMessageContaining("Invalid float ConstantValue for field value");
+        }
+    }
+
+    @Test
+    void readerRejectsInvalidDoubleConstantIndicesAndTags() {
+        for (final int index : List.of(0, 8, 9, 11, 12, 65535)) {
+            assertThatThrownBy(() -> new ClassFileReader().read(classfileWithFloatingConstant("D", 0x0019, index, 12), SOURCE))
+                .as("constant pool index %s", index)
+                .isInstanceOf(IOException.class).hasMessageContaining("Invalid double ConstantValue for field value");
+        }
+    }
+
+    @Test
+    void readerRejectsDoubleConstantPoolEntryWithoutReservedSlot() {
+        assertThatThrownBy(() -> new ClassFileReader().read(classfileWithFloatingConstant("D", 0x0019, 10, 11), SOURCE))
+            .isInstanceOf(IOException.class).hasMessageContaining("Missing reserved constant pool slot");
+    }
+
+    @Test
+    void readerIgnoresInstanceFloatingConstantIndex() throws Exception {
+        for (final String descriptor : List.of("F", "D")) {
+            for (final int index : List.of(0, 8, 11, 12)) {
+                assertThat(new ClassFileReader().read(classfileWithFloatingConstant(descriptor, 0x0001, index, 12), SOURCE).fields())
+                    .singleElement().extracting(FieldInfo::descriptor).isEqualTo(descriptor);
+            }
+        }
+    }
+
+    @Test
     void readerRejectsDuplicateFields() {
         assertThatThrownBy(() -> new ClassFileReader().read(classfileWithDuplicateFields(), SOURCE))
             .isInstanceOf(IOException.class)
@@ -1322,6 +1356,20 @@ final class ClassFileReaderTest {
             .utf8("value").utf8("J").utf8("ConstantValue").rawLong(123L)
             .u2(0x0031).u2(2).u2(4).u2(0).u2(1)
             .u2(0x0019).u2(5).u2(6).u2(1)
+            .u2(7).u4(2).u2(constantIndex).u2(0).u2(0).toByteArray();
+    }
+
+    private static byte[] classfileWithFloatingConstant(
+        final String descriptor, final int flags, final int constantIndex, final int poolCount
+    ) {
+        return new Bytes()
+            .u4(0xCAFEBABEL).u2(0).u2(65).u2(poolCount)
+            .utf8("sample/Value").classInfo(1)
+            .utf8("java/lang/Object").classInfo(3)
+            .utf8("value").utf8(descriptor).utf8("ConstantValue")
+            .rawInteger(0).rawFloat(-0.0f).rawDouble(-0.0d)
+            .u2(0x0031).u2(2).u2(4).u2(0).u2(1)
+            .u2(flags).u2(5).u2(6).u2(1)
             .u2(7).u4(2).u2(constantIndex).u2(0).u2(0).toByteArray();
     }
 

@@ -9,9 +9,9 @@ import java.util.Optional;
  * @param name field name
  * @param descriptor field descriptor
  * @param signature optional generic field signature
- * @param initialIntegralValue integral initial value, or zero when no integral constant exists
+ * @param initialValueBits signed integral initial value or raw floating-point bits, with binary32 bits sign-extended to long and zero by default
  */
-public record FieldInfo(int accessFlags, String name, String descriptor, Optional<String> signature, long initialIntegralValue) {
+public record FieldInfo(int accessFlags, String name, String descriptor, Optional<String> signature, long initialValueBits) {
     private static final int ACC_STATIC = 0x0008;
     private static final int ACC_ENUM = 0x4000;
 
@@ -21,7 +21,7 @@ public record FieldInfo(int accessFlags, String name, String descriptor, Optiona
         }
     }
 
-    /** Creates field metadata without an integer constant.
+    /** Creates field metadata without a constant.
      * @param accessFlags field access flags
      * @param name field name
      * @param descriptor field descriptor

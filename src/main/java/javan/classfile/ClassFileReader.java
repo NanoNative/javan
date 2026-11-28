@@ -82,14 +82,12 @@ public final class ClassFileReader {
             final int tag = in.u1();
             switch (tag) {
                 case 1 -> entries[index] = new ConstantPool.Utf8Entry(in.modifiedUtf8());
-                case 3 -> entries[index] = new ConstantPool.RawEntry(tag, in.i4());
-                case 4 -> entries[index] = new ConstantPool.RawEntry(tag, in.f4());
-                case 5 -> {
+                case 3, 4 -> entries[index] = new ConstantPool.RawEntry(tag, in.i4());
+                case 5, 6 -> {
+                    if (index + 1 >= count) {
+                        throw new IOException("Missing reserved constant pool slot after index " + index);
+                    }
                     entries[index] = new ConstantPool.RawEntry(tag, in.i8());
-                    index++;
-                }
-                case 6 -> {
-                    entries[index] = new ConstantPool.RawEntry(tag, in.f8());
                     index++;
                 }
                 case 7 -> entries[index] = new ConstantPool.ClassEntry(in.u2());
@@ -130,7 +128,7 @@ public final class ClassFileReader {
             }
             final int attributeCount = in.u2();
             Optional<String> signature = Optional.empty();
-            long initialIntegralValue = 0;
+            long initialValueBits = 0;
             boolean constantSeen = false;
             for (int attribute = 0; attribute < attributeCount; attribute++) {
                 final String attributeName = constantPool.utf8(in.u2());
@@ -143,20 +141,31 @@ public final class ClassFileReader {
                     if (constantSeen || length != 2) throw new IOException("Invalid ConstantValue attribute for field " + name);
                     constantSeen = true;
                     final int constantIndex = in.u2();
+                    if ((accessFlags & 0x0008) == 0) {
+                        continue;
+                    }
                     if (List.of("B", "S", "C", "I", "Z").contains(descriptor)) {
                         final Optional<Integer> integerConstant = constantPool.intValue(constantIndex);
                         if (integerConstant.isEmpty()) throw new IOException("Invalid integer ConstantValue for field " + name);
-                        initialIntegralValue = integerConstant.orElseThrow().intValue();
+                        initialValueBits = integerConstant.orElseThrow().intValue();
                     } else if ("J".equals(descriptor)) {
                         final Optional<Long> longConstant = constantPool.longValue(constantIndex);
                         if (longConstant.isEmpty()) throw new IOException("Invalid long ConstantValue for field " + name);
-                        initialIntegralValue = longConstant.orElseThrow().longValue();
+                        initialValueBits = longConstant.orElseThrow().longValue();
+                    } else if ("F".equals(descriptor)) {
+                        final Optional<Integer> floatConstant = constantPool.floatBits(constantIndex);
+                        if (floatConstant.isEmpty()) throw new IOException("Invalid float ConstantValue for field " + name);
+                        initialValueBits = floatConstant.orElseThrow().intValue();
+                    } else if ("D".equals(descriptor)) {
+                        final Optional<Long> doubleConstant = constantPool.doubleBits(constantIndex);
+                        if (doubleConstant.isEmpty()) throw new IOException("Invalid double ConstantValue for field " + name);
+                        initialValueBits = doubleConstant.orElseThrow().longValue();
                     }
                 } else {
                     in.skip(length);
                 }
             }
-            result.add(new FieldInfo(accessFlags, name, descriptor, signature, initialIntegralValue));
+            result.add(new FieldInfo(accessFlags, name, descriptor, signature, initialValueBits));
         }
         return result;
     }
