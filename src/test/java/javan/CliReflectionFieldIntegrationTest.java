@@ -2153,16 +2153,14 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void rejectsUnsupportedLongConstantsAndFieldTypesExplicitly() throws Exception {
+    void rejectsUnsupportedLongFieldTypesExplicitly() throws Exception {
         final Path project = project("reflection-field-get-long-unsupported");
         writeJava(project, "com.acme.Main", """
             package com.acme;
             public final class Main {
-                public static final class Model { public static final long CONSTANT = 5000000000L; public volatile long changing; public double decimal; }
+                public static final class Model { public volatile long changing; public double decimal; }
                 public static void main(String[] args) throws Exception {
                     Model model = new Model();
-                    try { Model.class.getDeclaredField("CONSTANT").getLong(null); }
-                    catch (UnsupportedOperationException e) { System.out.println("constant unsupported"); }
                     try { Model.class.getDeclaredField("changing").getLong(model); }
                     catch (UnsupportedOperationException e) { System.out.println("volatile unsupported"); }
                     try { Model.class.getDeclaredField("decimal").getLong(model); }
@@ -2174,7 +2172,7 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-get-long-unsupported").toString()));
         assertThat(result.exitCode()).as(result.stderr()).isZero();
-        assertThat(result.stdout()).isEqualTo("constant unsupported\nvolatile unsupported\ntype unsupported\n");
+        assertThat(result.stdout()).isEqualTo("volatile unsupported\ntype unsupported\n");
     }
 
     @Test
@@ -2263,6 +2261,33 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
             "com.acme.Main$Model", "value"));
         assertThat(result.exitCode()).as(result.stderr()).isZero();
         assertThat(result.stdout()).isEqualTo("5000000000\n");
+    }
+
+    @Test
+    void readsStaticFinalLongConstantsAndInitializesTheirClass() throws Exception {
+        final Path project = project("reflection-static-final-long");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model {
+                    static { System.out.println("initialized"); }
+                    public static final long MIN = Long.MIN_VALUE;
+                    public static final long BIG = 5000000000L;
+                }
+                public static void main(String[] args) throws Exception {
+                    var minimum = Model.class.getDeclaredField("MIN");
+                    var large = Model.class.getDeclaredField("BIG");
+                    System.out.println("before"); System.out.println(minimum.getLong(null));
+                    System.out.println(large.getLong(null));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-static-final-long").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("before\ninitialized\n-9223372036854775808\n5000000000\n");
     }
 
 }

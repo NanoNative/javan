@@ -611,6 +611,24 @@ final class ClassFileReaderTest {
     }
 
     @Test
+    void readerRejectsOutOfRangeIntegerConstantIndices() {
+        for (final int index : List.of(0, 9, 65535)) {
+            assertThatThrownBy(() -> new ClassFileReader().read(classfileWithIntegerConstants(index, 2), SOURCE))
+                .as("constant pool index %s", index)
+                .isInstanceOf(IOException.class).hasMessageContaining("Invalid integer ConstantValue for field value");
+        }
+    }
+
+    @Test
+    void readerRejectsInvalidLongConstantIndicesAndTags() {
+        for (final int index : List.of(0, 5, 9, 10)) {
+            assertThatThrownBy(() -> new ClassFileReader().read(classfileWithLongConstant(index), SOURCE))
+                .as("constant pool index %s", index)
+                .isInstanceOf(IOException.class).hasMessageContaining("Invalid long ConstantValue for field value");
+        }
+    }
+
+    @Test
     void readerRejectsDuplicateFields() {
         assertThatThrownBy(() -> new ClassFileReader().read(classfileWithDuplicateFields(), SOURCE))
             .isInstanceOf(IOException.class)
@@ -1294,6 +1312,17 @@ final class ClassFileReaderTest {
             .u2(0x0019).u2(5).u2(6).u2(lengths.length);
         for (final int length : lengths) bytes.u2(7).u4(length).u2(constantIndex);
         return bytes.u2(0).u2(0).toByteArray();
+    }
+
+    private static byte[] classfileWithLongConstant(final int constantIndex) {
+        return new Bytes()
+            .u4(0xCAFEBABEL).u2(0).u2(65).u2(10)
+            .utf8("sample/Value").classInfo(1)
+            .utf8("java/lang/Object").classInfo(3)
+            .utf8("value").utf8("J").utf8("ConstantValue").rawLong(123L)
+            .u2(0x0031).u2(2).u2(4).u2(0).u2(1)
+            .u2(0x0019).u2(5).u2(6).u2(1)
+            .u2(7).u4(2).u2(constantIndex).u2(0).u2(0).toByteArray();
     }
 
     private static byte[] classfileWithDuplicateFields() {

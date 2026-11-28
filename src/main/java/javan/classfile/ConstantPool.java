@@ -76,7 +76,7 @@ public final class ConstantPool {
      * @return int literal when the index points at one
      */
     public Optional<Integer> intValue(final int index) {
-        final Object entry = entries[index];
+        final Object entry = entry(index);
         if (entry instanceof RawEntry rawEntry && rawEntry.tag() == 3 && rawEntry.value() instanceof Integer value) {
             return Optional.of(value);
         }
@@ -90,7 +90,7 @@ public final class ConstantPool {
      * @return long literal when the index points at one
      */
     public Optional<Long> longValue(final int index) {
-        final Object entry = entries[index];
+        final Object entry = entry(index);
         if (entry instanceof RawEntry rawEntry && rawEntry.tag() == 5 && rawEntry.value() instanceof Long value) {
             return Optional.of(value);
         }

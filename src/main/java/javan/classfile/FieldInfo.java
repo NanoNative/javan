@@ -9,9 +9,9 @@ import java.util.Optional;
  * @param name field name
  * @param descriptor field descriptor
  * @param signature optional generic field signature
- * @param initialIntegerValue integer initial value, or zero when no integer constant exists
+ * @param initialIntegralValue integral initial value, or zero when no integral constant exists
  */
-public record FieldInfo(int accessFlags, String name, String descriptor, Optional<String> signature, int initialIntegerValue) {
+public record FieldInfo(int accessFlags, String name, String descriptor, Optional<String> signature, long initialIntegralValue) {
     private static final int ACC_STATIC = 0x0008;
     private static final int ACC_ENUM = 0x4000;
 

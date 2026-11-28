@@ -130,7 +130,7 @@ public final class ClassFileReader {
             }
             final int attributeCount = in.u2();
             Optional<String> signature = Optional.empty();
-            int initialIntegerValue = 0;
+            long initialIntegralValue = 0;
             boolean constantSeen = false;
             for (int attribute = 0; attribute < attributeCount; attribute++) {
                 final String attributeName = constantPool.utf8(in.u2());
@@ -146,13 +146,17 @@ public final class ClassFileReader {
                     if (List.of("B", "S", "C", "I", "Z").contains(descriptor)) {
                         final Optional<Integer> integerConstant = constantPool.intValue(constantIndex);
                         if (integerConstant.isEmpty()) throw new IOException("Invalid integer ConstantValue for field " + name);
-                        initialIntegerValue = integerConstant.orElseThrow().intValue();
+                        initialIntegralValue = integerConstant.orElseThrow().intValue();
+                    } else if ("J".equals(descriptor)) {
+                        final Optional<Long> longConstant = constantPool.longValue(constantIndex);
+                        if (longConstant.isEmpty()) throw new IOException("Invalid long ConstantValue for field " + name);
+                        initialIntegralValue = longConstant.orElseThrow().longValue();
                     }
                 } else {
                     in.skip(length);
                 }
             }
-            result.add(new FieldInfo(accessFlags, name, descriptor, signature, initialIntegerValue));
+            result.add(new FieldInfo(accessFlags, name, descriptor, signature, initialIntegralValue));
         }
         return result;
     }

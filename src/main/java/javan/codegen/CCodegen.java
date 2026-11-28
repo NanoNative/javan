@@ -1194,7 +1194,8 @@ public final class CCodegen {
                 c.append(field.type().cName())
                     .append(' ')
                     .append(staticFieldSymbol(classInfo.jvmName(), field.name()))
-                    .append(" = ").append(field.initialIntegerValue()).append(';')
+                    .append(" = ").append(field.type() == IrType.LONG
+                        ? longLiteral(Long.toString(field.initialIntegralValue())) : Long.toString(field.initialIntegralValue())).append(';')
                     .append(System.lineSeparator());
                 emitted = true;
             }
@@ -1869,7 +1870,6 @@ public final class CCodegen {
                     : wide ? List.of("B", "S", "C", "I", "J").contains(field.descriptor())
                     : List.of("B", "S", "C", "I").contains(field.descriptor()))
                     || (field.modifiers() & (0x0040 | (write ? 0x0010 : 0))) != 0) continue;
-                if (wide && "J".equals(field.descriptor()) && (field.modifiers() & 0x0018) == 0x0018) continue;
                 IrClass layout = null;
                 for (final IrClass candidate : program.classes()) {
                     if (candidate.jvmName().equals(field.declaringJvmName())) layout = candidate;

@@ -260,7 +260,6 @@ public final class ReflectionFieldReachability {
                     && candidate.isStatic() && (candidate.accessFlags() & 0x0040) == 0
                     && (readsInt && List.of("B", "S", "C", "I").contains(candidate.descriptor())
                         || readsLong && List.of("B", "S", "C", "I", "J").contains(candidate.descriptor())
-                            && !("J".equals(candidate.descriptor()) && (candidate.accessFlags() & 0x0010) != 0)
                         || writesInt && List.of("I", "J", "F", "D").contains(candidate.descriptor())
                             && (candidate.accessFlags() & 0x0010) == 0)) owners.add(field.owner());
             }

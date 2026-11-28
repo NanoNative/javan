@@ -7,9 +7,9 @@ package javan.ir;
  * @param type field type
  * @param name JVM field name
  * @param symbol C field symbol
- * @param initialIntegerValue static integer initial value
+ * @param initialIntegralValue static integral initial value
  */
-public record IrField(IrType type, String name, String symbol, int initialIntegerValue) {
+public record IrField(IrType type, String name, String symbol, long initialIntegralValue) {
     /**
      * Creates a field initialized to zero.
      *

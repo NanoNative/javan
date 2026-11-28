@@ -455,6 +455,7 @@ public final class CompatibilityReports {
             pass("boxed-primitive-null-unboxing"),
             pass("boolean-basic"),
             pass("static-fields"),
+            pass("static-long-constant-fields"),
             pass("string-concat"),
             pass("exception-panic"),
             pass("try-catch"),
