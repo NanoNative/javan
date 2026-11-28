@@ -210,6 +210,8 @@ changes in either direction, and concurrent map iterators remove the key they re
 a subsequently reinserted equal supported key. `keySet().contains` on supported hash-based and
 immutable maps invokes the query `hashCode` and `equals` where the corresponding JDK map does,
 outside the runtime lock.
+Before a HashMap table is initialized, `get`, `getOrDefault` and `containsKey` skip custom-key
+hashing; after initialization, the same queries hash even if the map becomes empty.
 Custom key queries on `TreeMap` key views and bulk comparisons remain unsupported and fail
 explicitly. Other unsupported key-view comparisons raise `UnsupportedOperationException` before
 bulk operations modify the map. Supported `Map.values()` views also remain connected to their map.

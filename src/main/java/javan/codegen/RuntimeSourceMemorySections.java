@@ -16305,11 +16305,16 @@ final class RuntimeSourceMemorySections {
             javan_object_map* storage = javan_map_checked(map_root);
             while (storage->backing != NULL) storage = storage->backing;
             int skip_hash = storage->immutable != 0 && storage->length <= 1;
-            int empty_uninitialized_lookup = operation == 6 && storage->immutable == 0
-                && storage->concurrent == 0 && storage->length == 0
+            int empty_uninitialized_lookup = (operation == 0 || operation == 5 || operation == 6)
+                && storage->immutable == 0 && storage->concurrent == 0 && storage->length == 0
                 && (storage->view_flags & (JAVAN_MAP_TABLE_INITIALIZED | JAVAN_MAP_SORTED)) == 0;
+            if (empty_uninitialized_lookup) {
+                if (operation == 5) *result = element_root;
+                javan_runtime_lock_leave();
+                javan_root_frame_pop(roots);
+                return;
+            }
             javan_runtime_lock_leave();
-            if (empty_uninitialized_lookup) { javan_root_frame_pop(roots); return; }
             int hash = skip_hash ? 0 : hash_fn == NULL ? javan_map_key_hash(key_root) : hash_fn(key_root);
             if (javan_pending_has()) { javan_root_frame_pop(roots); return; }
             javan_runtime_lock_enter();

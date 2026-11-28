@@ -983,4 +983,99 @@ final class CliCustomMapKeyIntegrationTest extends CliIntegrationSupport {
         assertThat(result.stdout()).isEqualTo(expected).isEqualTo("300\n");
     }
 
+    @Test
+    void uninitializedHashMapLookupsDoNotHashCustomKeys() throws Exception {
+        final Path project = project("map-empty-query-hash");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            public final class Main {
+                static int hashes;
+                public static final class Key {
+                    public int hashCode() { hashes++; return 1; }
+                    public boolean equals(Object other) { return this == other; }
+                }
+                public static void main(String[] args) {
+                    HashMap<Key, String> map = new HashMap<>(); Key key = new Key();
+                    System.out.println(map.containsKey(key)); System.out.println(map.get(key));
+                    System.out.println(map.getOrDefault(key, "fallback")); System.out.println(hashes);
+                    map.put(key, "value"); map.remove(key); hashes = 0;
+                    System.out.println(map.containsKey(key)); System.out.println(map.get(key));
+                    System.out.println(map.getOrDefault(key, "fallback")); System.out.println(hashes);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-empty-query-hash").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("false\nnull\nfallback\n0\nfalse\nnull\nfallback\n3\n");
+    }
+
+    @Test
+    void concurrentMapLookupsStillHashCustomKeysWhenEmpty() throws Exception {
+        final Path project = project("concurrent-map-empty-query-hash");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.concurrent.ConcurrentHashMap;
+            public final class Main {
+                static int hashes;
+                public static final class Key {
+                    public int hashCode() { hashes++; return 1; }
+                    public boolean equals(Object other) { return this == other; }
+                }
+                public static void main(String[] args) {
+                    ConcurrentHashMap<Key, String> map = new ConcurrentHashMap<>(); Key key = new Key();
+                    System.out.println(map.containsKey(key)); System.out.println(map.get(key));
+                    System.out.println(map.getOrDefault(key, "fallback")); System.out.println(hashes);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/concurrent-map-empty-query-hash").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("false\nnull\nfallback\n3\n");
+    }
+
+    @Test
+    void emptyMapDefaultLookupKeepsFallbackAliveDuringConcurrentGc() throws Exception {
+        final Path project = project("map-empty-default-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger signal = new AtomicInteger(), finished = new AtomicInteger();
+                public static final class Key {
+                    public int hashCode() { throw new IllegalStateException("unexpected hash"); }
+                    public boolean equals(Object other) { return this == other; }
+                }
+                public static final class Value { public int number = 73; }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        while (signal.get() == 0) Thread.yield();
+                        for (int i = 0; i < 1000; i++) { byte[] data = new byte[64]; data[0] = 1; }
+                        finished.set(1);
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    HashMap<Key, Value> map = new HashMap<>(); Key key = new Key(); Value fallback = new Value();
+                    Thread worker = new Thread(new Worker()); worker.start(); signal.set(1);
+                    while (finished.get() == 0) { if (map.getOrDefault(key, fallback).number != 73) throw new AssertionError(); }
+                    worker.join(); System.out.println(map.getOrDefault(key, fallback).number);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-empty-default-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("73\n");
+    }
+
 }
