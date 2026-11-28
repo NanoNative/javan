@@ -22,6 +22,7 @@ import java.util.Optional;
  * @param serviceProviders providers declared by a module descriptor
  * @param source source class file path
  * @param application whether the class belongs to the application input rather than a dependency
+ * @param simpleName source-level simple class name from InnerClasses when available
  */
 public record ClassFile(
     int majorVersion,
@@ -38,7 +39,8 @@ public record ClassFile(
     List<String> serviceUses,
     List<ServiceProvider> serviceProviders,
     Path source,
-    boolean application
+    boolean application,
+    String simpleName
 ) {
     private static final int ACC_PUBLIC = 0x0001;
     private static final int ACC_FINAL = 0x0010;
@@ -142,6 +144,19 @@ public record ClassFile(
         permittedSubclasses = List.copyOf(permittedSubclasses);
         serviceUses = List.copyOf(serviceUses);
         serviceProviders = List.copyOf(serviceProviders);
+    }
+
+    /** Creates a class file without explicit InnerClasses name metadata. */
+    public ClassFile(
+        final int majorVersion, final String name, final String superName, final int accessFlags,
+        final List<String> interfaces, final List<FieldInfo> fields, final List<MethodInfo> methods,
+        final Optional<String> sourceFile, final Optional<List<RecordComponentInfo>> recordComponents,
+        final List<String> permittedSubclasses, final String nestHost, final List<String> serviceUses,
+        final List<ServiceProvider> serviceProviders, final Path source, final boolean application
+    ) {
+        this(majorVersion, name, superName, accessFlags, interfaces, fields, methods, sourceFile,
+            recordComponents, permittedSubclasses, nestHost, serviceUses, serviceProviders, source, application,
+            name.substring(name.lastIndexOf('/') + 1));
     }
 
     /** Creates a class file without module service-provider metadata. */
@@ -395,7 +410,8 @@ public record ClassFile(
             serviceUses,
             serviceProviders,
             source,
-            value
+            value,
+            simpleName
         );
     }
 }

@@ -437,6 +437,39 @@ final class BytecodeToIRDynamicSupport {
         final Map<String, IrDispatch> dispatches,
         final Map<String, Integer> materializedLambdaTargetIds
     ) {
+        if (instruction.dynamicRef().isPresent()) {
+            final Optional<RecordObjectMethodsCall> recordString =
+                RecordObjectMethodsCall.resolveToString(classFile, method, instruction.dynamicRef().orElseThrow());
+            if (recordString.isPresent()) {
+                final IrExpression self = popObject(classFile, method, stack);
+                final String selfLocal = newObjectLocal(localDeclarations);
+                instructions.add(IrInstruction.assignObject(selfLocal, self));
+                final IrExpression receiver = IrExpression.objectLocal(selfLocal);
+                final List<IrExpression> parts = new ArrayList<>();
+                parts.add(IrExpression.stringLiteral(classFile.simpleName() + "["));
+                int index = 0;
+                for (final RecordObjectMethodsCall.Component component : recordString.orElseThrow().components()) {
+                    final javan.classfile.FieldInfo field = component.field();
+                    parts.add(IrExpression.stringLiteral((index++ == 0 ? "" : ", ") + field.name() + "="));
+                    final IrExpression value = switch (field.descriptor()) {
+                        case "Z" -> IrExpression.objectCall("javan_string_value_of_bool", List.of(IrExpression.intField(classFile.name(), field.name(), receiver)));
+                        case "B", "S", "I" -> IrExpression.objectCall("javan_string_value_of_int", List.of(IrExpression.intField(classFile.name(), field.name(), receiver)));
+                        case "C" -> IrExpression.objectCall("javan_string_value_of_char", List.of(IrExpression.intField(classFile.name(), field.name(), receiver)));
+                        case "J" -> IrExpression.objectCall("javan_string_value_of_long", List.of(IrExpression.longField(classFile.name(), field.name(), receiver)));
+                        case "F" -> IrExpression.objectCall("javan_string_value_of_float", List.of(IrExpression.floatField(classFile.name(), field.name(), receiver)));
+                        case "D" -> IrExpression.objectCall("javan_string_value_of_double", List.of(IrExpression.doubleField(classFile.name(), field.name(), receiver)));
+                        case "Ljava/lang/String;" -> IrExpression.objectField(classFile.name(), field.name(), receiver);
+                        default -> throw unsupported(classFile, method, instruction);
+                    };
+                    parts.add(value);
+                }
+                parts.add(IrExpression.stringLiteral("]"));
+                final StringBuilder recipe = new StringBuilder();
+                for (int part = 0; part < parts.size(); part++) recipe.append('\u0001');
+                stack.add(StackValue.objectExpression(IrExpression.stringConcat(recipe.toString(), List.copyOf(parts))));
+                return;
+            }
+        }
         if (lowerRecordHashCodeDynamic(classes, classFile, method, instruction, instructions, stack, localDeclarations, dispatches)) {
             return;
         }

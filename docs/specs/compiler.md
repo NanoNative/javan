@@ -362,6 +362,9 @@ Supported exceptions and null return values are preserved. Plain objects and app
 whose known superclass chain reaches `Object` without a `toString` override use their runtime class
 name and virtual `hashCode`, including identity hashing when no override exists. Unknown receiver
 types do not cause unrelated overrides to be retained and may still fail at runtime when no implementation was retained.
+Generated record `toString` supports primitive and `String` components, including null strings.
+Record component names and source-level class names come from class-file metadata. Other record
+component shapes remain rejected when the generated string method is reachable.
 `String.startsWith` and `String.endsWith` preserve UTF-16 comparisons and transport null failures
 within supported handler shapes; a negative start offset returns false for a non-null receiver.
 `String.equals` compares only strings and transports null-receiver failures within supported

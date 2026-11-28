@@ -6685,6 +6685,14 @@ public final class StaticVerifier {
         if (dynamicRef.isEmpty()) {
             return false;
         }
+        final Optional<RecordObjectMethodsCall> toString = RecordObjectMethodsCall.resolveToString(classFile, method, dynamicRef.orElseThrow());
+        if (toString.isPresent()) {
+            for (final RecordObjectMethodsCall.Component component : toString.orElseThrow().components()) {
+                final String descriptor = component.field().descriptor();
+                if (!(descriptor.length() == 1 || "Ljava/lang/String;".equals(descriptor))) return false;
+            }
+            return true;
+        }
         return recordObjectMethodsCall(classFile, method, instruction).isPresent()
             && unsupportedRecordComponentDescriptor(classes, classFile, method, instruction).isEmpty();
     }

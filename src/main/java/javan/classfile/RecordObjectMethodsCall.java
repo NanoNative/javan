@@ -391,6 +391,23 @@ public record RecordObjectMethodsCall(List<RecordObjectMethodsCall.Component> co
         return resolve(classFile, method, dynamicRef, "hashCode", "()I", "(L" + classFile.name() + ";)I");
     }
 
+    /**
+     * Recognizes the exact javac record-toString bootstrap contract.
+     *
+     * @param classFile enclosing class
+     * @param method enclosing method
+     * @param dynamicRef resolved call-site metadata
+     * @return normalized record metadata when every required dimension matches
+     */
+    public static Optional<RecordObjectMethodsCall> resolveToString(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final DynamicRef dynamicRef
+    ) {
+        return resolve(classFile, method, dynamicRef, "toString", "()Ljava/lang/String;",
+            "(L" + classFile.name() + ";)Ljava/lang/String;");
+    }
+
     private static Optional<RecordObjectMethodsCall> resolve(
         final ClassFile classFile,
         final MethodInfo method,

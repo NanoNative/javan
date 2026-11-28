@@ -54,7 +54,7 @@ public final class ClassFileReader {
         final List<String> interfaces = readInterfaces(in, constantPool);
         final List<FieldInfo> fields = readFields(in, constantPool);
         final List<MethodInfo> methods = readMethods(in, constantPool, thisClass);
-        final ClassAttributes classAttributes = readClassAttributes(in, constantPool);
+        final ClassAttributes classAttributes = readClassAttributes(in, constantPool, thisClass);
         return new ClassFile(
             major,
             thisClass,
@@ -70,7 +70,8 @@ public final class ClassFileReader {
             classAttributes.serviceUses(),
             classAttributes.serviceProviders(),
             source,
-            true
+            true,
+            classAttributes.simpleName()
         );
     }
 
@@ -534,7 +535,7 @@ public final class ClassFileReader {
         return List.copyOf(result);
     }
 
-    private static ClassAttributes readClassAttributes(final ClassByteCursor in, final ConstantPool constantPool) throws IOException {
+    private static ClassAttributes readClassAttributes(final ClassByteCursor in, final ConstantPool constantPool, final String thisClass) throws IOException {
         final int count = in.u2();
         final List<BootstrapMethod> bootstrapMethods = new ArrayList<>();
         Optional<String> sourceFile = Optional.empty();
@@ -544,6 +545,8 @@ public final class ClassFileReader {
         List<String> serviceUses = List.of();
         List<ServiceProvider> serviceProviders = List.of();
         boolean moduleSeen = false;
+        boolean innerClassesSeen = false;
+        String simpleName = thisClass.substring(thisClass.lastIndexOf('/') + 1);
         for (int index = 0; index < count; index++) {
             final String attributeName = constantPool.utf8(in.u2());
             final long length = in.u4();
@@ -570,6 +573,26 @@ public final class ClassFileReader {
                     throw new IOException("Invalid or duplicate NestHost attribute");
                 }
                 nestHost = Optional.of(constantPool.className(in.u2()));
+            } else if ("InnerClasses".equals(attributeName)) {
+                if (innerClassesSeen) throw new IOException("Duplicate InnerClasses attribute");
+                innerClassesSeen = true;
+                final ClassByteCursor attribute = new ClassByteCursor(in.bytes(length));
+                final int entries = attribute.u2();
+                boolean ownEntrySeen = false;
+                for (int entry = 0; entry < entries; entry++) {
+                    final String innerClass = constantPool.className(attribute.u2());
+                    final int outerIndex = attribute.u2();
+                    final int innerNameIndex = attribute.u2();
+                    attribute.u2();
+                    if (outerIndex != 0) constantPool.className(outerIndex);
+                    final String innerName = innerNameIndex == 0 ? "" : constantPool.utf8(innerNameIndex);
+                    if (thisClass.equals(innerClass)) {
+                        if (ownEntrySeen) throw new IOException("Duplicate own InnerClasses entry");
+                        ownEntrySeen = true;
+                        simpleName = innerName;
+                    }
+                }
+                if (!attribute.exhausted()) throw new IOException("Invalid InnerClasses attribute length");
             } else if ("Module".equals(attributeName)) {
                 if (moduleSeen) {
                     throw new IOException("Duplicate Module attribute");
@@ -584,7 +607,7 @@ public final class ClassFileReader {
         }
         return new ClassAttributes(
             List.copyOf(bootstrapMethods), sourceFile, recordComponents, permittedSubclasses, nestHost,
-            serviceUses, serviceProviders
+            serviceUses, serviceProviders, simpleName
         );
     }
 
@@ -776,7 +799,8 @@ public final class ClassFileReader {
         List<String> permittedSubclasses,
         Optional<String> nestHost,
         List<String> serviceUses,
-        List<ServiceProvider> serviceProviders
+        List<ServiceProvider> serviceProviders,
+        String simpleName
     ) {
     }
 

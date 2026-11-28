@@ -830,11 +830,6 @@ final class CliRecordObjectMethodsIntegrationTest extends CliIntegrationSupport 
             """)).contains("error[JAVAN030]", "unsupported record component type");
     }
 
-    @Test
-    void recordToStringRemainsUnsupported() throws Exception {
-        assertThat(rejectedRecordToStringBuild()).contains("error[JAVAN030]", "toString");
-    }
-
     private List<String> outputs(final String scenario) {
         final ProcessResult jvm = processSlow(project, List.of(
             CliTestHarness.currentJavaCommand(),
@@ -878,27 +873,6 @@ final class CliRecordObjectMethodsIntegrationTest extends CliIntegrationSupport 
         final CliRun build = runSlow(tempDir, "build", rejectedProject.toString());
         if (build.exitCode() == 0) {
             throw new IllegalStateException("unsafe record shape was accepted");
-        }
-        return build.stderr();
-    }
-
-    private String rejectedRecordToStringBuild() throws Exception {
-        final Path rejectedProject = project("record-to-string");
-        writeJava(rejectedProject, "com.acme.Main", """
-            package com.acme;
-
-            public final class Main {
-                record Value(int value) {
-                }
-
-                public static void main(final String[] args) {
-                    System.out.println(new Value(7).toString());
-                }
-            }
-            """);
-        final CliRun build = runSlow(tempDir, "build", rejectedProject.toString());
-        if (build.exitCode() == 0) {
-            throw new IllegalStateException("record toString was accepted");
         }
         return build.stderr();
     }
