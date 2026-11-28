@@ -226,6 +226,9 @@ public final class ReflectionFieldReachability {
     public static Set<String> staticPrimitiveOwners(final Map<String, ClassFile> classes, final List<EntryPoint> reachable) {
         boolean readsInt = false;
         boolean readsBoolean = false;
+        boolean readsByte = false;
+        boolean readsShort = false;
+        boolean readsChar = false;
         boolean readsLong = false;
         boolean readsDouble = false;
         boolean readsFloat = false;
@@ -244,6 +247,12 @@ public final class ReflectionFieldReachability {
                     && "(Ljava/lang/Object;)I".equals(target.orElseThrow().descriptor())) readsInt = true;
                 if ("getBoolean".equals(target.orElseThrow().name())
                     && "(Ljava/lang/Object;)Z".equals(target.orElseThrow().descriptor())) readsBoolean = true;
+                if ("getByte".equals(target.orElseThrow().name())
+                    && "(Ljava/lang/Object;)B".equals(target.orElseThrow().descriptor())) readsByte = true;
+                if ("getShort".equals(target.orElseThrow().name())
+                    && "(Ljava/lang/Object;)S".equals(target.orElseThrow().descriptor())) readsShort = true;
+                if ("getChar".equals(target.orElseThrow().name())
+                    && "(Ljava/lang/Object;)C".equals(target.orElseThrow().descriptor())) readsChar = true;
                 if ("getLong".equals(target.orElseThrow().name())
                     && "(Ljava/lang/Object;)J".equals(target.orElseThrow().descriptor())) readsLong = true;
                 if ("getDouble".equals(target.orElseThrow().name())
@@ -260,7 +269,7 @@ public final class ReflectionFieldReachability {
                     && "(Ljava/lang/Object;F)V".equals(target.orElseThrow().descriptor())) writesFloat = true;
             }
         }
-        if (!readsInt && !readsBoolean && !readsLong && !readsDouble && !readsFloat && !writesInt && !writesLong && !writesDouble && !writesFloat) return Set.of();
+        if (!readsInt && !readsBoolean && !readsByte && !readsShort && !readsChar && !readsLong && !readsDouble && !readsFloat && !writesInt && !writesLong && !writesDouble && !writesFloat) return Set.of();
         final Set<FieldRef> fields = new HashSet<>(literalLookups(classes, reachable));
         fields.addAll(ReflectionDeclaration.analyze(classes).fields());
         for (final String name : enumeratedOwners(classes, reachable)) {
@@ -278,6 +287,9 @@ public final class ReflectionFieldReachability {
                     && candidate.isStatic() && (candidate.accessFlags() & 0x0040) == 0
                     && (readsInt && List.of("B", "S", "C", "I").contains(candidate.descriptor())
                         || readsBoolean && "Z".equals(candidate.descriptor())
+                        || readsByte && "B".equals(candidate.descriptor())
+                        || readsShort && List.of("B", "S").contains(candidate.descriptor())
+                        || readsChar && "C".equals(candidate.descriptor())
                         || readsLong && List.of("B", "S", "C", "I", "J").contains(candidate.descriptor())
                         || readsDouble && List.of("B", "S", "C", "I", "J", "F", "D").contains(candidate.descriptor())
                         || readsFloat && List.of("B", "S", "C", "I", "J", "F").contains(candidate.descriptor())

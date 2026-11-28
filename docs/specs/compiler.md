@@ -157,6 +157,10 @@ Other floating-point literal paths retain their existing NaN behavior.
 `Field.getBoolean` reads selected, non-volatile application `boolean` fields with the same access,
 target and initialization rules. Volatile and non-boolean fields raise `UnsupportedOperationException`
 until modeled.
+`Field.getByte`, `getShort` and `getChar` read selected non-volatile application fields with Java's
+widening rules: byte; byte or short; and char respectively. They use the same access, target and
+initialization rules. Volatile and incompatible fields raise `UnsupportedOperationException` until
+modeled.
 Other field types and volatile fields raise `UnsupportedOperationException` for this accessor until
 implemented.
 `Field.getLong` reads selected, non-volatile application `byte`, `short`, `char`, `int` and

@@ -10584,6 +10584,37 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanReadsSmallReflectiveFields() throws Exception {
+        final Path project = tempDir.resolve("selfhost-reflection-get-small");
+        final Path classes = project.resolve("classes");
+        Files.createDirectories(classes);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.*;
+            public final class Main {
+                public static final class Model { public short value = -123; }
+                public static void main(String[] args) throws Exception { System.out.println(Model.class.getDeclaredField("value").getShort(new Model())); }
+            }
+            """);
+        final ProcessResult javac = process(tempDir,
+            List.of(CliTestHarness.currentJavacCommand(), "--release", "25", "-d", classes.toString(),
+                project.resolve("src/main/java/com/acme/Main.java").toString()), Duration.ofSeconds(30));
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+        final ProcessResult expected = process(tempDir,
+            List.of(CliTestHarness.currentJavaCommand(), "-cp", classes.toString(), "com.acme.Main"), Duration.ofSeconds(30));
+        assertThat(expected.exitCode()).as(expected.stderr()).isZero();
+        final ProcessResult build = process(tempDir,
+            List.of(primitiveLiteralBootstrap.toString(), "build", classes.toString(), "--main", "com.acme.Main",
+                "--output", "selfhost-reflection-get-small"), Duration.ofSeconds(120));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(tempDir,
+            List.of(project.resolve(".javan/bin/selfhost-reflection-get-small").toString()),
+            Duration.ofSeconds(30), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1"));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout()).isEqualTo(expected.stdout()).isEqualTo("-123\n");
+    }
+
+    @Test
     void nativeBuiltJavanReadsStaticFinalLongConstants() throws Exception {
         final Path project = tempDir.resolve("selfhost-static-long-constant");
         final Path classes = project.resolve("classes");

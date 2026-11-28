@@ -171,6 +171,9 @@ public final class JdkCallSupport {
         runtime("Field.getName", "java/lang/reflect/Field", "getName", "()Ljava/lang/String;"),
         runtime("Field.getInt", "java/lang/reflect/Field", "getInt", "(Ljava/lang/Object;)I"),
         runtime("Field.getBoolean", "java/lang/reflect/Field", "getBoolean", "(Ljava/lang/Object;)Z"),
+        runtime("Field.getByte", "java/lang/reflect/Field", "getByte", "(Ljava/lang/Object;)B"),
+        runtime("Field.getShort", "java/lang/reflect/Field", "getShort", "(Ljava/lang/Object;)S"),
+        runtime("Field.getChar", "java/lang/reflect/Field", "getChar", "(Ljava/lang/Object;)C"),
         runtime("Field.getLong", "java/lang/reflect/Field", "getLong", "(Ljava/lang/Object;)J"),
         runtime("Field.getDouble", "java/lang/reflect/Field", "getDouble", "(Ljava/lang/Object;)D"),
         runtime("Field.getFloat", "java/lang/reflect/Field", "getFloat", "(Ljava/lang/Object;)F"),
@@ -3022,6 +3025,9 @@ public final class JdkCallSupport {
         if ("java/lang/reflect/Field".equals(methodRef.owner())
             && ("getInt".equals(methodRef.name()) && "(Ljava/lang/Object;)I".equals(methodRef.descriptor())
                 || "getBoolean".equals(methodRef.name()) && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor())
+                || "getByte".equals(methodRef.name()) && "(Ljava/lang/Object;)B".equals(methodRef.descriptor())
+                || "getShort".equals(methodRef.name()) && "(Ljava/lang/Object;)S".equals(methodRef.descriptor())
+                || "getChar".equals(methodRef.name()) && "(Ljava/lang/Object;)C".equals(methodRef.descriptor())
                 || "getLong".equals(methodRef.name()) && "(Ljava/lang/Object;)J".equals(methodRef.descriptor())
                 || "getDouble".equals(methodRef.name()) && "(Ljava/lang/Object;)D".equals(methodRef.descriptor())
                 || "getFloat".equals(methodRef.name()) && "(Ljava/lang/Object;)F".equals(methodRef.descriptor())

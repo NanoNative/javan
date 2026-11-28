@@ -218,6 +218,15 @@ public final class CCodegen {
         if (features.fieldGetBoolean()) {
             emitFieldPrimitiveAccessHelper(program, c, "get_boolean");
         }
+        if (features.fieldGetByte()) {
+            emitFieldPrimitiveAccessHelper(program, c, "get_byte");
+        }
+        if (features.fieldGetShort()) {
+            emitFieldPrimitiveAccessHelper(program, c, "get_short");
+        }
+        if (features.fieldGetChar()) {
+            emitFieldPrimitiveAccessHelper(program, c, "get_char");
+        }
         if (features.fieldGetLong()) {
             emitFieldPrimitiveAccessHelper(program, c, "get_long");
         }
@@ -428,6 +437,15 @@ public final class CCodegen {
         if (features.fieldGetBoolean()) {
             header.append("int javan_generated_field_get_boolean(void* field, void* target, void* caller, void* caller_nest);\n");
         }
+        if (features.fieldGetByte()) {
+            header.append("int javan_generated_field_get_byte(void* field, void* target, void* caller, void* caller_nest);\n");
+        }
+        if (features.fieldGetShort()) {
+            header.append("int javan_generated_field_get_short(void* field, void* target, void* caller, void* caller_nest);\n");
+        }
+        if (features.fieldGetChar()) {
+            header.append("int javan_generated_field_get_char(void* field, void* target, void* caller, void* caller_nest);\n");
+        }
         if (features.fieldGetLong()) {
             header.append("long long javan_generated_field_get_long(void* field, void* target, void* caller, void* caller_nest);\n");
         }
@@ -532,6 +550,15 @@ public final class CCodegen {
         }
         if (features.fieldGetBoolean()) {
             emitFieldPrimitiveAccessHelper(program, core, "get_boolean");
+        }
+        if (features.fieldGetByte()) {
+            emitFieldPrimitiveAccessHelper(program, core, "get_byte");
+        }
+        if (features.fieldGetShort()) {
+            emitFieldPrimitiveAccessHelper(program, core, "get_short");
+        }
+        if (features.fieldGetChar()) {
+            emitFieldPrimitiveAccessHelper(program, core, "get_char");
         }
         if (features.fieldGetLong()) {
             emitFieldPrimitiveAccessHelper(program, core, "get_long");
@@ -789,6 +816,15 @@ public final class CCodegen {
         }
         if (features.fieldGetBoolean()) {
             emitFieldPrimitiveAccessHelper(program, c, "get_boolean");
+        }
+        if (features.fieldGetByte()) {
+            emitFieldPrimitiveAccessHelper(program, c, "get_byte");
+        }
+        if (features.fieldGetShort()) {
+            emitFieldPrimitiveAccessHelper(program, c, "get_short");
+        }
+        if (features.fieldGetChar()) {
+            emitFieldPrimitiveAccessHelper(program, c, "get_char");
         }
         if (features.fieldGetLong()) {
             emitFieldPrimitiveAccessHelper(program, c, "get_long");
@@ -1981,6 +2017,9 @@ public final class CCodegen {
                     : wide ? List.of("J", "F", "D").contains(field.descriptor())
                     : List.of("I", "J", "F", "D").contains(field.descriptor())
                     : booleanValue ? "Z".equals(field.descriptor())
+                    : "get_byte".equals(operation) ? "B".equals(field.descriptor())
+                    : "get_short".equals(operation) ? List.of("B", "S").contains(field.descriptor())
+                    : "get_char".equals(operation) ? "C".equals(field.descriptor())
                     : doubleValue ? List.of("B", "S", "C", "I", "J", "F", "D").contains(field.descriptor())
                     : floatValue ? List.of("B", "S", "C", "I", "J", "F").contains(field.descriptor())
                     : wide ? List.of("B", "S", "C", "I", "J").contains(field.descriptor())
@@ -6373,6 +6412,18 @@ public final class CCodegen {
             return calls("javan_generated_field_get_boolean");
         }
 
+        private boolean fieldGetByte() {
+            return calls("javan_generated_field_get_byte");
+        }
+
+        private boolean fieldGetShort() {
+            return calls("javan_generated_field_get_short");
+        }
+
+        private boolean fieldGetChar() {
+            return calls("javan_generated_field_get_char");
+        }
+
         private boolean fieldGetLong() {
             return calls("javan_generated_field_get_long");
         }
@@ -6418,7 +6469,7 @@ public final class CCodegen {
         }
 
         private boolean classAssignability() {
-            return methodInvocation() || constructorInvocation() || fieldGetInt() || fieldGetBoolean() || fieldGetLong() || fieldGetDouble() || fieldGetFloat() || fieldSetInt() || fieldSetLong() || fieldSetDouble() || fieldSetFloat() || calls("javan_class_is_instance") || calls("javan_class_is_assignable_from")
+            return methodInvocation() || constructorInvocation() || fieldGetInt() || fieldGetBoolean() || fieldGetByte() || fieldGetShort() || fieldGetChar() || fieldGetLong() || fieldGetDouble() || fieldGetFloat() || fieldSetInt() || fieldSetLong() || fieldSetDouble() || fieldSetFloat() || calls("javan_class_is_instance") || calls("javan_class_is_assignable_from")
                 || calls("javan_class_cast") || calls("javan_method_can_access") || calls("javan_record_shape_validate");
         }
     }

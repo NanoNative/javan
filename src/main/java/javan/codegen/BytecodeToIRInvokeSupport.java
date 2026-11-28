@@ -4426,6 +4426,16 @@ final class BytecodeToIRInvokeSupport {
         stack.add(StackValue.intExpression(IrExpression.intLocal(localName)));
     }
 
+    private static String intFieldReadKind(final MethodRef method) {
+        if (!"java/lang/reflect/Field".equals(method.owner())) return "";
+        if ("getInt".equals(method.name()) && "(Ljava/lang/Object;)I".equals(method.descriptor())) return "int";
+        if ("getBoolean".equals(method.name()) && "(Ljava/lang/Object;)Z".equals(method.descriptor())) return "boolean";
+        if ("getByte".equals(method.name()) && "(Ljava/lang/Object;)B".equals(method.descriptor())) return "byte";
+        if ("getShort".equals(method.name()) && "(Ljava/lang/Object;)S".equals(method.descriptor())) return "short";
+        if ("getChar".equals(method.name()) && "(Ljava/lang/Object;)C".equals(method.descriptor())) return "char";
+        return "";
+    }
+
     static void pushLongCall(
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
@@ -4913,52 +4923,28 @@ final class BytecodeToIRInvokeSupport {
             );
             return true;
         }
-        if ("java/lang/reflect/Field".equals(methodRef.owner()) && "getInt".equals(methodRef.name())
-            && "(Ljava/lang/Object;)I".equals(methodRef.descriptor())) {
+        final String intFieldRead = intFieldReadKind(methodRef);
+        if (!intFieldRead.isEmpty()) {
             final String targetLocal = newObjectLocal(localDeclarations);
             final String receiverLocal = newObjectLocal(localDeclarations);
             instructions.add(IrInstruction.assignObject(targetLocal, popObject(classFile, method, stack)));
             instructions.add(IrInstruction.assignObject(receiverLocal, popObject(classFile, method, stack)));
             final List<StackValue> successStack = List.copyOf(stack);
-            final String receiverPresent = "label_field_get_int_receiver_present_" + instruction.offset();
+            final String receiverPresent = "label_field_get_" + intFieldRead + "_receiver_present_" + instruction.offset();
             instructions.add(IrInstruction.branchIf(receiverPresent, IrExpression.objectComparison(
                 "!=", IrExpression.objectLocal(receiverLocal), IrExpression.objectNull())));
             routePendingPlatformException(classFile, method, instruction, instructions, stack,
                 pendingExceptionHandlerStacks, sourceLines, "java/lang/NullPointerException", IrExpression.stringLiteral("field"));
             instructions.add(IrInstruction.label(receiverPresent));
             stack.addAll(successStack);
-            pushIntCall(instructions, stack, localDeclarations, "javan_generated_field_get_int", List.of(
+            pushIntCall(instructions, stack, localDeclarations, "javan_generated_field_get_" + intFieldRead, List.of(
                 IrExpression.objectLocal(receiverLocal), IrExpression.objectLocal(targetLocal),
                 IrExpression.stringLiteral(classFile.name().replace('/', '.')),
                 IrExpression.stringLiteral(classFile.nestHost().replace('/', '.'))));
             BytecodeToIRControlFlowSupport.appendPendingExceptionDispatch(classes, method, instruction, instructions,
                 List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException",
                     "java/lang/IllegalAccessException", "java/lang/UnsupportedOperationException"),
-                pendingExceptionHandlerStacks, "label_field_get_int_pending_continue_" + instruction.offset());
-            return true;
-        }
-        if ("java/lang/reflect/Field".equals(methodRef.owner()) && "getBoolean".equals(methodRef.name())
-            && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor())) {
-            final String targetLocal = newObjectLocal(localDeclarations);
-            final String receiverLocal = newObjectLocal(localDeclarations);
-            instructions.add(IrInstruction.assignObject(targetLocal, popObject(classFile, method, stack)));
-            instructions.add(IrInstruction.assignObject(receiverLocal, popObject(classFile, method, stack)));
-            final List<StackValue> successStack = List.copyOf(stack);
-            final String receiverPresent = "label_field_get_boolean_receiver_present_" + instruction.offset();
-            instructions.add(IrInstruction.branchIf(receiverPresent, IrExpression.objectComparison(
-                "!=", IrExpression.objectLocal(receiverLocal), IrExpression.objectNull())));
-            routePendingPlatformException(classFile, method, instruction, instructions, stack,
-                pendingExceptionHandlerStacks, sourceLines, "java/lang/NullPointerException", IrExpression.stringLiteral("field"));
-            instructions.add(IrInstruction.label(receiverPresent));
-            stack.addAll(successStack);
-            pushIntCall(instructions, stack, localDeclarations, "javan_generated_field_get_boolean", List.of(
-                IrExpression.objectLocal(receiverLocal), IrExpression.objectLocal(targetLocal),
-                IrExpression.stringLiteral(classFile.name().replace('/', '.')),
-                IrExpression.stringLiteral(classFile.nestHost().replace('/', '.'))));
-            BytecodeToIRControlFlowSupport.appendPendingExceptionDispatch(classes, method, instruction, instructions,
-                List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException",
-                    "java/lang/IllegalAccessException", "java/lang/UnsupportedOperationException"),
-                pendingExceptionHandlerStacks, "label_field_get_boolean_pending_continue_" + instruction.offset());
+                pendingExceptionHandlerStacks, "label_field_get_" + intFieldRead + "_pending_continue_" + instruction.offset());
             return true;
         }
         if ("java/lang/reflect/Field".equals(methodRef.owner()) && "getLong".equals(methodRef.name())

@@ -3157,4 +3157,126 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
     }
 
 
+    @Test
+    void readsByteShortAndCharFieldsWithJavaWidening() throws Exception {
+        final Path project = project("reflection-field-get-small");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model {
+                    static { System.out.println("initialized"); }
+                    public byte b = -128; public short s = -32768; public char c = 65535;
+                    public static final byte STATIC_BYTE = -3; public static final short STATIC_SHORT = -4;
+                    public static final char STATIC_CHAR = 65535;
+                }
+                public static void main(String[] args) throws Exception {
+                    var b = Model.class.getDeclaredField("b"); var s = Model.class.getDeclaredField("s");
+                    var c = Model.class.getDeclaredField("c"); System.out.println("before");
+                    System.out.println(Model.class.getDeclaredField("STATIC_BYTE").getByte(null));
+                    System.out.println(Model.class.getDeclaredField("STATIC_SHORT").getShort(null));
+                    System.out.println((int) Model.class.getDeclaredField("STATIC_CHAR").getChar(null));
+                    Model model = new Model(); System.out.println(b.getByte(model)); System.out.println(b.getShort(model));
+                    System.out.println(s.getShort(model)); System.out.println((int) c.getChar(model));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-get-small").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("before\ninitialized\n-3\n-4\n65535\n-128\n-128\n-32768\n65535\n");
+    }
+
+    @Test
+    void checksSmallFieldReadReceiverAndAccess() throws Exception {
+        final Path project = project("reflection-field-get-small-access");
+        writeJava(project, "com.other.Model", """
+            package com.other;
+            public class Model { public byte b; public short s; public char c; private byte secret; }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import com.other.Model;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    var b = Model.class.getDeclaredField("b"); var s = Model.class.getDeclaredField("s");
+                    var c = Model.class.getDeclaredField("c"); var secret = Model.class.getDeclaredField("secret");
+                    Object wrong = new Object(); Model model = new Model();
+                    try { b.getByte(null); } catch (NullPointerException e) { System.out.println("null"); }
+                    try { s.getShort(wrong); } catch (IllegalArgumentException e) { System.out.println("wrong short"); }
+                    try { c.getChar(wrong); } catch (IllegalArgumentException e) { System.out.println("wrong char"); }
+                    try { secret.getByte(model); } catch (IllegalAccessException e) { System.out.println("denied"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-get-small-access").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("null\nwrong short\nwrong char\ndenied\n");
+    }
+
+    @Test
+    void rejectsUnsupportedSmallFieldReadsExplicitly() throws Exception {
+        final Path project = project("reflection-field-get-small-unsupported");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model { public byte b; public short s; public int value; public volatile char changing; }
+                public static void main(String[] args) throws Exception {
+                    Model model = new Model(); var b = Model.class.getDeclaredField("b");
+                    var s = Model.class.getDeclaredField("s"); var value = Model.class.getDeclaredField("value");
+                    var changing = Model.class.getDeclaredField("changing");
+                    try { s.getByte(model); } catch (UnsupportedOperationException e) { System.out.println("byte unsupported"); }
+                    try { value.getShort(model); } catch (UnsupportedOperationException e) { System.out.println("short unsupported"); }
+                    try { b.getChar(model); } catch (UnsupportedOperationException e) { System.out.println("char unsupported"); }
+                    try { changing.getChar(model); } catch (UnsupportedOperationException e) { System.out.println("volatile unsupported"); }
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-get-small-unsupported").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("byte unsupported\nshort unsupported\nchar unsupported\nvolatile unsupported\n");
+    }
+
+    @Test
+    void readsSmallFieldsDuringConcurrentGc() throws Exception {
+        final Path project = project("reflection-field-get-small-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger signal = new AtomicInteger(), finished = new AtomicInteger();
+                public static final class Model { public byte b = -7; public short s = -300; public char c = 65535; }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        while (signal.get() == 0) Thread.yield();
+                        for (int i = 0; i < 1000; i++) { byte[] value = new byte[64]; value[0] = 1; }
+                        finished.set(1);
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Field b = Model.class.getDeclaredField("b"), s = Model.class.getDeclaredField("s"), c = Model.class.getDeclaredField("c");
+                    Model model = new Model(); Thread worker = new Thread(new Worker()); worker.start(); signal.set(1);
+                    while (finished.get() == 0) {
+                        if (b.getByte(model) != -7 || s.getShort(model) != -300 || c.getChar(model) != 65535) throw new AssertionError();
+                    }
+                    worker.join(); System.out.println(b.getByte(model)); System.out.println(s.getShort(model)); System.out.println((int) c.getChar(model));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-get-small-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("-7\n-300\n65535\n");
+    }
+
 }
