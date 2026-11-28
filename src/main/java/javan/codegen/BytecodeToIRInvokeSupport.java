@@ -4729,6 +4729,34 @@ final class BytecodeToIRInvokeSupport {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
     ) {
+        if ("java/lang/Class".equals(methodRef.owner()) && "getDeclaredFields".equals(methodRef.name())
+            && "()[Ljava/lang/reflect/Field;".equals(methodRef.descriptor())) {
+            final String classLocal = newObjectLocal(localDeclarations);
+            instructions.add(IrInstruction.assignObject(classLocal, popObject(classFile, method, stack)));
+            final List<StackValue> successStack = List.copyOf(stack);
+            final String present = "label_fields_class_present_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(present,
+                IrExpression.objectComparison("!=", IrExpression.objectLocal(classLocal), IrExpression.objectNull())));
+            routePendingPlatformException(classFile, method, instruction, instructions, stack, pendingExceptionHandlerStacks,
+                sourceLines, "java/lang/NullPointerException", IrExpression.stringLiteral("class"));
+            instructions.add(IrInstruction.label(present));
+            stack.addAll(successStack);
+            final String resultLocal = newObjectLocal(localDeclarations);
+            final String statusLocal = "int" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.INT, statusLocal));
+            instructions.add(IrInstruction.assignInt(statusLocal, IrExpression.intCall(
+                "javan_generated_class_get_declared_fields",
+                List.of(IrExpression.objectLocalAddress(resultLocal), IrExpression.objectLocal(classLocal)))));
+            final String supported = "label_fields_supported_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(supported,
+                IrExpression.intComparison(">=", IrExpression.intLocal(statusLocal), IrExpression.intLiteral(0))));
+            routePendingPlatformException(classFile, method, instruction, instructions, stack, pendingExceptionHandlerStacks,
+                sourceLines, "java/lang/UnsupportedOperationException", IrExpression.stringLiteral("field enumeration target"));
+            instructions.add(IrInstruction.label(supported));
+            stack.addAll(successStack);
+            stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+            return true;
+        }
         if ("java/lang/Class".equals(methodRef.owner()) && "getDeclaredField".equals(methodRef.name())
             && "(Ljava/lang/String;)Ljava/lang/reflect/Field;".equals(methodRef.descriptor())) {
             final String nameLocal = newObjectLocal(localDeclarations);

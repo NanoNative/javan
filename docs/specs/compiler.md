@@ -136,6 +136,11 @@ where the Java API permits. Reachable `getType` calls retain the selected field 
 required hierarchies without initializing them. Field types outside the supported class metadata
 model raise `UnsupportedOperationException` instead of returning incomplete class information.
 Runtime names do not reveal unselected fields and produce `NoSuchFieldException`.
+`Class.getDeclaredFields` returns fresh arrays and field objects for application classes selected by
+literal class flow or the public project declaration when the receiver is dynamic. It retains all
+declared fields of those selected classes without initializing them. Primitive and array classes
+return empty arrays. Unselected dynamic targets and platform classes raise
+`UnsupportedOperationException` until their enumeration is modeled.
 `Field.getInt` reads selected, non-volatile application fields declared as `byte`, `short`,
 `char` or `int`, with caller access checks, instance target validation and Java's widening
 conversion. Static fields initialize their declaring class on access and ignore the target.

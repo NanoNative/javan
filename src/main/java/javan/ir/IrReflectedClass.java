@@ -12,7 +12,8 @@ import java.util.List;
  * @param declaredConstructors declared constructors available for lookup
  * @param abstractClass whether reflective construction must reject the class
  * @param enumClass whether reflective construction must reject enum constants
- * @param declaredFields explicitly referenced declared fields
+ * @param declaredFields selected declared fields
+ * @param declaredFieldsEnumerable whether all declared fields were retained for enumeration
  */
 public record IrReflectedClass(
     String jvmName,
@@ -22,7 +23,8 @@ public record IrReflectedClass(
     List<IrMethodMetadata> declaredConstructors,
     boolean abstractClass,
     boolean enumClass,
-    List<IrFieldMetadata> declaredFields
+    List<IrFieldMetadata> declaredFields,
+    boolean declaredFieldsEnumerable
 ) {
     public IrReflectedClass {
         declaredMethods = List.copyOf(declaredMethods);
@@ -32,6 +34,33 @@ public record IrReflectedClass(
         if (arrayFamily && !declaredMethods.isEmpty()) {
             throw new IllegalArgumentException("Array-family reflection metadata cannot declare methods.");
         }
+    }
+
+    /**
+     * Creates class metadata without field enumeration.
+     *
+     * @param jvmName JVM internal class name
+     * @param declaredMethods declared methods
+     * @param publicMethods inherited public methods
+     * @param arrayFamily whether public methods apply to all arrays
+     * @param declaredConstructors declared constructors
+     * @param abstractClass whether the class is abstract
+     * @param enumClass whether the class is an enum
+     * @param declaredFields selected declared fields
+     * @throws NullPointerException if a metadata list or element is null
+     * @throws IllegalArgumentException if array-family metadata declares methods
+     */
+    public IrReflectedClass(
+        final String jvmName,
+        final List<IrMethodMetadata> declaredMethods,
+        final List<IrMethodMetadata> publicMethods,
+        final boolean arrayFamily,
+        final List<IrMethodMetadata> declaredConstructors,
+        final boolean abstractClass,
+        final boolean enumClass,
+        final List<IrFieldMetadata> declaredFields
+    ) {
+        this(jvmName, declaredMethods, publicMethods, arrayFamily, declaredConstructors, abstractClass, enumClass, declaredFields, false);
     }
 
     /** Creates class metadata without field metadata. */

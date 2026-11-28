@@ -167,6 +167,7 @@ public final class JdkCallSupport {
         runtime("Class.getTypeName", "java/lang/Class", "getTypeName", "()Ljava/lang/String;"),
         runtime("Class.getComponentType", "java/lang/Class", "getComponentType", "()Ljava/lang/Class;"),
         runtime("Class.getDeclaredField", "java/lang/Class", "getDeclaredField", "(Ljava/lang/String;)Ljava/lang/reflect/Field;"),
+        runtime("Class.getDeclaredFields", "java/lang/Class", "getDeclaredFields", "()[Ljava/lang/reflect/Field;"),
         runtime("Field.getName", "java/lang/reflect/Field", "getName", "()Ljava/lang/String;"),
         runtime("Field.getInt", "java/lang/reflect/Field", "getInt", "(Ljava/lang/Object;)I"),
         runtime("Field.setInt", "java/lang/reflect/Field", "setInt", "(Ljava/lang/Object;I)V"),
@@ -1885,6 +1886,9 @@ public final class JdkCallSupport {
             || "java/util/Base64$Decoder".equals(owner)) {
             return List.of("arrays", "strings");
         }
+        if ("java/lang/Class".equals(owner) && "getDeclaredFields".equals(name)) {
+            return List.of("reflection-metadata", "arrays");
+        }
         if ("java/lang/Class".equals(owner)
             && ("forName".equals(name) || "getDeclaredField".equals(name) || "getDeclaredMethod".equals(name) || "getMethod".equals(name)
                 || "getDeclaredConstructor".equals(name) || "getConstructor".equals(name))) {
@@ -2972,6 +2976,10 @@ public final class JdkCallSupport {
         if ("java/lang/Enum".equals(methodRef.owner()) && "valueOf".equals(methodRef.name())
             && "(Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Enum;".equals(methodRef.descriptor())) {
             return List.of("java/lang/Error");
+        }
+        if ("java/lang/Class".equals(methodRef.owner()) && "getDeclaredFields".equals(methodRef.name())
+            && "()[Ljava/lang/reflect/Field;".equals(methodRef.descriptor())) {
+            return List.of("java/lang/NullPointerException", "java/lang/UnsupportedOperationException");
         }
         if ("java/lang/Class".equals(methodRef.owner()) && "getDeclaredField".equals(methodRef.name())
             && "(Ljava/lang/String;)Ljava/lang/reflect/Field;".equals(methodRef.descriptor())) {

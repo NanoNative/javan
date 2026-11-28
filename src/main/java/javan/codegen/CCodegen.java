@@ -209,6 +209,9 @@ public final class CCodegen {
         if (features.declaredFieldMetadata()) {
             emitFieldLookupHelper(program, c);
         }
+        if (features.declaredFieldsEnumeration()) {
+            emitFieldEnumerationHelper(program, c);
+        }
         if (features.fieldGetInt()) {
             emitFieldIntAccessHelper(program, c, false);
         }
@@ -395,6 +398,9 @@ public final class CCodegen {
         if (features.declaredFieldMetadata()) {
             header.append("int javan_generated_class_get_declared_field(void** result, void* class_value, void* name_value);\n");
         }
+        if (features.declaredFieldsEnumeration()) {
+            header.append("int javan_generated_class_get_declared_fields(void** result, void* class_value);\n");
+        }
         if (features.fieldGetInt()) {
             header.append("int javan_generated_field_get_int(void* field, void* target, void* caller, void* caller_nest);\n");
         }
@@ -475,6 +481,9 @@ public final class CCodegen {
         }
         if (features.declaredFieldMetadata()) {
             emitFieldLookupHelper(program, core);
+        }
+        if (features.declaredFieldsEnumeration()) {
+            emitFieldEnumerationHelper(program, core);
         }
         if (features.fieldGetInt()) {
             emitFieldIntAccessHelper(program, core, false);
@@ -708,6 +717,9 @@ public final class CCodegen {
         }
         if (features.declaredFieldMetadata()) {
             emitFieldLookupHelper(program, c);
+        }
+        if (features.declaredFieldsEnumeration()) {
+            emitFieldEnumerationHelper(program, c);
         }
         if (features.fieldGetInt()) {
             emitFieldIntAccessHelper(program, c, false);
@@ -1803,6 +1815,35 @@ public final class CCodegen {
             .append(System.lineSeparator());
         c.append("    return -1;").append(System.lineSeparator()).append("}")
             .append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static void emitFieldEnumerationHelper(final IrProgram program, final StringBuilder c) {
+        c.append("JAVAN_PROGRAM_LINKAGE int javan_generated_class_get_declared_fields(void** result, void* class_value) {\n");
+        c.append("    *result = NULL;\n");
+        c.append("    if (javan_class_is_array(class_value) || javan_class_is_primitive(class_value)) {\n")
+            .append("        javan_runtime_lock_enter(); *result = javan_object_array_new(0, \"[Ljava.lang.reflect.Field;\"); javan_runtime_lock_leave(); return 1;\n    }\n");
+        for (final IrReflectedClass owner : program.reflectedClasses()) {
+            if (!owner.declaredFieldsEnumerable()) continue;
+            c.append("    if (javan_class_name_equals(class_value, ")
+                .append(emitCStringLiteral(displayClassName(owner.jvmName()))).append(")) {\n")
+                .append("        javan_runtime_lock_enter();\n")
+                .append("        void* field = NULL; void** roots[] = { &field }; javan_root_frame_push(roots, 1);\n")
+                .append("        *result = javan_object_array_new(").append(owner.declaredFields().size())
+                .append(", \"[Ljava.lang.reflect.Field;\");\n");
+            for (int index = 0; index < owner.declaredFields().size(); index++) {
+                final IrFieldMetadata field = owner.declaredFields().get(index);
+                c.append("        { static const JavanMethodMetadata metadata = {JAVAN_METHOD_METADATA_MAGIC, 0, ")
+                    .append(field.modifiers()).append(", ").append(field.declaringPublic() ? 1 : 0)
+                    .append(", 0, 0, NULL, ").append(emitCStringLiteral(field.name())).append(", ")
+                    .append(emitCStringLiteral(displayClassName(field.declaringJvmName()))).append(", ")
+                    .append(emitCStringLiteral(displayClassName(field.declaringNestJvmName()))).append(", ")
+                    .append(emitCStringLiteral(reflectionTypeName(field.descriptor()))).append(", NULL};\n")
+                    .append("          javan_field_new_into(&field, &metadata); javan_object_array_set(*result, ")
+                    .append(index).append(", field); }\n");
+            }
+            c.append("        javan_root_frame_pop(roots); javan_runtime_lock_leave(); return 1;\n    }\n");
+        }
+        c.append("    return -1;\n}\n\n");
     }
 
     private static void emitFieldIntAccessHelper(final IrProgram program, final StringBuilder c, final boolean write) {
@@ -6186,6 +6227,10 @@ public final class CCodegen {
 
         private boolean declaredFieldMetadata() {
             return calls("javan_generated_class_get_declared_field");
+        }
+
+        private boolean declaredFieldsEnumeration() {
+            return calls("javan_generated_class_get_declared_fields");
         }
 
         private boolean declaredMethodMetadata() {

@@ -52,6 +52,43 @@ public final class ReflectionFieldReachability {
         return Set.copyOf(result);
     }
     /**
+     * Finds closed-world classes whose declared fields can be enumerated.
+     *
+     * @param classes parsed closed-world classes
+     * @param reachable reachable methods
+     * @return classes selected by literal data flow or the project declaration
+     */
+    public static Set<String> enumeratedOwners(final Map<String, ClassFile> classes, final List<EntryPoint> reachable) {
+        final Set<String> owners = new HashSet<>();
+        boolean needsDeclaredTargets = false;
+        for (final EntryPoint entry : reachable) {
+            final ClassFile owner = classes.get(entry.className());
+            final Optional<MethodInfo> method = owner == null ? Optional.empty() : owner.method(entry.methodName(), entry.descriptor());
+            if (method.isEmpty() || method.orElseThrow().code().isEmpty()) continue;
+            final List<Instruction> instructions = method.orElseThrow().code().orElseThrow().instructions();
+            for (int index = 1; index < instructions.size(); index++) {
+                final Optional<MethodRef> target = instructions.get(index).methodRef();
+                if (target.isEmpty() || !"java/lang/Class".equals(target.orElseThrow().owner())
+                    || !"getDeclaredFields".equals(target.orElseThrow().name())
+                    || !"()[Ljava/lang/reflect/Field;".equals(target.orElseThrow().descriptor())) continue;
+                final Instruction receiver = instructions.get(index - 1);
+                final boolean literalClass = ReflectionDeclaration.classLiteralDescriptor(receiver).isPresent();
+                final boolean literalName = receiver.opcode() == 184 && receiver.methodRef().isPresent()
+                    && "java/lang/Class".equals(receiver.methodRef().orElseThrow().owner())
+                    && "forName".equals(receiver.methodRef().orElseThrow().name())
+                    && "(Ljava/lang/String;)Ljava/lang/Class;".equals(receiver.methodRef().orElseThrow().descriptor())
+                    && index >= 2 && instructions.get(index - 2).stringValue().isPresent();
+                needsDeclaredTargets |= !literalClass && !literalName;
+                for (final String name : ReflectionLiteralFlow.classNames(method.orElseThrow(), index - 1)) {
+                    if (classes.containsKey(name)) owners.add(name);
+                }
+            }
+        }
+        if (needsDeclaredTargets) owners.addAll(ReflectionDeclaration.analyze(classes).classes());
+        return Set.copyOf(owners);
+    }
+
+    /**
      * Returns owners of selected static fields when reflective integer reads or writes are reachable.
      *
      * @param classes parsed closed-world classes
@@ -77,6 +114,12 @@ public final class ReflectionFieldReachability {
         if (!readsInt && !writesInt) return Set.of();
         final Set<FieldRef> fields = new HashSet<>(literalLookups(classes, reachable));
         fields.addAll(ReflectionDeclaration.analyze(classes).fields());
+        for (final String name : enumeratedOwners(classes, reachable)) {
+            final ClassFile owner = classes.get(name);
+            if (owner != null) {
+                for (final FieldInfo field : owner.fields()) fields.add(new FieldRef(name, field.name(), field.descriptor()));
+            }
+        }
         final Set<String> owners = new HashSet<>();
         for (final FieldRef field : fields) {
             final ClassFile owner = classes.get(field.owner());

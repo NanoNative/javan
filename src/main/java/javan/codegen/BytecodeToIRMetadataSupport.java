@@ -346,8 +346,10 @@ final class BytecodeToIRMetadataSupport {
                 if (instruction.methodRef().isPresent()) {
                     final MethodRef reference = instruction.methodRef().orElseThrow();
                     declaredFieldLookup |= "java/lang/Class".equals(reference.owner())
-                        && "getDeclaredField".equals(reference.name())
-                        && "(Ljava/lang/String;)Ljava/lang/reflect/Field;".equals(reference.descriptor());
+                        && ("getDeclaredField".equals(reference.name())
+                            && "(Ljava/lang/String;)Ljava/lang/reflect/Field;".equals(reference.descriptor())
+                            || "getDeclaredFields".equals(reference.name())
+                            && "()[Ljava/lang/reflect/Field;".equals(reference.descriptor()));
                     declaredMethodLookup |= "java/lang/Class".equals(reference.owner())
                         && "getDeclaredMethod".equals(reference.name())
                         && "(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;".equals(reference.descriptor());
@@ -457,19 +459,20 @@ final class BytecodeToIRMetadataSupport {
         final Set<String> classpathClasses = classes.keySet();
         final ReflectionDeclaration.Result declaration = ReflectionDeclaration.analyze(classes);
         final Set<FieldRef> literalFields = ReflectionFieldReachability.literalLookups(classes, reachableMethods);
+        final Set<String> enumeratedOwners = ReflectionFieldReachability.enumeratedOwners(classes, reachableMethods);
         final Set<String> literalLookups = ReflectionMethodReachability.literalLookups(classes, reachableMethods);
         final List<EntryPoint> literalConstructors = ReflectionConstructorReachability.analyze(classes, reachableMethods);
         final List<IrReflectedClass> result = new ArrayList<>();
         for (final IrClass retained : retainedClasses) {
             final ClassFile classFile = classes.get(retained.jvmName());
             if (classFile != null) {
-                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection, declaration, literalLookups, literalConstructors, literalFields));
+                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection, declaration, literalLookups, literalConstructors, literalFields, enumeratedOwners));
             }
         }
         for (final String jvmName : reflection.externalClassNames()) {
             final ClassFile classFile = externalClasses.get(jvmName);
             if (classFile != null) {
-                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection, declaration, literalLookups, literalConstructors, literalFields));
+                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection, declaration, literalLookups, literalConstructors, literalFields, enumeratedOwners));
             }
         }
         if (reflection.publicMethodLookup()) {
@@ -494,7 +497,8 @@ final class BytecodeToIRMetadataSupport {
         final ReflectionDeclaration.Result declaration,
         final Set<String> literalLookups,
         final List<EntryPoint> literalConstructors,
-        final Set<FieldRef> literalFields
+        final Set<FieldRef> literalFields,
+        final Set<String> enumeratedOwners
     ) {
         final List<IrMethodMetadata> constructors = new ArrayList<>();
         if (reflection.declaredConstructorLookup() && classpathClasses.contains(classFile.name())) {
@@ -513,7 +517,8 @@ final class BytecodeToIRMetadataSupport {
         if (reflection.declaredFieldLookup()) {
             for (final FieldInfo field : classFile.fields()) {
                 final FieldRef reference = new FieldRef(classFile.name(), field.name(), field.descriptor());
-                if (declaration.fields().contains(reference) || literalFields.contains(reference)) {
+                if (declaration.fields().contains(reference) || literalFields.contains(reference)
+                    || enumeratedOwners.contains(classFile.name()) && classpathClasses.contains(classFile.name())) {
                     fields.add(new IrFieldMetadata(classFile.name(), classFile.nestHost(), field.name(),
                         field.descriptor(), field.accessFlags(), classFile.isPublic()));
                 }
@@ -531,7 +536,8 @@ final class BytecodeToIRMetadataSupport {
             constructors,
             classFile.isAbstract(),
             classFile.isEnum(),
-            fields
+            fields,
+            enumeratedOwners.contains(classFile.name()) && classpathClasses.contains(classFile.name())
         );
     }
 

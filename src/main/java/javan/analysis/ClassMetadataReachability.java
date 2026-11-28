@@ -85,6 +85,10 @@ public final class ClassMetadataReachability {
             for (final FieldRef field : ReflectionFieldReachability.literalLookups(classes, callGraph.reachableMethods())) {
                 addClass(classes, retained, field.descriptor());
             }
+            for (final String name : ReflectionFieldReachability.enumeratedOwners(classes, callGraph.reachableMethods())) {
+                final ClassFile owner = classes.get(name);
+                if (owner != null) for (final var field : owner.fields()) addClass(classes, retained, field.descriptor());
+            }
         }
         for (final String type : callGraph.instantiatedTypes().types()) {
             addClass(classes, retained, type);

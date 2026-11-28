@@ -1533,4 +1533,259 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
         assertThat(result.stdout()).isEqualTo(expected).isEqualTo("true\n");
     }
 
+    @Test
+    void enumeratesFieldsOfAStaticallyKnownClass() throws Exception {
+        final Path project = project("reflection-declared-fields-literal");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            public final class Main {
+                public static final class Model { public int value; private long hidden; }
+                public static final class Empty { }
+                public static void main(String[] args) throws Exception {
+                    Field[] fields = Model.class.getDeclaredFields();
+                    boolean value = false, hidden = false;
+                    for (Field field : fields) { value |= field.getName().equals("value"); hidden |= field.getName().equals("hidden"); }
+                    System.out.println(fields.length); System.out.println(value); System.out.println(hidden);
+                    System.out.println(Empty.class.getDeclaredFields().length);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-declared-fields-literal").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("2\ntrue\ntrue\n0\n");
+    }
+
+    @Test
+    void enumeratesDeclaredClassSelectedByExternalName() throws Exception {
+        final Path project = project("reflection-declared-fields-external");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.*;
+            public final class Main {
+                public static final class Model { public int value; private long hidden; }
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[] { Model.class }; }
+                public static void main(String[] args) throws Exception {
+                    Field[] fields = Class.forName(args[0]).getDeclaredFields();
+                    boolean value = false, hidden = false;
+                    for (Field field : fields) { value |= field.getName().equals("value"); hidden |= field.getName().equals("hidden"); }
+                    System.out.println(fields.length); System.out.println(value); System.out.println(hidden);
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-declared-fields-external").toString(), "com.acme.Main$Model"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("2\ntrue\ntrue\n");
+    }
+
+    @Test
+    void returnsFreshFieldArraysWithoutInitializingTheClass() throws Exception {
+        final Path project = project("reflection-declared-fields-fresh");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            public final class Main {
+                public static final class Model { static { System.out.println("initialized"); } public int value; }
+                public static void main(String[] args) throws Exception {
+                    Field[] first = Model.class.getDeclaredFields(); Field[] second = Model.class.getDeclaredFields();
+                    System.out.println(first != second); System.out.println(first[0] != second[0]);
+                    first[0] = null; System.out.println(second[0].getName()); System.out.println("done");
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-declared-fields-fresh").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("true\ntrue\nvalue\ndone\n");
+    }
+
+    @Test
+    void retainsEnumeratedFieldTypesWithoutInitializingThem() throws Exception {
+        final Path project = project("reflection-declared-fields-types");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            public final class Main {
+                public static final class Helper { static { System.out.println("helper initialized"); } }
+                public static final class Model { static { System.out.println("model initialized"); } public Helper value; }
+                public static void main(String[] args) throws Exception {
+                    Field field = Model.class.getDeclaredFields()[0];
+                    System.out.println(field.getType().getName()); System.out.println("done");
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-declared-fields-types").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("com.acme.Main$Helper\ndone\n");
+    }
+
+    @Test
+    void initializesAnEnumeratedStaticFieldOnReflectiveRead() throws Exception {
+        final Path project = project("reflection-declared-fields-static-read");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model { static { System.out.println("initialized"); } public static int value = 42; }
+                public static void main(String[] args) throws Exception {
+                    var field = Model.class.getDeclaredFields()[0];
+                    System.out.println("before"); System.out.println(field.getInt(null));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-declared-fields-static-read").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("before\ninitialized\n42\n");
+    }
+
+    @Test
+    void rejectsUnselectedAndPlatformFieldEnumeration() throws Exception {
+        final Path project = project("reflection-declared-fields-bounds");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.*;
+            public final class Main {
+                public static final class Selected { public int value; }
+                public static final class Unselected { public int hidden; }
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[] { Selected.class }; }
+                static void enumerate(Class<?> type) {
+                    Field[] fields;
+                    try { fields = type.getDeclaredFields(); }
+                    catch (UnsupportedOperationException e) { System.out.println("unsupported"); return; }
+                    System.out.println(fields.length);
+                }
+                public static void main(String[] args) {
+                    enumerate(Selected.class); enumerate(Unselected.class); enumerate(String.class);
+                    enumerate(int[].class);
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-declared-fields-bounds").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("1\nunsupported\nunsupported\n0\n");
+    }
+
+    @Test
+    void enumeratedFieldsAndArraysSurviveConcurrentGc() throws Exception {
+        final Path project = project("reflection-declared-fields-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger signal = new AtomicInteger(), finished = new AtomicInteger();
+                public static final class Model { public int first; private long second; public double third; }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        while (signal.get() == 0) Thread.yield();
+                        for (int i = 0; i < 1000; i++) { byte[] value = new byte[64]; value[0] = 1; }
+                        finished.set(1);
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Thread worker = new Thread(new Worker()); worker.start(); signal.set(1);
+                    while (finished.get() == 0) {
+                        Field[] fields = Model.class.getDeclaredFields();
+                        if (fields.length != 3) throw new AssertionError();
+                        for (Field field : fields) if (field.getName().length() == 0) throw new AssertionError();
+                    }
+                    worker.join(); System.out.println(Model.class.getDeclaredFields().length);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-declared-fields-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("3\n");
+    }
+
+    @Test
+    void literalEnumerationDoesNotRetainFieldsOfUnrelatedDeclaredClasses() throws Exception {
+        final Path project = project("reflection-declared-fields-unrelated");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.*;
+            public final class Main {
+                public static final class Selected { public int value; }
+                public static final class Other { public int hidden; }
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[] { Other.class }; }
+                public static void main(String[] args) throws Exception {
+                    System.out.println(Selected.class.getDeclaredFields().length);
+                    System.out.println(int.class.getDeclaredFields().length);
+                    String name = args[0]; Field field;
+                    try { field = Other.class.getDeclaredField(name); }
+                    catch (NoSuchFieldException e) { System.out.println("not retained"); return; }
+                    System.out.println("retained");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-declared-fields-unrelated").toString(), "hidden"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("1\n0\nnot retained\n");
+    }
+
+    @Test
+    void enumeratedFieldsHaveJavaRuntimeTypes() throws Exception {
+        final Path project = project("reflection-declared-fields-runtime-types");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            public final class Main {
+                public static final class Model { public int value; }
+                public static void main(String[] args) {
+                    Field[] fields = Model.class.getDeclaredFields();
+                    System.out.println(fields.getClass().getName());
+                    System.out.println(fields[0].getClass().getName());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-declared-fields-runtime-types").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("[Ljava.lang.reflect.Field;\njava.lang.reflect.Field\n");
+    }
+
+    @Test
+    void nullClassFieldEnumerationThrowsCatchableNullPointerException() throws Exception {
+        final Path project = project("reflection-declared-fields-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            public final class Main {
+                public static void main(String[] args) {
+                    Class<?> missing = null;
+                    try { Field[] fields = missing.getDeclaredFields(); }
+                    catch (NullPointerException e) { System.out.println("null class"); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-declared-fields-null").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("null class\n");
+    }
+
 }
