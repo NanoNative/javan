@@ -362,6 +362,8 @@ Supported exceptions and null return values are preserved. Plain objects and app
 whose known superclass chain reaches `Object` without a `toString` override use their runtime class
 name and virtual `hashCode`, including identity hashing when no override exists. Unknown receiver
 types do not cause unrelated overrides to be retained and may still fail at runtime when no implementation was retained.
+Array values converted to strings use their runtime array class name and identity hash, including
+cloned and copied arrays.
 Generated record `toString` supports primitive, boxed primitive and `String` components, plus
 application reference components with a proven final receiver and supported string conversion.
 Null values, conversion failures and component evaluation order are preserved. Record component

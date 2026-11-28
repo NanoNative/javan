@@ -2268,8 +2268,10 @@ final class RuntimeSourceMemorySections {
             JavanTypeDescriptor* descriptor = javan_type_descriptor_for(type);
             const char* name = descriptor == NULL ? NULL : descriptor->name;
             javan_allocation_metadata snapshot;
-            if (name == NULL && javan_find_allocation(value, &snapshot) != 0
-                && snapshot.runtime_kind == JAVAN_RUNTIME_KIND_PLAIN_OBJECT) name = "java.lang.Object";
+            if (name == NULL && javan_find_allocation(value, &snapshot) != 0) {
+                if (snapshot.runtime_kind == JAVAN_RUNTIME_KIND_PLAIN_OBJECT) name = "java.lang.Object";
+                else if (snapshot.kind == JAVAN_HEAP_KIND_ARRAY) name = snapshot.array_class_name;
+            }
             if (name == NULL) {
                 javan_panic("unsupported default object string type");
                 return NULL;
@@ -2305,7 +2307,7 @@ final class RuntimeSourceMemorySections {
             if (javan_find_allocation(value, &snapshot) == 0) {
                 return value;
             }
-            if (snapshot.runtime_kind == JAVAN_RUNTIME_KIND_PLAIN_OBJECT) {
+            if (snapshot.runtime_kind == JAVAN_RUNTIME_KIND_PLAIN_OBJECT || snapshot.kind == JAVAN_HEAP_KIND_ARRAY) {
                 return javan_default_object_string(value, javan_record_reference_identity_hash_code(value));
             }
             if (snapshot.runtime_kind == JAVAN_RUNTIME_KIND_STRING) {

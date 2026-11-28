@@ -361,6 +361,26 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanConvertsArrayValuesToStrings() throws Exception {
+        final Path project = project("selfhost-array-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static void main(String[] args) {
+                    Object value = new int[1];
+                    String expected = value.getClass().getName() + "@" + Integer.toHexString(System.identityHashCode(value));
+                    System.out.println(String.valueOf(value).equals(expected));
+                }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()), Duration.ofSeconds(60));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-array-string").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("true\n");
+    }
+
+    @Test
     void nativeBuiltJavanFormatsBoxedRecordComponents() throws Exception {
         final Path project = project("selfhost-record-string-boxed");
         writeJava(project, "com.acme.Main", """
