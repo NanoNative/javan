@@ -1651,7 +1651,7 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void rejectsUnselectedAndPlatformFieldEnumeration() throws Exception {
+    void tracesKnownHelperTargetsAndRejectsPlatformFieldEnumeration() throws Exception {
         final Path project = project("reflection-declared-fields-bounds");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1676,7 +1676,7 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
         assertThat(build.exitCode()).as(build.stderr()).isZero();
         final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-declared-fields-bounds").toString()));
         assertThat(result.exitCode()).as(result.stderr()).isZero();
-        assertThat(result.stdout()).isEqualTo("1\nunsupported\nunsupported\n0\n");
+        assertThat(result.stdout()).isEqualTo("1\n1\nunsupported\n0\n");
     }
 
     @Test
@@ -1786,6 +1786,225 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
         final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-declared-fields-null").toString()));
         assertThat(result.exitCode()).as(result.stderr()).isZero();
         assertThat(result.stdout()).isEqualTo(expected).isEqualTo("null class\n");
+    }
+
+    @Test
+    void tracesFieldEnumerationTargetsThroughAStaticHelperArgument() throws Exception {
+        final Path project = project("reflection-declared-fields-static-helper");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model { public int value; private long hidden; }
+                static void inspect(Class<?> type) { System.out.println(type.getDeclaredFields().length); }
+                public static void main(String[] args) { inspect(Model.class); }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-declared-fields-static-helper").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("2\n");
+    }
+
+    @Test
+    void reassignedHelperParameterDoesNotRetainThePassedClassFields() throws Exception {
+        final Path project = project("reflection-declared-fields-reassigned-helper");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            public final class Main {
+                public static final class Passed { public int hidden; }
+                public static final class Actual { public int visible; }
+                static int inspect(Class<?> type) { type = Actual.class; return type.getDeclaredFields().length; }
+                public static void main(String[] args) throws Exception {
+                    System.out.println(inspect(Passed.class)); String name = args[0]; Field field;
+                    try { field = Passed.class.getDeclaredField(name); }
+                    catch (NoSuchFieldException e) { System.out.println("not retained"); return; }
+                    System.out.println("retained");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-declared-fields-reassigned-helper").toString(), "hidden"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("1\nnot retained\n");
+    }
+
+    @Test
+    void tracesFieldEnumerationAcrossForwardingHelpers() throws Exception {
+        final Path project = project("reflection-declared-fields-forwarding");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model { public int first; public long second; }
+                static int inspect(Class<?> type) { return type.getDeclaredFields().length; }
+                static int forward(Class<?> type) { return inspect(type); }
+                public static void main(String[] args) { System.out.println(forward(Model.class)); }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-declared-fields-forwarding").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("2\n");
+    }
+
+    @Test
+    void helperFlowDoesNotRetainFieldsFromUnrelatedCalls() throws Exception {
+        final Path project = project("reflection-declared-fields-helper-unrelated");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            public final class Main {
+                public static final class First { public int value; }
+                public static final class Second { public int a; public long b; }
+                public static final class Unrelated { public int hidden; }
+                static int inspect(Class<?> type) { return type.getDeclaredFields().length; }
+                static void ignore(Class<?> type) { }
+                public static void main(String[] args) throws Exception {
+                    System.out.println(inspect(First.class)); System.out.println(inspect(Second.class));
+                    ignore(Unrelated.class); String name = args[0]; Field field;
+                    try { field = Unrelated.class.getDeclaredField(name); }
+                    catch (NoSuchFieldException e) { System.out.println("not retained"); return; }
+                    System.out.println("retained");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-declared-fields-helper-unrelated").toString(), "hidden"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("1\n2\nnot retained\n");
+    }
+
+    @Test
+    void rejectsUndeclaredRuntimeSelectedEnumerationTargets() throws Exception {
+        final Path project = project("reflection-declared-fields-runtime-undeclared");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.*;
+            public final class Main {
+                public static final class Selected { public int value; }
+                public static final class Unselected { public int hidden; }
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[] { Selected.class }; }
+                static void inspect(Class<?> type) {
+                    try { Field[] fields = type.getDeclaredFields(); }
+                    catch (UnsupportedOperationException e) { System.out.println("unsupported"); }
+                }
+                public static void main(String[] args) throws Exception {
+                    System.out.println(Unselected.class.getName());
+                    Class<?> target = Class.forName(args[0]); inspect(target);
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-declared-fields-runtime-undeclared").toString(), "com.acme.Main$Unselected"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("com.acme.Main$Unselected\nunsupported\n");
+    }
+
+    @Test
+    void initializesAStaticFieldReachedOnlyThroughHelperEnumerationAndWrite() throws Exception {
+        final Path project = project("reflection-declared-fields-helper-static-write");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Model { static { System.out.println("initialized"); } public static int value = 3; }
+                static void write(Class<?> type) throws Exception { type.getDeclaredFields()[0].setInt(null, 42); }
+                public static void main(String[] args) throws Exception {
+                    System.out.println("before"); write(Model.class); System.out.println("done");
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-declared-fields-helper-static-write").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("before\ninitialized\ndone\n");
+    }
+
+    @Test
+    void knownHelperTargetsDoNotEnumerateUnrelatedProjectDeclarations() throws Exception {
+        final Path project = project("reflection-enumeration-helper-unrelated-declaration");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.*;
+            public final class Main {
+                public static final class Selected { public int value; }
+                public static final class Other { public int hidden; }
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[] { Other.class }; }
+                static int inspect(Class<?> type) { return type.getDeclaredFields().length; }
+                public static void main(String[] args) throws Exception {
+                    System.out.println(inspect(Selected.class)); String name = args[0]; Field field;
+                    try { field = Other.class.getDeclaredField(name); }
+                    catch (NoSuchFieldException e) { System.out.println("not retained"); return; }
+                    System.out.println("retained");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-enumeration-helper-unrelated-declaration").toString(), "hidden"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("1\nnot retained\n");
+    }
+
+    @Test
+    void declaredTargetsRemainAvailableThroughAHelperMethodReference() throws Exception {
+        final Path project = project("reflection-enumeration-method-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.AnnotatedElement;
+            import java.util.function.Consumer;
+            public final class Main {
+                public static final class Model { public int value; private long hidden; }
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[] { Model.class }; }
+                static void inspect(Class<?> type) { System.out.println(type.getDeclaredFields().length); }
+                public static void main(String[] args) throws Exception {
+                    Consumer<Class<?>> ref = Main::inspect;
+                    ref.accept(Class.forName(args[0]));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-enumeration-method-reference").toString(), "com.acme.Main$Model"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("2\n");
+    }
+
+    @Test
+    void unrelatedMethodReferenceDoesNotBroadenHelperTargets() throws Exception {
+        final Path project = project("reflection-enumeration-unrelated-method-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.*;
+            import java.util.function.Consumer;
+            public final class Main {
+                public static final class Selected { public int value; }
+                public static final class Other { public int hidden; }
+                public static AnnotatedElement[] javanReflectionTargets() { return new AnnotatedElement[] { Other.class }; }
+                static int inspect(Class<?> type) { return type.getDeclaredFields().length; }
+                static void unrelated(Class<?> type) { }
+                public static void main(String[] args) throws Exception {
+                    Consumer<Class<?>> run = Main::unrelated; run.accept(Selected.class);
+                    System.out.println(inspect(Selected.class)); String name = args[0]; Field field;
+                    try { field = Other.class.getDeclaredField(name); }
+                    catch (NoSuchFieldException e) { System.out.println("not retained"); return; }
+                    System.out.println("retained");
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-enumeration-unrelated-method-reference").toString(), "hidden"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("1\nnot retained\n");
     }
 
 }
