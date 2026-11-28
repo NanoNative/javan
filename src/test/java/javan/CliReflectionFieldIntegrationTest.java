@@ -802,4 +802,225 @@ final class CliReflectionFieldIntegrationTest extends CliIntegrationSupport {
         }
     }
 
+    @Test
+    void writesADeclaredPublicIntFieldOnAnInstance() throws Exception {
+        final Path project = project("reflection-field-write-int");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.*;
+            public final class Main {
+                public static final class Model { public int value = 42; }
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] { Model.class.getDeclaredField("value") };
+                }
+                public static void main(String[] args) throws Exception {
+                    Model target = new Model(); Field field = Model.class.getDeclaredField(args[0]);
+                    field.setInt(target, -17); System.out.println(target.value); System.out.println(field.getInt(target));
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-write-int").toString(), "value"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("-17\n-17\n");
+    }
+
+    @Test
+    void evaluatesFieldWriteArgumentsInJavaOrder() throws Exception {
+        final Path project = project("reflection-field-write-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            public final class Main {
+                public static final class Model { public int value; }
+                static final Model model = new Model();
+                static Field field() throws Exception { System.out.println("field"); return Model.class.getDeclaredField("value"); }
+                static Object target() { System.out.println("target"); return model; }
+                static int value() { System.out.println("value"); return 99; }
+                public static void main(String[] args) throws Exception {
+                    field().setInt(target(), value()); System.out.println(model.value);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-write-order").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("field\ntarget\nvalue\n99\n");
+    }
+
+    @Test
+    void preservesIntFieldWriteFailuresAndAccessChecks() throws Exception {
+        final Path project = project("reflection-field-write-failures");
+        writeJava(project, "other.Model", """
+            package other;
+            public final class Model { public int value = 42; private int secret = 9; }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            import other.Model;
+            public final class Main {
+                public static void main(String[] args) throws Exception {
+                    Field value = Model.class.getDeclaredField("value"); Field secret = Model.class.getDeclaredField("secret");
+                    Model model = new Model(); Object wrong = new Object(); Field absent = null;
+                    try { value.setInt(null, 1); } catch (NullPointerException e) { System.out.println("null target"); }
+                    try { value.setInt(wrong, 1); } catch (IllegalArgumentException e) { System.out.println("wrong target"); }
+                    try { secret.setInt(model, 1); } catch (IllegalAccessException e) { System.out.println("inaccessible"); }
+                    try { secret.setInt(wrong, 1); } catch (IllegalAccessException e) { System.out.println("access before target"); }
+                    try { absent.setInt(model, 1); } catch (NullPointerException e) { System.out.println("null field"); }
+                    System.out.println(model.value);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-write-failures").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void writesTheDeclaringIntFieldWhenASubclassHidesItsName() throws Exception {
+        final Path project = project("reflection-field-write-hidden");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static class Base { public int value = 11; }
+                public static final class Derived extends Base { public int value = 22; }
+                public static void main(String[] args) throws Exception {
+                    Derived target = new Derived();
+                    Base.class.getDeclaredField("value").setInt(target, 33);
+                    Derived.class.getDeclaredField("value").setInt(target, 44);
+                    System.out.println(((Base) target).value); System.out.println(target.value);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-write-hidden").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("33\n44\n");
+    }
+
+    @Test
+    void rejectsUnsupportedStaticVolatileAndFinalIntWrites() throws Exception {
+        final Path project = project("reflection-field-write-bounds");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            public final class Main {
+                public static final class Model { public static int shared; public volatile int value; public final int fixed = 1; }
+                public static void main(String[] args) throws Exception {
+                    Field shared = Model.class.getDeclaredField("shared"); Field value = Model.class.getDeclaredField("value");
+                    Field fixed = Model.class.getDeclaredField("fixed"); Model target = new Model();
+                    try { shared.setInt(null, 7); } catch (UnsupportedOperationException e) { System.out.println("static"); }
+                    try { value.setInt(target, 7); } catch (UnsupportedOperationException e) { System.out.println("volatile"); }
+                    try { fixed.setInt(target, 7); } catch (UnsupportedOperationException e) { System.out.println("final"); }
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-write-bounds").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("static\nvolatile\nfinal\n");
+    }
+
+    @Test
+    void writesIntFieldsDuringConcurrentGc() throws Exception {
+        final Path project = project("reflection-field-write-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger signal = new AtomicInteger(), finished = new AtomicInteger();
+                public static final class Model { public int value; }
+                static final class Worker implements Runnable {
+                    public void run() {
+                        while (signal.get() == 0) Thread.yield();
+                        for (int i = 0; i < 1000; i++) { byte[] value = new byte[64]; value[0] = 1; }
+                        finished.set(1);
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Model target = new Model(); Field field = Model.class.getDeclaredField("value");
+                    Thread worker = new Thread(new Worker()); worker.start(); signal.set(1);
+                    while (finished.get() == 0) { field.setInt(target, 42); if (target.value != 42) throw new AssertionError(); }
+                    worker.join(); field.setInt(target, 73); System.out.println(target.value);
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-write-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("73\n");
+    }
+
+    @Test
+    void checksProtectedFieldWritesAgainstTheActualTarget() throws Exception {
+        final Path project = project("reflection-field-write-protected");
+        writeJava(project, "other.Base", """
+            package other;
+            public class Base { protected int value = 13; }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.Field;
+            import other.Base;
+            public final class Main {
+                public static final class Derived extends Base {
+                    static void check() throws Exception {
+                        Field field = Base.class.getDeclaredField("value");
+                        Derived allowed = new Derived(); Object denied = new Base(); Object wrong = new Object();
+                        field.setInt(allowed, 17); System.out.println(allowed.value);
+                        try { field.setInt(denied, 19); } catch (IllegalAccessException e) { System.out.println("base denied"); }
+                        try { field.setInt(wrong, 19); } catch (IllegalAccessException e) { System.out.println("wrong denied"); }
+                    }
+                }
+                public static void main(String[] args) throws Exception { Derived.check(); }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-write-protected").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("17\nbase denied\nwrong denied\n");
+    }
+
+    @Test
+    void writesDeclaredFieldsSelectedByExternalNames() throws Exception {
+        final Path project = project("reflection-field-write-external");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.lang.reflect.*;
+            public final class Main {
+                public static final class Model { public int value = 42; }
+                public static AnnotatedElement[] javanReflectionTargets() throws ReflectiveOperationException {
+                    return new AnnotatedElement[] { Model.class.getDeclaredField("value") };
+                }
+                public static void main(String[] args) throws Exception {
+                    Model model = new Model();
+                    Class.forName(args[0]).getDeclaredField(args[1]).setInt(model, 73);
+                    System.out.println(model.value);
+                }
+            }
+            """);
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/reflection-field-write-external").toString(),
+            "com.acme.Main$Model", "value"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("73\n");
+    }
+
 }

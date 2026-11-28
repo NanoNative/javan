@@ -4895,6 +4895,36 @@ final class BytecodeToIRInvokeSupport {
                 pendingExceptionHandlerStacks, "label_field_get_int_pending_continue_" + instruction.offset());
             return true;
         }
+        if ("java/lang/reflect/Field".equals(methodRef.owner()) && "setInt".equals(methodRef.name())
+            && "(Ljava/lang/Object;I)V".equals(methodRef.descriptor())) {
+            final IrExpression value = popInt(classFile, method, stack);
+            final IrExpression target = popObject(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            final String receiverLocal = newObjectLocal(localDeclarations);
+            final String targetLocal = newObjectLocal(localDeclarations);
+            final String valueLocal = "int" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.INT, valueLocal));
+            instructions.add(IrInstruction.assignObject(receiverLocal, receiver));
+            instructions.add(IrInstruction.assignObject(targetLocal, target));
+            instructions.add(IrInstruction.assignInt(valueLocal, value));
+            final List<StackValue> successStack = List.copyOf(stack);
+            final String receiverPresent = "label_field_set_int_receiver_present_" + instruction.offset();
+            instructions.add(IrInstruction.branchIf(receiverPresent, IrExpression.objectComparison(
+                "!=", IrExpression.objectLocal(receiverLocal), IrExpression.objectNull())));
+            routePendingPlatformException(classFile, method, instruction, instructions, stack,
+                pendingExceptionHandlerStacks, sourceLines, "java/lang/NullPointerException", IrExpression.stringLiteral("field"));
+            instructions.add(IrInstruction.label(receiverPresent));
+            stack.addAll(successStack);
+            instructions.add(IrInstruction.callStaticVoid("javan_generated_field_set_int", List.of(
+                IrExpression.objectLocal(receiverLocal), IrExpression.objectLocal(targetLocal),
+                IrExpression.stringLiteral(classFile.name().replace('/', '.')),
+                IrExpression.stringLiteral(classFile.nestHost().replace('/', '.')), IrExpression.intLocal(valueLocal))));
+            BytecodeToIRControlFlowSupport.appendPendingExceptionDispatch(classes, method, instruction, instructions,
+                List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException",
+                    "java/lang/IllegalAccessException", "java/lang/UnsupportedOperationException"),
+                pendingExceptionHandlerStacks, "label_field_set_int_pending_continue_" + instruction.offset());
+            return true;
+        }
         if (methodAccessCall(methodRef)) {
             return lowerMethodAccessCall(
                 classFile, method, instruction, methodRef, instructions, stack, localDeclarations,
