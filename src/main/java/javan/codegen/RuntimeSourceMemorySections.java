@@ -15782,8 +15782,27 @@ final class RuntimeSourceMemorySections {
         }
 
         void javan_map_initialize_capacity_with_load_factor(void* value, int capacity, float load_factor) {
+            if (capacity < 0) {
+                javan_map_initialize_capacity_java(value, capacity);
+                return;
+            }
             if (!(load_factor > 0.0f)) {
-                javan_panic("invalid map load factor");
+                javan_runtime_lock_enter();
+                javan_object_map* map = javan_map_checked(value);
+                void* message = NULL;
+                void** roots[] = { &message };
+                javan_root_frame_push(roots, 1);
+                if (map->concurrent == 0) {
+                    char load_factor_text[32];
+                    char buffer[64];
+                    javan_format_real(load_factor_text, sizeof(load_factor_text), load_factor, 1);
+                    snprintf(buffer, sizeof(buffer), "Illegal load factor: %s", load_factor_text);
+                    message = javan_string_from(buffer);
+                }
+                javan_pending_throw("java/lang/IllegalArgumentException", message, NULL, NULL, NULL, -1, -1, NULL);
+                javan_root_frame_pop(roots);
+                javan_runtime_lock_leave();
+                return;
             }
             javan_map_initialize_capacity(value, capacity);
         }
@@ -15794,11 +15813,9 @@ final class RuntimeSourceMemorySections {
             float load_factor,
             int concurrency_level
         ) {
-            if (!(load_factor > 0.0f)) {
-                javan_panic("invalid map load factor");
-            }
-            if (concurrency_level <= 0) {
-                javan_panic("non-positive map concurrency level");
+            if (capacity < 0 || !(load_factor > 0.0f) || concurrency_level <= 0) {
+                javan_pending_throw("java/lang/IllegalArgumentException", NULL, NULL, NULL, NULL, -1, -1, NULL);
+                return;
             }
             if (capacity < concurrency_level) {
                 capacity = concurrency_level;

@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 374 |
-| pass | 372 |
+| rows | 375 |
+| pass | 373 |
 | scoped | 2 |
 | target | 0 |
 | rejected | 0 |
@@ -273,6 +273,7 @@ Status mapping:
 | `map-expected-size-factory-lazy-allocation` | pass |
 | `map-capacity-constructor-lazy-allocation` | pass |
 | `map-capacity-constructor-negative-exception` | pass |
+| `map-constructor-invalid-load-and-concurrency` | pass |
 | `map-view-and-iterator-creation-concurrent-gc` | pass |
 | `map-values-custom-contains` | pass |
 | `map-values-custom-remove` | pass |

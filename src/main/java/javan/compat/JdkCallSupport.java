@@ -2707,9 +2707,11 @@ public final class JdkCallSupport {
         if (isMapExpectedSizeFactory(methodRef)) {
             return List.of("java/lang/IllegalArgumentException");
         }
-        if ("<init>".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor())
-            && ("java/util/HashMap".equals(methodRef.owner()) || "java/util/LinkedHashMap".equals(methodRef.owner())
-                || "java/util/concurrent/ConcurrentHashMap".equals(methodRef.owner()))) {
+        if ("<init>".equals(methodRef.name())
+            && (("(I)V".equals(methodRef.descriptor()) || "(IF)V".equals(methodRef.descriptor()))
+                && ("java/util/HashMap".equals(methodRef.owner()) || "java/util/LinkedHashMap".equals(methodRef.owner())
+                    || "java/util/concurrent/ConcurrentHashMap".equals(methodRef.owner()))
+                || "(IFI)V".equals(methodRef.descriptor()) && "java/util/concurrent/ConcurrentHashMap".equals(methodRef.owner()))) {
             return List.of("java/lang/IllegalArgumentException");
         }
         if (isMapEntrySetValue(methodRef)) {

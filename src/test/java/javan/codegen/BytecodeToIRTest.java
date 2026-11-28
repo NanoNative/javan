@@ -24203,6 +24203,12 @@ final class BytecodeToIRTest {
                 "javan_map_initialize_capacity_with_load_factor",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"), IrExpression.floatLocal("arg1"))
             ),
+            IrInstruction.branchIf(
+                "label_pending_continue_4",
+                IrExpression.intComparison("==", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))
+            ),
+            IrInstruction.propagatePending(),
+            IrInstruction.label("label_pending_continue_4"),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
@@ -24230,6 +24236,12 @@ final class BytecodeToIRTest {
                 "javan_map_initialize_capacity_with_load_factor",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"), IrExpression.floatLocal("arg1"))
             ),
+            IrInstruction.branchIf(
+                "label_pending_continue_4",
+                IrExpression.intComparison("==", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))
+            ),
+            IrInstruction.propagatePending(),
+            IrInstruction.label("label_pending_continue_4"),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
@@ -24257,6 +24269,12 @@ final class BytecodeToIRTest {
                 "javan_map_initialize_capacity_with_load_factor",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"), IrExpression.floatLocal("arg1"))
             ),
+            IrInstruction.branchIf(
+                "label_pending_continue_4",
+                IrExpression.intComparison("==", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))
+            ),
+            IrInstruction.propagatePending(),
+            IrInstruction.label("label_pending_continue_4"),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
@@ -24285,6 +24303,12 @@ final class BytecodeToIRTest {
                 "javan_map_initialize_capacity_with_load_factor_and_concurrency",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"), IrExpression.floatLocal("arg1"), IrExpression.intLocal("arg2"))
             ),
+            IrInstruction.branchIf(
+                "label_pending_continue_5",
+                IrExpression.intComparison("==", IrExpression.intCall("javan_pending_has", List.of()), IrExpression.intLiteral(0))
+            ),
+            IrInstruction.propagatePending(),
+            IrInstruction.label("label_pending_continue_5"),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }

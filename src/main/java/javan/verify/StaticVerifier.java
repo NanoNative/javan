@@ -5039,7 +5039,7 @@ public final class StaticVerifier {
         if (instruction.opcode() == 16 || instruction.opcode() == 17) {
             return true;
         }
-        if (instruction.opcode() >= 9 && instruction.opcode() <= 10) {
+        if (instruction.opcode() >= 9 && instruction.opcode() <= 15) {
             return true;
         }
         if (instruction.opcode() == 178) {

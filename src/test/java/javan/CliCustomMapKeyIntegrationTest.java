@@ -1349,4 +1349,97 @@ final class CliCustomMapKeyIntegrationTest extends CliIntegrationSupport {
     }
 
 
+    @Test
+    void invalidMapConstructorArgumentsThrowJvmExceptionsInOrder() throws Exception {
+        final Path project = project("map-constructor-invalid-arguments");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.ConcurrentHashMap;
+            public final class Main {
+                public static void main(String[] args) {
+                    try { new HashMap<>(-1, 0.0f); } catch (IllegalArgumentException e) { System.out.println(e.getMessage()); }
+                    try { new HashMap<>(1, -0.0f); } catch (IllegalArgumentException e) { System.out.println(e.getMessage()); }
+                    try { new LinkedHashMap<>(1, Float.NaN); } catch (IllegalArgumentException e) { System.out.println(e.getMessage()); }
+                    try { new ConcurrentHashMap<>(-1, 0.75f); } catch (IllegalArgumentException e) { System.out.println(e.getMessage()); }
+                    try { new ConcurrentHashMap<>(1, 0.0f); } catch (IllegalArgumentException e) { System.out.println(e.getMessage()); }
+                    try { new ConcurrentHashMap<>(-1, 0.75f, 3); } catch (IllegalArgumentException e) { System.out.println(e.getMessage()); }
+                    try { new ConcurrentHashMap<>(1, 0.75f, 0); } catch (IllegalArgumentException e) { System.out.println(e.getMessage()); }
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-constructor-invalid-arguments").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
+    @Test
+    void invalidLoadFactorExceptionsSurviveConcurrentGc() throws Exception {
+        final Path project = project("map-constructor-invalid-load-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.HashMap;
+            import java.util.concurrent.atomic.AtomicInteger;
+            public final class Main {
+                static final AtomicInteger count = new AtomicInteger();
+                static final class Worker implements Runnable {
+                    public void run() {
+                        for (int i = 0; i < 150; i++) {
+                            try { new HashMap<>(1, -0.0f); }
+                            catch (IllegalArgumentException e) {
+                                if (e.getMessage().equals("Illegal load factor: -0.0")) count.incrementAndGet();
+                            }
+                        }
+                    }
+                }
+                public static void main(String[] args) throws Exception {
+                    Thread first = new Thread(new Worker()); Thread second = new Thread(new Worker());
+                    first.start(); second.start(); first.join(); second.join();
+                    System.out.println(count.get());
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-constructor-invalid-load-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("300\n");
+    }
+
+
+
+    @Test
+    void validMapConstructorArgumentsRemainUsableAfterRejectedArguments() throws Exception {
+        final Path project = project("map-constructor-valid-after-invalid");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.*;
+            import java.util.concurrent.ConcurrentHashMap;
+            public final class Main {
+                static int capacity() { System.out.println("capacity"); return -1; }
+                static float factor() { System.out.println("factor"); return 0.0f; }
+                public static void main(String[] args) {
+                    try { new HashMap<>(capacity(), factor()); }
+                    catch (IllegalArgumentException e) { System.out.println(e.getMessage()); }
+                    var a = new HashMap<Integer, String>(0, Float.POSITIVE_INFINITY);
+                    var b = new LinkedHashMap<Integer, String>(1, 0.5f);
+                    var c = new ConcurrentHashMap<Integer, String>(0, 0.5f, 2);
+                    a.put(1, "a"); b.put(2, "b"); c.put(3, "c");
+                    System.out.println(a.get(1)); System.out.println(b.get(2)); System.out.println(c.get(3));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-constructor-valid-after-invalid").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected);
+    }
+
 }
