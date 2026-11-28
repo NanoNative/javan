@@ -292,6 +292,30 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         assertThat(primitiveLiteralBootstrap).isExecutable();
     }
 
+
+    @Test
+    void nativeBuiltJavanRetainsOnlyProvenReflectiveOverloads() throws Exception {
+        final Path project = project("selfhost-reflection-proven-overload");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            public final class Main {
+                public static final class Target {
+                    public String run(String value) { return "selected:" + value; }
+                    public String run(int value) { System.setProperty("unused", "never"); return "unused"; }
+                }
+                public static void main(String[] args) throws Exception {
+                    var method = Target.class.getDeclaredMethod("run", String.class);
+                    System.out.println(method.invoke(new Target(), "value"));
+                }
+            }
+            """);
+        final ProcessResult build = process(project, List.of(primitiveLiteralBootstrap.toString(), "build", project.toString()), Duration.ofSeconds(60));
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/selfhost-reflection-proven-overload").toString()));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo("selected:value\n");
+    }
+
     @Test
     void nativeBuiltJavanReadsPublicReflectionDeclaration() throws Exception {
         final Path project = project("selfhost-reflection-declaration");

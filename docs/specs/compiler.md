@@ -101,9 +101,11 @@ not resolve to an already retained class require an explicit declaration.
 Supported platform classes remain available. Other application names produce
 `ClassNotFoundException`. For application methods, metadata and invocation retain declared
 identities and literal arguments traced through local assignments and control flow to reachable
-`getDeclaredMethod` or `getMethod` calls. Literal-name matches conservatively retain all
-overloads; the normal parameter check still selects the requested overload. Names that cannot
-yet be proven require an explicit declaration. Other dynamic application method names produce
+`getDeclaredMethod` or `getMethod` calls. Inline literal parameter arrays and a literal null array
+select the matching parameter signature. Other parameter arrays conservatively retain all
+same-name overloads. Matching is currently shared across retained classes, so an unrelated class
+with the same name and parameter signature can still be retained. Names that cannot yet be proven
+require an explicit declaration. Other dynamic application method names produce
 `NoSuchMethodException`.
 Supported platform method metadata remains available. Automatically proven targets remain
 available without the declaration.

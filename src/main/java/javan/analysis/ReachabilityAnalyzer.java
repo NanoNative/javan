@@ -127,14 +127,14 @@ public final class ReachabilityAnalyzer {
             }
         }
         final Set<String> reflectionClasses = new HashSet<>(declaration.classes());
-        final Set<String> reflectionMethodNames = new HashSet<>();
+        final Set<String> reflectionMethodLookups = new HashSet<>();
         CallGraph graph;
         while (true) {
             final List<EntryPoint> roots = new ArrayList<>(entries);
             roots.addAll(reflectionRoots);
             roots.addAll(serviceRoots);
             graph = analyzePass(classes, roots, declaredExternalLeaves, instantiatedTypes, collectionQueries,
-                methodFlows, declaration, reflectionClasses, reflectionMethodNames, false);
+                methodFlows, declaration, reflectionClasses, reflectionMethodLookups, false);
             if (!serviceProviders.isEmpty()
                 && !serviceRootsResolved
                 && usesServiceLoader(classes, graph.reachableMethods())) {
@@ -162,8 +162,8 @@ public final class ReachabilityAnalyzer {
                     ClassInitializationGraph.analyze(classes, graph.reachableMethods());
                 final boolean classesChanged = reflectionClasses.addAll(
                     ClassMetadataReachability.collect(classes, graph, initialization, declaration));
-                final boolean namesChanged = reflectionMethodNames.addAll(
-                    ReflectionMethodReachability.literalNames(classes, graph.reachableMethods()));
+                final boolean namesChanged = reflectionMethodLookups.addAll(
+                    ReflectionMethodReachability.literalLookups(classes, graph.reachableMethods()));
                 if (classesChanged || namesChanged) {
                     continue;
                 }
@@ -199,7 +199,7 @@ public final class ReachabilityAnalyzer {
             }
             if (!queriesChanged) {
                 return analyzePass(classes, roots, declaredExternalLeaves, instantiatedTypes, collectionQueries,
-                    methodFlows, declaration, reflectionClasses, reflectionMethodNames, true);
+                    methodFlows, declaration, reflectionClasses, reflectionMethodLookups, true);
             }
             collectionQueries = Map.copyOf(next);
         }
@@ -384,7 +384,7 @@ public final class ReachabilityAnalyzer {
         final FunctionValueFlow.MethodFlowCache methodFlows,
         final ReflectionDeclaration.Result declaration,
         final Set<String> reflectionClasses,
-        final Set<String> reflectionMethodNames,
+        final Set<String> reflectionMethodLookups,
         final boolean complete
     ) {
         final MethodRefFactsCache methodRefFacts = new MethodRefFactsCache(classes);
@@ -484,7 +484,7 @@ public final class ReachabilityAnalyzer {
                             instruction,
                             declaration,
                             reflectionClasses,
-                            reflectionMethodNames,
+                            reflectionMethodLookups,
                             work,
                             workSet,
                             current,
@@ -542,7 +542,7 @@ public final class ReachabilityAnalyzer {
         final Instruction instruction,
         final ReflectionDeclaration.Result declaration,
         final Set<String> reflectionClasses,
-        final Set<String> reflectionMethodNames,
+        final Set<String> reflectionMethodLookups,
         final List<EntryPoint> work,
         final EntryPointMembership workSet,
         final EntryPoint current,
@@ -590,7 +590,7 @@ public final class ReachabilityAnalyzer {
                     continue;
                 }
                 if (!ReflectionMethodReachability.includes(
-                    classes, declaration, reflectionMethodNames, classFile.name(), method.name(), method.descriptor())) {
+                    classes, declaration, reflectionMethodLookups, classFile.name(), method.name(), method.descriptor())) {
                     continue;
                 }
                 targets.add(entryPoints.entry(classFile.name(), method.name(), method.descriptor()));

@@ -445,19 +445,19 @@ final class BytecodeToIRMetadataSupport {
         allClasses.putAll(classes);
         final Set<String> classpathClasses = classes.keySet();
         final ReflectionDeclaration.Result declaration = ReflectionDeclaration.analyze(classes);
-        final Set<String> literalNames = ReflectionMethodReachability.literalNames(classes, reachableMethods);
+        final Set<String> literalLookups = ReflectionMethodReachability.literalLookups(classes, reachableMethods);
         final List<EntryPoint> literalConstructors = ReflectionConstructorReachability.analyze(classes, reachableMethods);
         final List<IrReflectedClass> result = new ArrayList<>();
         for (final IrClass retained : retainedClasses) {
             final ClassFile classFile = classes.get(retained.jvmName());
             if (classFile != null) {
-                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection, declaration, literalNames, literalConstructors));
+                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection, declaration, literalLookups, literalConstructors));
             }
         }
         for (final String jvmName : reflection.externalClassNames()) {
             final ClassFile classFile = externalClasses.get(jvmName);
             if (classFile != null) {
-                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection, declaration, literalNames, literalConstructors));
+                result.add(reflectedClass(classFile, allClasses, classpathClasses, reflection, declaration, literalLookups, literalConstructors));
             }
         }
         if (reflection.publicMethodLookup()) {
@@ -480,7 +480,7 @@ final class BytecodeToIRMetadataSupport {
         final Set<String> classpathClasses,
         final ReflectionClasses reflection,
         final ReflectionDeclaration.Result declaration,
-        final Set<String> literalNames,
+        final Set<String> literalLookups,
         final List<EntryPoint> literalConstructors
     ) {
         final List<IrMethodMetadata> constructors = new ArrayList<>();
@@ -499,10 +499,10 @@ final class BytecodeToIRMetadataSupport {
         return new IrReflectedClass(
             classFile.name(),
             reflection.declaredMethodLookup()
-                ? selectedMethods(declaredMethods(classFile, classes, classpathClasses), classes, classpathClasses, declaration, literalNames)
+                ? selectedMethods(declaredMethods(classFile, classes, classpathClasses), classes, classpathClasses, declaration, literalLookups)
                 : List.of(),
             reflection.publicMethodLookup()
-                ? selectedMethods(publicMethods(classFile, classes, classpathClasses), classes, classpathClasses, declaration, literalNames)
+                ? selectedMethods(publicMethods(classFile, classes, classpathClasses), classes, classpathClasses, declaration, literalLookups)
                 : List.of(),
             false,
             constructors,
@@ -516,7 +516,7 @@ final class BytecodeToIRMetadataSupport {
         final Map<String, ClassFile> classes,
         final Set<String> classpathClasses,
         final ReflectionDeclaration.Result declaration,
-        final Set<String> literalNames
+        final Set<String> literalLookups
     ) {
         final List<IrMethodMetadata> selected = new ArrayList<>();
         for (final IrMethodMetadata method : methods) {
@@ -527,7 +527,7 @@ final class BytecodeToIRMetadataSupport {
             descriptor.append(')').append(method.returnDescriptor());
             if (!classpathClasses.contains(method.declaringJvmName())
                 || ReflectionMethodReachability.includes(
-                    classes, declaration, literalNames, method.declaringJvmName(), method.name(), descriptor.toString())) {
+                    classes, declaration, literalLookups, method.declaringJvmName(), method.name(), descriptor.toString())) {
                 selected.add(method);
             }
         }

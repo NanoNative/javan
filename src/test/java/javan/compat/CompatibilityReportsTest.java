@@ -136,6 +136,7 @@ final class CompatibilityReportsTest {
             "| `try-catch` | pass |",
             "| `application-runtime-exception-transport` | pass |",
             "| `try-finally` | scoped |",
+            "| `closed-world-reflective-method-literal-signature` | pass |",
             "| `path-inline-varargs-typed-handler` | pass |",
             "| `boxed-primitive-gc` | pass |",
             "| `enum-basic` | pass |",
@@ -417,6 +418,7 @@ final class CompatibilityReportsTest {
             "\"generatedForJdk\": " + feature,
             "\"feature\": \"try-catch\"",
             "\"feature\": \"try-finally\"",
+            "\"feature\": \"closed-world-reflective-method-literal-signature\"",
             "\"feature\": \"path-inline-varargs-typed-handler\"",
             "\"feature\": \"boxed-primitive-gc\"",
             "\"feature\": \"enum-value-of\"",
@@ -648,10 +650,10 @@ final class CompatibilityReportsTest {
             "A broad JDK-compatibility release must report:",
             "The first native release is scenario-bounded.",
             "not a release-completion percentage.",
-            "| support rows | 345 |",
-            "| pass rows | 343 |",
+            "| support rows | 346 |",
+            "| pass rows | 344 |",
             "| scoped rows | 2 |",
-            "| accounted rows | 343 |",
+            "| accounted rows | 344 |",
             "| unaccounted rows | 2 |"
         );
         assertThat(matrix).contains(
