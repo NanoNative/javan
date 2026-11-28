@@ -2995,7 +2995,8 @@ public final class JdkCallSupport {
             && ("getInt".equals(methodRef.name()) && "(Ljava/lang/Object;)I".equals(methodRef.descriptor())
                 || "setInt".equals(methodRef.name()) && "(Ljava/lang/Object;I)V".equals(methodRef.descriptor()))) {
             return List.of("java/lang/NullPointerException", "java/lang/IllegalArgumentException",
-                "java/lang/IllegalAccessException", "java/lang/UnsupportedOperationException");
+                "java/lang/IllegalAccessException", "java/lang/UnsupportedOperationException",
+                "java/lang/ExceptionInInitializerError", "java/lang/NoClassDefFoundError", "java/lang/Error");
         }
         if ("java/lang/reflect/Field".equals(methodRef.owner()) && "getType".equals(methodRef.name())
             && "()Ljava/lang/Class;".equals(methodRef.descriptor())) {

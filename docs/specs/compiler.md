@@ -136,10 +136,11 @@ where the Java API permits. Reachable `getType` calls retain the selected field 
 required hierarchies without initializing them. Field types outside the supported class metadata
 model raise `UnsupportedOperationException` instead of returning incomplete class information.
 Runtime names do not reveal unselected fields and produce `NoSuchFieldException`.
-`Field.getInt` reads selected, non-static, non-volatile application fields declared as `byte`,
-`short`, `char` or `int`, with caller access checks, target validation and Java's widening
-conversion. Other field types, static fields and volatile fields raise
-`UnsupportedOperationException` for this accessor until implemented.
+`Field.getInt` reads selected, non-volatile application fields declared as `byte`, `short`,
+`char` or `int`, with caller access checks, instance target validation and Java's widening
+conversion. Non-final static fields initialize their declaring class on access and ignore the target.
+Other field types, volatile fields and static final fields raise `UnsupportedOperationException` for
+this accessor until implemented.
 `Field.setInt` writes selected, non-static, non-volatile, non-final application `int` fields with
 the same caller access and target checks. Other field types, static, volatile and final fields
 raise `UnsupportedOperationException` for this accessor until implemented.

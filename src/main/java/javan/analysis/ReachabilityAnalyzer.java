@@ -157,6 +157,24 @@ public final class ReachabilityAnalyzer {
                 }
             }
             if (constructorsChanged) continue;
+            boolean fieldInitializersChanged = false;
+            final List<String> fieldOwners = new ArrayList<>();
+            for (final String owner : ReflectionFieldReachability.staticIntOwners(classes, graph.reachableMethods())) {
+                int index = 0;
+                while (index < fieldOwners.size() && Strings2.compareAscii(fieldOwners.get(index), owner) < 0) index++;
+                fieldOwners.add(index, owner);
+            }
+            for (final String owner : fieldOwners) {
+                for (final String initializer : ClassInitializationGraph.initializerOwners(classes, owner)) {
+                    if (classes.get(initializer).method("<clinit>", "()V").isEmpty()) continue;
+                    final EntryPoint root = new EntryPoint(initializer, "<clinit>", "()V");
+                    if (!reflectionRoots.contains(root)) {
+                        reflectionRoots.add(root);
+                        fieldInitializersChanged = true;
+                    }
+                }
+            }
+            if (fieldInitializersChanged) continue;
             if (declaration.present() || usesReflectionLookup(classes, graph.reachableMethods())) {
                 final ClassInitializationGraph.Result initialization =
                     ClassInitializationGraph.analyze(classes, graph.reachableMethods());

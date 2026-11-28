@@ -51,4 +51,40 @@ public final class ReflectionFieldReachability {
         }
         return Set.copyOf(result);
     }
+    /**
+     * Returns owners of selected static fields when reflective integer reads are reachable.
+     *
+     * @param classes parsed closed-world classes
+     * @param reachable reachable methods
+     * @return static field owners requiring class initialization
+     */
+    public static Set<String> staticIntOwners(final Map<String, ClassFile> classes, final List<EntryPoint> reachable) {
+        boolean readsInt = false;
+        for (final EntryPoint entry : reachable) {
+            final ClassFile owner = classes.get(entry.className());
+            final Optional<MethodInfo> method = owner == null ? Optional.empty() : owner.method(entry.methodName(), entry.descriptor());
+            if (method.isEmpty() || method.orElseThrow().code().isEmpty()) continue;
+            for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
+                final Optional<MethodRef> target = instruction.methodRef();
+                if (target.isPresent() && "java/lang/reflect/Field".equals(target.orElseThrow().owner())
+                    && "getInt".equals(target.orElseThrow().name())
+                    && "(Ljava/lang/Object;)I".equals(target.orElseThrow().descriptor())) readsInt = true;
+            }
+        }
+        if (!readsInt) return Set.of();
+        final Set<FieldRef> fields = new HashSet<>(literalLookups(classes, reachable));
+        fields.addAll(ReflectionDeclaration.analyze(classes).fields());
+        final Set<String> owners = new HashSet<>();
+        for (final FieldRef field : fields) {
+            final ClassFile owner = classes.get(field.owner());
+            if (owner == null) continue;
+            for (final FieldInfo candidate : owner.fields()) {
+                if (candidate.name().equals(field.name()) && candidate.descriptor().equals(field.descriptor())
+                    && candidate.isStatic() && (candidate.accessFlags() & 0x0050) == 0
+                    && List.of("B", "S", "C", "I").contains(candidate.descriptor())) owners.add(field.owner());
+            }
+        }
+        return Set.copyOf(owners);
+    }
+
 }

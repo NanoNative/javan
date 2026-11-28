@@ -1813,22 +1813,29 @@ public final class CCodegen {
         for (final IrReflectedClass owner : program.reflectedClasses()) {
             for (final IrFieldMetadata field : owner.declaredFields()) {
                 if (!(write ? "I".equals(field.descriptor()) : List.of("B", "S", "C", "I").contains(field.descriptor()))
-                    || (field.modifiers() & (0x0008 | 0x0040 | (write ? 0x0010 : 0))) != 0) continue;
+                    || (field.modifiers() & (0x0040 | (write ? 0x0018 : 0))) != 0) continue;
                 IrClass layout = null;
                 for (final IrClass candidate : program.classes()) {
                     if (candidate.jvmName().equals(field.declaringJvmName())) layout = candidate;
                 }
                 if (layout == null) continue;
+                final boolean staticField = (field.modifiers() & 0x0008) != 0;
+                if (staticField && (field.modifiers() & 0x0010) != 0) continue;
                 c.append("    if (javan_string_equals(metadata->declaring_name, ")
                     .append(emitCStringLiteral(displayClassName(field.declaringJvmName())))
                     .append(") && javan_string_equals(metadata->name, ")
                     .append(emitCStringLiteral(field.name())).append(")) {\n")
-                    .append("        if (target == NULL) { javan_pending_throw(\"java/lang/NullPointerException\", NULL, NULL, NULL, NULL, -1, -1, NULL); return 0; }\n")
-                    .append("        int access = javan_method_can_access(field, target, caller, caller_nest);\n")
+                    .append(staticField ? "" : "        if (target == NULL) { javan_pending_throw(\"java/lang/NullPointerException\", NULL, NULL, NULL, NULL, -1, -1, NULL); return 0; }\n")
+                    .append(staticField ? "        int access = javan_method_can_access(field, NULL, caller, caller_nest);\n" : "        int access = javan_method_can_access(field, target, caller, caller_nest);\n")
                     .append("        if (access < 0 && !javan_field_caller_can_access(field, target, caller, caller_nest)) access = 0;\n")
                     .append("        if (access < 0) { javan_pending_throw(\"java/lang/IllegalArgumentException\", NULL, NULL, NULL, NULL, -1, -1, NULL); return 0; }\n")
                     .append("        if (access == 0) { javan_pending_throw(\"java/lang/IllegalAccessException\", NULL, NULL, NULL, NULL, -1, -1, NULL); return 0; }\n");
-                final String value = "((struct " + layout.symbol() + "*) target)->" + fieldSymbol(field.name());
+                if (staticField && program.classInitializationDependencies().containsKey(field.declaringJvmName())) {
+                    c.append("        ").append(classInitializationSymbol(field.declaringJvmName())).append("();\n")
+                        .append("        if (javan_pending_has()) return 0;\n");
+                }
+                final String value = staticField ? staticFieldSymbol(field.declaringJvmName(), field.name())
+                    : "((struct " + layout.symbol() + "*) target)->" + fieldSymbol(field.name());
                 final String converted = switch (field.descriptor()) {
                     case "B" -> "javan_i2b(" + value + ")";
                     case "S" -> "javan_i2s(" + value + ")";
