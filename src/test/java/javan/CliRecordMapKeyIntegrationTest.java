@@ -72,6 +72,62 @@ final class CliRecordMapKeyIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapOfSingletonKeepsItsResultAliveDuringRecordKeyHashing() throws Exception {
+        assertSingletonMapResultSurvivesRecordKeyHashing("Map.of");
+    }
+
+    @Test
+    void collectionsSingletonMapKeepsItsResultAliveDuringRecordKeyHashing() throws Exception {
+        assertSingletonMapResultSurvivesRecordKeyHashing("Collections.singletonMap");
+    }
+
+    @Test
+    void mapOfPairsKeepTheirResultAliveDuringRecordKeyHashing() throws Exception {
+        final Path project = project("map-pair-record-key-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Map;
+            public final class Main {
+                record Key(String value) { }
+                public static void main(String[] args) {
+                    var map = Map.of(new Key("first"), "one", new Key("second"), "two");
+                    System.out.println(map.get(new Key("first")) + map.get(new Key("second")));
+                }
+            }
+            """);
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/map-pair-record-key-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("onetwo\n");
+    }
+
+    private void assertSingletonMapResultSurvivesRecordKeyHashing(final String factory) throws Exception {
+        final Path project = project("singleton-map-record-key-gc");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+            import java.util.Collections;
+            import java.util.Map;
+            public final class Main {
+                record Key(String value) { }
+                public static void main(String[] args) {
+                    var map = %s(new Key("key"), "value");
+                    System.out.println(map.get(new Key("key")));
+                }
+            }
+            """.formatted(factory));
+        final String expected = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString(), "--release");
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult result = process(project, List.of(project.resolve(".javan/bin/singleton-map-record-key-gc").toString()),
+            Duration.ofSeconds(60), Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1", "JAVAN_GC_STRESS", "1"));
+        assertThat(result.exitCode()).as(result.stderr()).isZero();
+        assertThat(result.stdout()).isEqualTo(expected).isEqualTo("value\n");
+    }
+
+    @Test
     void recordMapKeysSurviveConcurrentGarbageCollection() throws Exception {
         final Path project = project("record-map-concurrent-gc");
         writeJava(project, "com.acme.Main", """

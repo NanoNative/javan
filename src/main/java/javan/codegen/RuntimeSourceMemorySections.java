@@ -15870,12 +15870,14 @@ final class RuntimeSourceMemorySections {
         void* javan_map_singleton(void* key, void* value) {
             void* key_root = key;
             void* value_root = value;
+            javan_object_map* map = NULL;
             void** javan_map_singleton_roots[] = {
                 (void**) &key_root,
-                (void**) &value_root
+                (void**) &value_root,
+                (void**) &map
             };
-            javan_root_frame_push(javan_map_singleton_roots, 2);
-            javan_object_map* map = javan_map_new_with_capacity(1, 1);
+            javan_root_frame_push(javan_map_singleton_roots, 3);
+            map = javan_map_new_with_capacity(1, 1);
             map->view_flags |= JAVAN_MAP_SINGLETON_COLLECTION;
             map->keys[0] = key_root;
             map->key_hashes[0] = javan_map_key_hash(key_root);
@@ -15912,12 +15914,14 @@ final class RuntimeSourceMemorySections {
                     }
                 }
             }
-            void** roots[20];
+            void** roots[21];
             for (int index = 0; index < count * 2; index++) {
                 roots[index] = &entries[index];
             }
-            javan_root_frame_push(roots, count * 2);
-            javan_object_map* map = javan_map_new_with_capacity(count, 1);
+            javan_object_map* map = NULL;
+            roots[count * 2] = (void**) &map;
+            javan_root_frame_push(roots, count * 2 + 1);
+            map = javan_map_new_with_capacity(count, 1);
             map->view_flags |= JAVAN_MAP_REJECT_NULL_QUERY;
             for (int index = 0; index < count; index++) {
                 map->keys[index] = entries[index * 2];
